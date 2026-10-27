@@ -34,7 +34,7 @@ php artisan serve
 
 Open **http://127.0.0.1:8000** in your browser.
 
-*(Alternatively, run `./bin/serve` to start on port 8431).*
+*(Alternatively, run `php artisan serve --port=8431`).*
 
 ---
 

@@ -24,6 +24,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         RecordPullRequestSnapshotCommand::class,
         InspectPullRequestCommand::class,
         \ProofPatch\Application\TriagePullRequestCommand::class,
+        \ProofPatch\Application\VerifyPatchCommand::class,
+        \ProofPatch\Application\CheckReceiptCommand::class,
     ])
     ->withExceptions(static function (): void {})
     ->create();

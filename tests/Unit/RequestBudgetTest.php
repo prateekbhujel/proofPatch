@@ -1,0 +1,58 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ProofPatch\Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+use ProofPatch\Agent\RequestBudget;
+
+final class RequestBudgetTest extends TestCase
+{
+    private string $directory;
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/proofpatch-budget-'.bin2hex(random_bytes(8));
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->directory.'/runtime-ledger.json')) {
+            unlink($this->directory.'/runtime-ledger.json');
+        }
+        if (is_dir($this->directory)) {
+            rmdir($this->directory);
+        }
+    }
+
+    public function testReservationsSurviveFailureAndBlockOverspend(): void
+    {
+        $budget = new RequestBudget($this->directory, 50000, 3);
+        $calls = 0;
+        $budget->run(20000, function () use (&$calls): array { ++$calls; return ['usage' => []]; });
+        try {
+            $budget->run(20000, function () use (&$calls): array { ++$calls; throw new \RuntimeException('Timeout'); });
+            self::fail('A failed request was accepted.');
+        } catch (\RuntimeException $error) {
+            self::assertSame('Timeout', $error->getMessage());
+        }
+        $status = (new RequestBudget($this->directory, 50000, 3))->status();
+        self::assertSame(2, $status['attempts']);
+        self::assertSame(40000, $status['reservedMicros']);
+        $this->expectException(\RuntimeException::class);
+        try {
+            $budget->run(15000, function () use (&$calls): array { ++$calls; return ['usage' => []]; });
+        } finally {
+            self::assertSame(2, $calls);
+        }
+    }
+
+    public function testInvalidLedgerFailsClosed(): void
+    {
+        mkdir($this->directory, 0700);
+        file_put_contents($this->directory.'/runtime-ledger.json', '{"version":1,"attempts":[{"reservedMicros":-1,"status":"received"}]}');
+        $this->expectException(\RuntimeException::class);
+        (new RequestBudget($this->directory))->status();
+    }
+}

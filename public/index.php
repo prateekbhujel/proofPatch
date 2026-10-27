@@ -7,6 +7,7 @@ use ProofPatch\Agent\ModelProposal;
 use ProofPatch\Agent\RequestBudget;
 use ProofPatch\Evidence\Receipt;
 use ProofPatch\Patch\CssPatch;
+use ProofPatch\Support\LocalProcess;
 use ProofPatch\Verifier\CheckoutVerifier;
 use Symfony\Component\HttpClient\HttpClient;
 
@@ -58,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($directory === null || !$home) {
                 throw new InvalidArgumentException('Select a run with a reproduced baseline first.');
             }
+            $sourceReport = json_decode((string) file_get_contents($directory.'/result.json'), true, 64, JSON_THROW_ON_ERROR);
+            if (($sourceReport['proposal']['file'] ?? null) !== ($_POST['fixture'] ?? null)) {
+                throw new InvalidArgumentException('Run the selected fixture first so the model sees its own baseline.');
+            }
             $agent = new ModelProposal($project, HttpClient::create(), new RequestBudget($home.'/.local/share/proofpatch/runtime'));
             $_SESSION['proposal'] = $agent->propose($directory, Credentials::baseten());
             header('Location: /?run='.rawurlencode($id), true, 303);
@@ -106,9 +111,18 @@ if ($runId === '' && $history !== []) {
     $runId = array_key_first($history);
 }
 $report = $history[$runId] ?? null;
+$currentHead = trim(LocalProcess::output(['git', '-C', $project, 'rev-parse', 'HEAD']));
+$baselineReady = $report !== null && ($report['baseCommit'] ?? null) === $currentHead
+    && ($report['runs']['baseline']['exitCode'] ?? null) === 1;
 $home = getenv('HOME');
-$ledgerPath = $home ? $home.'/.local/share/proofpatch/runtime/runtime-ledger.json' : '';
-$pilotUsed = $ledgerPath !== '' && (file_exists($ledgerPath) || is_link($ledgerPath));
+$budgetStatus = null;
+try {
+    if ($home) {
+        $budgetStatus = (new RequestBudget($home.'/.local/share/proofpatch/runtime'))->status();
+    }
+} catch (Throwable) {
+    // An unreadable ledger disables requests rather than resetting the limit.
+}
 $proposal = $_SESSION['proposal'] ?? null;
 if (!is_array($proposal) || ($proposal['sourceRunId'] ?? null) !== $runId) {
     $proposal = null;
@@ -146,8 +160,8 @@ $gates = ['baselineReproduced' => 'Bug reproduced', 'protectedTestsPassed' => 'P
         <label for="find">FIND <span>Existing CSS</span></label><textarea id="find" name="find" required maxlength="4096" spellcheck="false"><?= $escape($_POST['find'] ?? $proposal['patch']['find'] ?? 'pointer-events: auto;') ?></textarea>
         <label for="replace">REPLACE WITH <span>Candidate CSS</span></label><textarea id="replace" name="replace" required maxlength="4096" spellcheck="false"><?= $escape($_POST['replace'] ?? $proposal['patch']['replace'] ?? 'pointer-events: none;') ?></textarea>
         <button type="submit" name="action" value="verify">Run verification <span aria-hidden="true">↗</span></button>
-        <button class="secondary" type="submit" name="action" value="propose" formnovalidate <?= $report === null || $pilotUsed ? 'disabled' : '' ?>>Generate with Muse <span aria-hidden="true">✦</span></button>
-        <p class="model-note"><?= $pilotUsed ? 'The single-request pilot has been used. Existing results remain available for review.' : 'Uses a single bounded Baseten request from a reproduced baseline. Review the proposal before verification.' ?></p>
+        <button class="secondary" type="submit" name="action" value="propose" formnovalidate <?= !$baselineReady || !($budgetStatus['canRequest'] ?? false) ? 'disabled' : '' ?>>Generate with Muse <span aria-hidden="true">✦</span></button>
+        <p class="model-note"><?php if (!$baselineReady): ?>Run a verification on the current version to prepare model evidence. <?php endif; ?><?php if ($budgetStatus): ?>Local reservation: $<?= $escape(number_format($budgetStatus['reservedMicros'] / 1000000, 3)) ?> of $<?= $escape(number_format($budgetStatus['limitMicros'] / 1000000, 2)) ?> · <?= $escape($budgetStatus['attempts']) ?>/<?= $escape($budgetStatus['maxAttempts']) ?> requests. This is not an account-wide cap.<?php else: ?>Budget unavailable; model requests are disabled.<?php endif; ?></p>
       </form><div class="detail"><span>Fixture</span><strong><?= $escape(basename($fixture)) ?></strong></div><div class="detail"><span>Review</span><strong>Human approval required</strong></div>
     </section>
     <section class="card result"><div class="section-label"><span>02 / EVIDENCE</span><span class="quiet">SELECTED RUN</span></div>

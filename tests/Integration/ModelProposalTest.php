@@ -59,7 +59,7 @@ final class ModelProposalTest extends TestCase
             self::assertStringContainsString('hitStack', $payload['messages'][1]['content']);
             return $this->response('stop', ['find' => 'pointer-events: auto;', 'replace' => 'pointer-events: none;']);
         });
-        $service = new ModelProposal($this->project, $client, new RequestBudget($this->directory.'/budget'));
+        $service = new ModelProposal($this->project, $client, new RequestBudget($this->directory.'/budget', 50000, 1));
         $result = $service->propose($this->directory, 'test-key-1234567890');
         self::assertSame('pointer-events: none;', $result['patch']['replace']);
         self::assertSame(['prompt_tokens' => 600, 'completion_tokens' => 400], $result['usage']);

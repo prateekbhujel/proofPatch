@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProofPatch\Verifier;
 
+use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 use Symfony\Component\Process\ExecutableFinder;
 
@@ -13,8 +14,11 @@ final readonly class LockedCheckoutRunner
     {
     }
 
-    public function run(string $worktree, string $evidence): array
+    public function run(string $worktree, string $evidence, string $fixture = CssPatch::FILE): array
     {
+        if (!in_array($fixture, CssPatch::FILES, true)) {
+            throw new \InvalidArgumentException('Unknown checkout fixture.');
+        }
         if (!mkdir($evidence, 0700, true)) {
             throw new \RuntimeException('Cannot create a fresh evidence directory.');
         }
@@ -52,7 +56,7 @@ final readonly class LockedCheckoutRunner
                 throw new \RuntimeException('ChromeDriver is not configured.');
             }
             $browser = getenv('PANTHER_CHROME_BINARY') ?: $this->project.'/drivers/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
-            $environment = ['CHECKOUT_URL' => 'http://127.0.0.1:'.$port.'/fixtures/checkout.html',
+            $environment = ['CHECKOUT_URL' => 'http://127.0.0.1:'.$port.'/fixtures/'.rawurlencode(basename($fixture)),
                 'CHECKOUT_ARTIFACT_DIR' => $evidence, 'CHECKOUT_DRIVER' => $driver];
             if (is_executable($browser)) {
                 $environment['PANTHER_CHROME_BINARY'] = $browser;

@@ -63,11 +63,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: /?run='.rawurlencode($id), true, 303);
             exit;
         }
-        $source = file_get_contents($project.'/'.CssPatch::FILE);
+        $fixture = $_POST['fixture'] ?? null;
+        if (!is_string($fixture) || !in_array($fixture, CssPatch::FILES, true)) {
+            throw new InvalidArgumentException('Choose a supported checkout fixture.');
+        }
+        $source = file_get_contents($project.'/'.$fixture);
         if ($source === false) {
             throw new RuntimeException('The checkout fixture is unavailable.');
         }
-        $patch = CssPatch::fromArray(['file' => CssPatch::FILE, 'baseSha256' => hash('sha256', $source),
+        $patch = CssPatch::fromArray(['file' => $fixture, 'baseSha256' => hash('sha256', $source),
             'find' => $_POST['find'] ?? null, 'replace' => $_POST['replace'] ?? null]);
         $generated = $_SESSION['proposal'] ?? null;
         $provenance = null;
@@ -109,6 +113,10 @@ $proposal = $_SESSION['proposal'] ?? null;
 if (!is_array($proposal) || ($proposal['sourceRunId'] ?? null) !== $runId) {
     $proposal = null;
 }
+$fixture = $_POST['fixture'] ?? $proposal['patch']['file'] ?? $report['proposal']['file'] ?? CssPatch::FILE;
+if (!is_string($fixture) || !in_array($fixture, CssPatch::FILES, true)) {
+    $fixture = CssPatch::FILE;
+}
 $receipt = null;
 $receiptError = null;
 if ($report !== null) {
@@ -129,17 +137,18 @@ $gates = ['baselineReproduced' => 'Bug reproduced', 'protectedTestsPassed' => 'P
 <body>
 <header class="topbar"><a class="brand" href="/"><span class="brand-mark">P</span><span>ProofPatch<small>REPAIR WORKBENCH</small></span></a><span class="local-pill"><i></i> Local workspace</span></header>
 <main class="shell">
-  <div class="intro"><div><div class="eyebrow">CHECKOUT / INTERACTION REPAIR</div><h1>Fix with evidence.</h1><p>Test a focused CSS change against the broken checkout, then review the result before applying it.</p></div><div class="intro-index">01 <span>/ 01</span><small>ACTIVE CASE</small></div></div>
+  <div class="intro"><div><div class="eyebrow">CHECKOUT / INTERACTION REPAIR</div><h1>Fix with evidence.</h1><p>Test a focused CSS change against the broken checkout, then review the result before applying it.</p></div><div class="intro-index"><?= $fixture === CssPatch::FILE ? '01' : '02' ?> <span>/ 02</span><small>ACTIVE CASE</small></div></div>
   <?php if ($error !== ''): ?><div class="alert" role="alert"><?= $escape($error) ?></div><?php endif; ?>
   <div class="workspace">
     <section class="card proposal"><div class="section-label"><span>01 / CANDIDATE</span><span class="quiet"><?= $proposal ? 'MUSE PROPOSAL' : 'MANUAL INPUT' ?></span></div><h2>Propose a change</h2><p class="muted">Change one unique section of the fixture’s inline CSS. The original file stays untouched.</p>
       <form method="post"><input type="hidden" name="csrf" value="<?= $escape($_SESSION['csrf']) ?>"><input type="hidden" name="source_run" value="<?= $escape($runId) ?>">
+        <label for="fixture">FIXTURE <span>Controlled case</span></label><select id="fixture" name="fixture"><option value="<?= $escape(CssPatch::FILE) ?>" <?= $fixture === CssPatch::FILE ? 'selected' : '' ?>>Northline checkout</option><option value="<?= $escape(CssPatch::SECOND_FILE) ?>" <?= $fixture === CssPatch::SECOND_FILE ? 'selected' : '' ?>>Lumen checkout</option></select>
         <label for="find">FIND <span>Existing CSS</span></label><textarea id="find" name="find" required maxlength="4096" spellcheck="false"><?= $escape($_POST['find'] ?? $proposal['patch']['find'] ?? 'pointer-events: auto;') ?></textarea>
         <label for="replace">REPLACE WITH <span>Candidate CSS</span></label><textarea id="replace" name="replace" required maxlength="4096" spellcheck="false"><?= $escape($_POST['replace'] ?? $proposal['patch']['replace'] ?? 'pointer-events: none;') ?></textarea>
         <button type="submit" name="action" value="verify">Run verification <span aria-hidden="true">↗</span></button>
         <button class="secondary" type="submit" name="action" value="propose" formnovalidate <?= $report === null || $pilotUsed ? 'disabled' : '' ?>>Generate with Muse <span aria-hidden="true">✦</span></button>
         <p class="model-note"><?= $pilotUsed ? 'The single-request pilot has been used. Existing results remain available for review.' : 'Uses a single bounded Baseten request from a reproduced baseline. Review the proposal before verification.' ?></p>
-      </form><div class="detail"><span>Fixture</span><strong>checkout.html</strong></div><div class="detail"><span>Review</span><strong>Human approval required</strong></div>
+      </form><div class="detail"><span>Fixture</span><strong><?= $escape(basename($fixture)) ?></strong></div><div class="detail"><span>Review</span><strong>Human approval required</strong></div>
     </section>
     <section class="card result"><div class="section-label"><span>02 / EVIDENCE</span><span class="quiet">SELECTED RUN</span></div>
       <?php if ($report === null): ?><div class="empty"><span class="empty-icon">↗</span><h2>Ready when you are.</h2><p>Run a candidate to see the protected checks, screenshots and receipt here.</p></div>

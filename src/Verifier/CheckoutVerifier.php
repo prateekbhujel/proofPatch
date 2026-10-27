@@ -24,11 +24,11 @@ final readonly class CheckoutVerifier
     public function verify(CssPatch $patch, ?array $proposalEvidence = null): array
     {
         $head = trim($this->git('rev-parse', 'HEAD'));
-        $source = $this->git('show', $head.':'.CssPatch::FILE);
+        $source = $this->git('show', $head.':'.$patch->file);
         $updated = $patch->apply($source);
         $authority = $this->protectedHashes($head);
-        $this->assertRegularPath($this->project, CssPatch::FILE);
-        if (!hash_equals(hash('sha256', $source), hash_file('sha256', $this->project.'/'.CssPatch::FILE))) {
+        $this->assertRegularPath($this->project, $patch->file);
+        if (!hash_equals(hash('sha256', $source), hash_file('sha256', $this->project.'/'.$patch->file))) {
             throw new \InvalidArgumentException('Checkout fixture has uncommitted changes.');
         }
 
@@ -57,18 +57,18 @@ final readonly class CheckoutVerifier
                 $path = $temporary.'/'.$case;
                 $this->git('worktree', 'add', '--quiet', '--detach', $path, $head);
                 $worktrees[$case] = $path;
-                $this->assertRegularPath($path, CssPatch::FILE);
+                $this->assertRegularPath($path, $patch->file);
                 if ($case === 'candidate') {
-                    if (file_put_contents($path.'/'.CssPatch::FILE, $updated) !== strlen($updated)) {
+                    if (file_put_contents($path.'/'.$patch->file, $updated) !== strlen($updated)) {
                         throw new \RuntimeException('Could not write the candidate.');
                     }
-                    $diff = LocalProcess::output(['git', '-C', $path, 'diff', '--', CssPatch::FILE]);
+                    $diff = LocalProcess::output(['git', '-C', $path, 'diff', '--', $patch->file]);
                     file_put_contents($evidence.'/patch.diff', $diff);
                     $report['patchSha256'] = hash('sha256', $diff);
-                    LocalProcess::output(['git', '-C', $path, 'add', '--', CssPatch::FILE]);
+                    LocalProcess::output(['git', '-C', $path, 'add', '--', $patch->file]);
                     $report['candidateTree'] = trim(LocalProcess::output(['git', '-C', $path, 'write-tree']));
                 }
-                $run = (new LockedCheckoutRunner($this->project))->run($path, $evidence.'/'.$case);
+                $run = (new LockedCheckoutRunner($this->project))->run($path, $evidence.'/'.$case, $patch->file);
                 $report['runs'][$case] = $run;
                 if ($case === 'baseline' && !$this->reproduced($run)) {
                     $report['reason'] = 'BASELINE_NOT_REPRODUCED';
@@ -82,7 +82,7 @@ final readonly class CheckoutVerifier
                 }
                 $visual = (new PixelDiffGuard())->compare($evidence.'/baseline/checkout.png', $evidence.'/candidate/checkout.png', self::MASK);
                 $intact = $authority === $this->protectedHashes($head)
-                    && hash_equals(hash('sha256', $source), hash_file('sha256', $this->project.'/'.CssPatch::FILE));
+                    && hash_equals(hash('sha256', $source), hash_file('sha256', $this->project.'/'.$patch->file));
                 $report['visual'] = $visual;
                 $report['gates'] = ['baselineReproduced' => true, 'protectedTestsPassed' => $candidate['exitCode'] === 0,
                     'outsideMaskPreserved' => $visual['passed'], 'authorityIntact' => $intact];

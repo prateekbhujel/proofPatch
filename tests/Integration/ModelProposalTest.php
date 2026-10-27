@@ -26,7 +26,7 @@ final class ModelProposalTest extends TestCase
         foreach (['checkout.png', 'observation.json', 'phpunit.log', 'junit.xml'] as $file) {
             file_put_contents($this->directory.'/baseline/'.$file, 'test evidence '.$file);
         }
-        $report = ['id' => '20261027T040000Z-123456abcdef', 'decision' => 'FAILED',
+        $report = ['id' => '20261027T040000Z-123456abcdef', 'decision' => 'FAILED', 'proposal' => ['file' => 'public/fixtures/checkout.html'],
             'baseCommit' => trim(LocalProcess::output(['git', '-C', $this->project, 'rev-parse', 'HEAD'])),
             'runs' => ['baseline' => ['exitCode' => 1, 'observation' => [
                 'initial' => 'Standard', 'selected' => 'Standard', 'pointer' => ['trusted' => true, 'x' => 420, 'y' => 320],

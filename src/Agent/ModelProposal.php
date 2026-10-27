@@ -26,9 +26,13 @@ final readonly class ModelProposal
         }
         $sourceReceipt = (new Receipt())->verify($directory);
         $report = json_decode((string) file_get_contents($directory.'/result.json'), true, 64, JSON_THROW_ON_ERROR);
+        $fixture = $report['proposal']['file'] ?? null;
+        if (!in_array($fixture, CssPatch::FILES, true)) {
+            throw new \InvalidArgumentException('The recorded fixture is not supported.');
+        }
         $head = trim(LocalProcess::output(['git', '-C', $this->project, 'rev-parse', 'HEAD']));
-        $source = file_get_contents($this->project.'/'.CssPatch::FILE);
-        $committed = LocalProcess::output(['git', '-C', $this->project, 'show', $head.':'.CssPatch::FILE]);
+        $source = file_get_contents($this->project.'/'.$fixture);
+        $committed = LocalProcess::output(['git', '-C', $this->project, 'show', $head.':'.$fixture]);
         if ($source === false || !hash_equals(hash('sha256', $committed), hash('sha256', $source))
             || ($report['baseCommit'] ?? null) !== $head) {
             throw new \InvalidArgumentException('Run a fresh baseline against the current committed fixture.');
@@ -51,7 +55,7 @@ final readonly class ModelProposal
         }
         // Reserve uncached text input by UTF-8 bytes plus framing allowance and maximum output.
         $reserveMicros = (int) ceil((strlen($system.$prompt) + 4096) * 1.25 + self::MAX_TOKENS * 4.25);
-        return $this->budget->run($reserveMicros, function () use ($key, $system, $prompt, $source, $sourceReceipt): array {
+        return $this->budget->run($reserveMicros, function () use ($key, $system, $prompt, $source, $sourceReceipt, $fixture): array {
             $response = $this->http->request('POST', self::ENDPOINT, [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0, 'timeout' => 90, 'max_duration' => 120,
@@ -76,7 +80,7 @@ final readonly class ModelProposal
             if (!is_array($candidate) || count($candidate) !== 2 || !array_key_exists('find', $candidate) || !array_key_exists('replace', $candidate)) {
                 throw new \RuntimeException('Model did not return the required patch format.');
             }
-            $patch = CssPatch::fromArray(['file' => CssPatch::FILE, 'baseSha256' => hash('sha256', $source),
+            $patch = CssPatch::fromArray(['file' => $fixture, 'baseSha256' => hash('sha256', $source),
                 'find' => $candidate['find'], 'replace' => $candidate['replace']]);
             $patch->apply($source);
             $usage = $result['usage'] ?? null;

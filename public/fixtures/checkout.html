@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northline checkout</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f2f5f8; color: #18313c; font: 16px Arial, sans-serif; }
+    main { position: absolute; left: 240px; top: 100px; width: 800px; height: 520px; padding: 40px; background: white; border: 1px solid #d9e1e7; border-radius: 16px; }
+    h1 { margin: 0; font-size: 28px; }
+    .subtitle { color: #627581; margin-top: 12px; }
+    #promo-banner { position: absolute; left: 40px; top: 108px; width: 720px; height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #145c57; color: white; border-radius: 8px; }
+    #promo-details { border: 0; padding: 8px 12px; background: #e5f3ee; border-radius: 5px; color: #145c57; cursor: pointer; }
+    .promo-hitbox { position: fixed; left: 320px; top: 296px; width: 300px; height: 48px; z-index: 5; pointer-events: auto; }
+    h2 { position: absolute; left: 80px; top: 168px; margin: 0; font-size: 18px; }
+    #express { position: absolute; left: 80px; top: 196px; width: 300px; height: 48px; border: 1px solid #8fa5af; border-radius: 8px; background: white; color: #18313c; font: inherit; text-align: left; padding-left: 18px; cursor: pointer; }
+    #selection { position: absolute; left: 80px; top: 268px; margin: 0; }
+    #summary { position: absolute; left: 480px; top: 172px; width: 240px; line-height: 2; }
+    #summary strong { display: block; font-size: 20px; }
+    #offer-feedback { position: absolute; left: 40px; bottom: 32px; color: #627581; }
+    .footer { position: absolute; left: 80px; bottom: 100px; color: #627581; }
+    button:focus-visible { outline: 3px solid #e59d39; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Northline / Checkout</h1>
+  <p class="subtitle">One final step before your order is on its way.</p>
+  <section id="promo-banner" aria-label="Shipping offer">
+    <span>Complimentary standard delivery on orders over $75</span>
+    <button id="promo-details" type="button">Offer details</button>
+    <div class="promo-hitbox" aria-hidden="true"></div>
+  </section>
+  <h2>Delivery method</h2>
+  <button id="express" type="button">Express Next-Day &nbsp; + $8.00</button>
+  <p id="selection">Selected: <strong id="shipping-selected">Standard</strong></p>
+  <section id="summary" aria-label="Order summary">Order total<strong>$96.00</strong><span>2 items · Secure checkout</span></section>
+  <p class="footer">Your delivery preference is saved for this order.</p>
+  <p id="offer-feedback" role="status"></p>
+</main>
+<script>
+  document.addEventListener('pointerdown', event => {
+    window.lastPointer = {trusted: event.isTrusted, x: event.clientX, y: event.clientY, target: event.target.id || event.target.className};
+  });
+  document.querySelector('#express').addEventListener('click', () => {
+    document.querySelector('#shipping-selected').textContent = 'Express Next-Day';
+  });
+  document.querySelector('#promo-details').addEventListener('click', () => {
+    document.querySelector('#offer-feedback').textContent = 'Offer terms opened';
+  });
+</script>
+</body>
+</html>

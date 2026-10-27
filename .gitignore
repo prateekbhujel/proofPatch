@@ -1,0 +1,12 @@
+/vendor/
+/drivers/
+/artifacts/
+/.phpunit.cache/
+/.env
+/.env.*
+!/.env.example
+/.DS_Store
+/.idea/
+/.vscode/
+/.worktrees/
+*.log

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProofPatch\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use ProofPatch\Evidence\Receipt;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 use ProofPatch\Verifier\CheckoutVerifier;
@@ -38,6 +39,11 @@ final class CheckoutVerifierTest extends TestCase
         self::assertSame($report['runs']['candidate']['logSha256'], hash_file('sha256', $report['evidenceDirectory'].'/candidate/phpunit.log'));
         self::assertSame($report['runs']['candidate']['junitSha256'], hash_file('sha256', $report['evidenceDirectory'].'/candidate/junit.xml'));
         self::assertStringContainsString($project.'/tests/Locked/CheckoutLockedTest.php', implode(' ', $report['runs']['candidate']['argv']));
+        $receipt = json_decode(file_get_contents($report['evidenceDirectory'].'/receipt.json'), true, 32, JSON_THROW_ON_ERROR);
+        $checked = (new Receipt())->verify($report['evidenceDirectory'], $receipt['sha256']);
+        self::assertSame('VALID', $checked['integrity']);
+        self::assertTrue($checked['externallyAnchored']);
+        self::assertSame('VERIFIED', $checked['decision']);
     }
 
     public function testRejectsABannerHidingShortcutEvenWhenShippingWorks(): void

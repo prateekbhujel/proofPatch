@@ -1,0 +1,19 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use ProofPatch\Evidence\Receipt;
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+try {
+    if ($argc < 2 || $argc > 3) {
+        throw new InvalidArgumentException('Usage: php bin/check-receipt RUN_DIRECTORY [EXPECTED_SHA256]');
+    }
+    $result = (new Receipt())->verify($argv[1], $argv[2] ?? null);
+    echo json_encode($result, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)."\n";
+} catch (Throwable $error) {
+    fwrite(STDERR, 'Receipt check failed: '.$error->getMessage()."\n");
+    exit(1);
+}

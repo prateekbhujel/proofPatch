@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProofPatch\Verifier;
 
 use ProofPatch\Evidence\CanonicalJson;
+use ProofPatch\Evidence\Receipt;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 
@@ -20,7 +21,7 @@ final readonly class CheckoutVerifier
         }
     }
 
-    public function verify(CssPatch $patch): array
+    public function verify(CssPatch $patch, ?array $proposalEvidence = null): array
     {
         $head = trim($this->git('rev-parse', 'HEAD'));
         $source = $this->git('show', $head.':'.CssPatch::FILE);
@@ -47,6 +48,9 @@ final readonly class CheckoutVerifier
             'proposalHashFormat' => 'proofpatch-json-v1',
             'proposalSha256' => hash('sha256', CanonicalJson::encode($proposal)),
             'protectedSha256' => $authority, 'allowedMask' => self::MASK, 'evidenceDirectory' => $evidence];
+        if ($proposalEvidence !== null) {
+            $report['proposalEvidence'] = $proposalEvidence;
+        }
         $worktrees = [];
         try {
             foreach (['baseline', 'candidate'] as $case) {
@@ -101,7 +105,13 @@ final readonly class CheckoutVerifier
             }
         }
         $report['runnerSha256'] = hash_file('sha256', __FILE__);
-        file_put_contents($evidence.'/result.json', json_encode($report, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)."\n");
+        if (file_put_contents($evidence.'/result.json', json_encode($report, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)."\n") === false) {
+            throw new \RuntimeException('Could not write the run report.');
+        }
+        $receipt = (new Receipt())->create($evidence);
+        if (file_put_contents($evidence.'/receipt.json', json_encode($receipt, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)."\n") === false) {
+            throw new \RuntimeException('Could not write the evidence receipt.');
+        }
         return $report;
     }
 

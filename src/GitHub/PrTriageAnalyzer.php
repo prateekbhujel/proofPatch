@@ -4,256 +4,83 @@ declare(strict_types=1);
 
 namespace ProofPatch\GitHub;
 
+/** Compares captured file names only. It does not assess code, authorship or coverage. */
 final readonly class PrTriageAnalyzer
 {
-    public function __construct(private array $policy = [])
-    {
-    }
+    public function __construct(private array $policy = []) {}
 
-    /**
-     * Analyze a target PR against a list of candidate PRs (or single candidate).
-     */
     public function triage(array $targetPull, array $candidatePulls): array
     {
-        $targetFiles = $this->extractFileNames($targetPull);
-        $totalChanges = 0;
+        $files = $this->fileNames($targetPull);
+        $total = 0;
         foreach ($targetPull['files'] ?? [] as $file) {
-            $totalChanges += ($file['additions'] ?? 0) + ($file['deletions'] ?? 0);
+            $total += ($file['additions'] ?? 0) + ($file['deletions'] ?? 0);
         }
-        $hasTests = false;
-        foreach ($targetFiles as $file) {
-            if (preg_match('/(?:test|spec|tests\/|__tests__)/i', $file)) {
-                $hasTests = true;
-                break;
-            }
-        }
-
-        $policyEvaluation = $this->evaluatePolicy($totalChanges, $hasTests);
+        $truncated = (bool) ($targetPull['filesTruncated'] ?? false);
+        // A path is a hint only, not proof that tests exist, ran, or cover this change.
+        $testPaths = array_values(array_filter($files, static fn (string $file): bool =>
+            (bool) preg_match('~(?:^|/)(?:tests?|__tests__)/|(?:^|/)[^/]+[._-](?:test|spec)\.[^/]+$~i', $file)
+            || (bool) preg_match('~(?:^|/)[^/]+(?:Test|Spec)\.[^/]+$~', $file)));
+        $limit = (int) ($this->policy['maxDiffLines'] ?? 50);
+        $coverageRequired = (bool) ($this->policy['requireTestCoverage'] ?? true);
+        $exceeded = $total > $limit;
+        $status = $exceeded ? 'review' : (($truncated || $coverageRequired) ? 'unknown' : 'within_limit');
 
         $comparisons = [];
-        $topMatch = null;
-        $maxScore = -1.0;
-
+        $targetRepo = $targetPull['repository'] ?? null;
         foreach ($candidatePulls as $candidate) {
-            if (($candidate['number'] ?? null) === ($targetPull['number'] ?? null)
-                && ($candidate['repository'] ?? '') === ($targetPull['repository'] ?? '')) {
+            $candidateRepo = $candidate['repository'] ?? null;
+            if (!is_string($targetRepo) || $targetRepo === '' || !is_string($candidateRepo)
+                || strcasecmp($targetRepo, $candidateRepo) !== 0
+                || ($candidate['number'] ?? null) === ($targetPull['number'] ?? null)) {
                 continue;
             }
-            $candidateFiles = $this->extractFileNames($candidate);
-            $comparison = $this->compareSingle($targetPull, $targetFiles, $candidate, $candidateFiles);
-            $comparisons[] = $comparison;
-            if ($comparison['jaccardScore'] > $maxScore) {
-                $maxScore = $comparison['jaccardScore'];
-                $topMatch = $comparison;
-            }
+            $candidateFiles = $this->fileNames($candidate);
+            $shared = array_values(array_intersect($files, $candidateFiles));
+            $union = array_values(array_unique(array_merge($files, $candidateFiles)));
+            $score = count($union) ? count($shared) / count($union) : 0.0;
+            $incomplete = $truncated || (bool) ($candidate['filesTruncated'] ?? false);
+            $number = $candidate['number'] ?? 0;
+            $comparisons[] = [
+                'candidate' => ['repository' => $candidateRepo, 'number' => $number,
+                    'headSha' => $candidate['headSha'] ?? '', 'title' => $candidate['title'] ?? '',
+                    'fileCount' => count($candidateFiles)],
+                'jaccardScore' => round($score, 4), 'matchPercentage' => (int) round($score * 100),
+                'sharedFiles' => $shared, 'sharedFilesCount' => count($shared), 'incomplete' => $incomplete,
+                'relationship' => count($shared) ? 'SHARED_FILES' : 'NO_SHARED_FILES_OBSERVED',
+                'verdictBanner' => count($shared)
+                    ? 'Shared file paths with PR #'.$number.'. This does not establish a duplicate fix.'
+                    : 'No shared file paths observed with PR #'.$number.'.',
+            ];
         }
 
-        $summary = $this->generateSummary($targetPull, $topMatch, $policyEvaluation);
-
+        $withShared = array_filter($comparisons, static fn (array $c): bool => $c['sharedFilesCount'] > 0);
+        $headline = $exceeded ? 'Changed lines exceed the configured limit'
+            : ($withShared ? 'Shared file paths found' : 'Review needs more evidence');
+        $detail = $exceeded ? 'Review the size threshold; this is not an automatic merge decision.'
+            : ($withShared ? 'Compare the captured PRs manually; file overlap does not establish duplicate changes.'
+                : 'Only captured PRs were compared. Test coverage and code quality have not been assessed.');
         return [
-            'target' => [
-                'repository' => $targetPull['repository'] ?? 'unknown',
-                'number' => $targetPull['number'] ?? 0,
-                'headSha' => $targetPull['headSha'] ?? '',
-                'title' => $targetPull['title'] ?? '',
-                'totalChanges' => $totalChanges,
-                'hasTests' => $hasTests,
-                'fileCount' => count($targetFiles),
-            ],
-            'policy' => $policyEvaluation,
-            'summary' => $summary,
-            'comparisons' => $comparisons,
+            'target' => ['repository' => $targetRepo ?? 'unknown', 'number' => $targetPull['number'] ?? 0,
+                'headSha' => $targetPull['headSha'] ?? '', 'title' => $targetPull['title'] ?? '',
+                'totalChanges' => $total, 'testPaths' => $testPaths, 'fileCount' => count($files), 'filesTruncated' => $truncated],
+            'policy' => ['mode' => $this->policy['maintainerMode'] ?? 'STRICT_ANTI_SLOP', 'status' => $status,
+                'maxDiffLines' => $limit, 'totalChanges' => $total, 'diffExceeded' => $exceeded,
+                'requireTestCoverage' => $coverageRequired, 'coverage' => 'unknown'],
+            'summary' => ['verdict' => 'REVIEW', 'headline' => $headline, 'detail' => $detail, 'severity' => 'amber'],
+            'comparisons' => array_values($comparisons),
         ];
     }
 
-    private function compareSingle(array $target, array $targetFiles, array $candidate, array $candidateFiles): array
-    {
-        $intersection = array_values(array_intersect($targetFiles, $candidateFiles));
-        $union = array_values(array_unique(array_merge($targetFiles, $candidateFiles)));
-
-        $jaccard = count($union) > 0 ? count($intersection) / count($union) : 0.0;
-        $matchPercentage = (int) round($jaccard * 100);
-
-        $hunkOverlap = $this->detectHunkOverlap($target['files'] ?? [], $candidate['files'] ?? []);
-
-        $relationship = 'INDEPENDENT';
-        if ($jaccard > 0.0) {
-            if ($jaccard >= 0.999) {
-                $relationship = $hunkOverlap['hasLineOverlap'] ? 'DUPLICATE' : 'IDENTICAL_FILES_DIFFERENT_HUNKS';
-            } elseif (count($intersection) === count($targetFiles) && count($candidateFiles) > count($targetFiles)) {
-                $relationship = 'SUPERSET';
-            } elseif (count($intersection) === count($candidateFiles) && count($targetFiles) > count($candidateFiles)) {
-                $relationship = 'SUBSET';
-            } else {
-                $relationship = 'PARTIAL_OVERLAP';
-            }
-        }
-
-        $verdictBanner = $this->formatVerdictBanner($candidate, $relationship, $matchPercentage, count($intersection));
-
-        return [
-            'candidate' => [
-                'repository' => $candidate['repository'] ?? 'unknown',
-                'number' => $candidate['number'] ?? 0,
-                'headSha' => $candidate['headSha'] ?? '',
-                'title' => $candidate['title'] ?? '',
-                'fileCount' => count($candidateFiles),
-            ],
-            'jaccardScore' => round($jaccard, 4),
-            'matchPercentage' => $matchPercentage,
-            'sharedFiles' => $intersection,
-            'sharedFilesCount' => count($intersection),
-            'hunkOverlap' => $hunkOverlap,
-            'relationship' => $relationship,
-            'verdictBanner' => $verdictBanner,
-        ];
-    }
-
-    private function detectHunkOverlap(array $targetFiles, array $candidateFiles): array
-    {
-        $candidateMap = [];
-        foreach ($candidateFiles as $file) {
-            if (isset($file['name'])) {
-                $candidateMap[$file['name']] = $file;
-            }
-        }
-
-        $overlappingFiles = [];
-        $totalOverlappingHunks = 0;
-
-        foreach ($targetFiles as $file) {
-            $name = $file['name'] ?? null;
-            if ($name === null || !isset($candidateMap[$name])) {
-                continue;
-            }
-            $targetHunks = $this->parseHunks($file['patch'] ?? '');
-            $candHunks = $this->parseHunks($candidateMap[$name]['patch'] ?? '');
-
-            $overlapCount = 0;
-            foreach ($targetHunks as $tHunk) {
-                foreach ($candHunks as $cHunk) {
-                    if ($this->rangesIntersect($tHunk, $cHunk)) {
-                        ++$overlapCount;
-                    }
-                }
-            }
-            if ($overlapCount > 0) {
-                $overlappingFiles[] = ['name' => $name, 'overlappingHunks' => $overlapCount];
-                $totalOverlappingHunks += $overlapCount;
-            }
-        }
-
-        return [
-            'hasLineOverlap' => $totalOverlappingHunks > 0,
-            'overlappingHunksCount' => $totalOverlappingHunks,
-            'overlappingFiles' => $overlappingFiles,
-        ];
-    }
-
-    private function parseHunks(string $patch): array
-    {
-        if (trim($patch) === '') {
-            return [];
-        }
-        $hunks = [];
-        if (preg_match_all('/@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/', $patch, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $start = (int) $match[1];
-                $len = isset($match[2]) && $match[2] !== '' ? (int) $match[2] : 1;
-                $hunks[] = ['start' => $start, 'end' => $start + max(0, $len - 1)];
-            }
-        }
-        return $hunks;
-    }
-
-    private function rangesIntersect(array $a, array $b): bool
-    {
-        return max($a['start'], $b['start']) <= min($a['end'], $b['end']);
-    }
-
-    private function extractFileNames(array $pull): array
+    private function fileNames(array $pull): array
     {
         $names = [];
         foreach ($pull['files'] ?? [] as $file) {
-            if (isset($file['name']) && is_string($file['name'])) {
+            if (is_string($file['name'] ?? null)) {
                 $names[] = $file['name'];
             }
         }
         sort($names);
         return array_values(array_unique($names));
-    }
-
-    private function evaluatePolicy(int $totalChanges, bool $hasTests): array
-    {
-        $maxDiffLines = (int) ($this->policy['maxDiffLines'] ?? 50);
-        $requireTests = (bool) ($this->policy['requireTestCoverage'] ?? true);
-        $mode = $this->policy['maintainerMode'] ?? 'STRICT_ANTI_SLOP';
-
-        $diffExceeded = $totalChanges > $maxDiffLines;
-        $testsMissing = $requireTests && !$hasTests;
-        $passed = !$diffExceeded && !$testsMissing;
-
-        return [
-            'mode' => $mode,
-            'passed' => $passed,
-            'maxDiffLines' => $maxDiffLines,
-            'totalChanges' => $totalChanges,
-            'diffExceeded' => $diffExceeded,
-            'requireTestCoverage' => $requireTests,
-            'hasTests' => $hasTests,
-            'testsMissing' => $testsMissing,
-            'action' => $passed ? 'PROMOTE_FOR_HUMAN_REVIEW' : 'QUARANTINE_DO_NOT_NOTIFY_MAINTAINER',
-        ];
-    }
-
-    private function formatVerdictBanner(array $candidate, string $relationship, int $pct, int $sharedCount): string
-    {
-        $num = $candidate['number'] ?? 0;
-        return match ($relationship) {
-            'DUPLICATE' => "OVERLAPS PR #{$num} ({$pct}% match) — Touches the exact same files and hunk lines; candidate is a duplicate fix.",
-            'SUPERSET' => "OVERLAPS PR #{$num} ({$pct}% match) — PR #{$num} is a superset fix encompassing all shared files.",
-            'SUBSET' => "OVERLAPS PR #{$num} ({$pct}% match) — PR #{$num} is a subset fix of the current change.",
-            'PARTIAL_OVERLAP' => "PARTIAL OVERLAP WITH PR #{$num} ({$pct}% match) — Shares {$sharedCount} files in common queue.",
-            'IDENTICAL_FILES_DIFFERENT_HUNKS' => "SHARED FILES WITH PR #{$num} ({$pct}% match) — Same files modified but distinct line hunks.",
-            default => "INDEPENDENT — 0 file overlap with PR #{$num}.",
-        };
-    }
-
-    private function generateSummary(array $target, ?array $topMatch, array $policy): array
-    {
-        if (!$policy['passed']) {
-            $reason = $policy['diffExceeded'] ? 'Exceeds maximum bounded diff lines' : 'Missing test coverage in pull request';
-            return [
-                'verdict' => 'QUARANTINE',
-                'headline' => 'DO NOT MERGE — Violates maintainer anti-slop policy',
-                'detail' => $reason.' (Mode: '.$policy['mode'].').',
-                'severity' => 'red',
-            ];
-        }
-
-        if ($topMatch !== null && $topMatch['matchPercentage'] >= 75) {
-            return [
-                'verdict' => 'OVERLAP_WARNING',
-                'headline' => "OVERLAPS PR #{$topMatch['candidate']['number']} ({$topMatch['matchPercentage']}% match)",
-                'detail' => "Shares {$topMatch['sharedFilesCount']} files in repository; investigate queue collision before review.",
-                'severity' => 'amber',
-            ];
-        }
-
-        if ($topMatch !== null && $topMatch['matchPercentage'] > 0) {
-            return [
-                'verdict' => 'PARTIAL_OVERLAP',
-                'headline' => "PARTIAL QUEUE OVERLAP ({$topMatch['matchPercentage']}% match)",
-                'detail' => "Shares {$topMatch['sharedFilesCount']} files with PR #{$topMatch['candidate']['number']}.",
-                'severity' => 'amber',
-            ];
-        }
-
-        return [
-            'verdict' => 'CLEAR',
-            'headline' => 'READY FOR VERIFICATION — 0 queue collisions',
-            'detail' => 'Complies with maintainer policy and touches independent files.',
-            'severity' => 'emerald',
-        ];
     }
 }

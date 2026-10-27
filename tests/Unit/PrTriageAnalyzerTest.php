@@ -9,7 +9,7 @@ use ProofPatch\GitHub\PrTriageAnalyzer;
 
 final class PrTriageAnalyzerTest extends TestCase
 {
-    public function testDetectsDuplicatePrWithHunkLineOverlap(): void
+    public function testSharedHunksDoNotEstablishDuplicatePr(): void
     {
         $target = [
             'repository' => 'livewire/livewire',
@@ -59,19 +59,19 @@ final class PrTriageAnalyzerTest extends TestCase
 
         $result = $analyzer->triage($target, [$candidate]);
 
-        self::assertTrue($result['policy']['passed']);
+        self::assertSame('unknown', $result['policy']['status']);
         self::assertCount(1, $result['comparisons']);
 
         $comp = $result['comparisons'][0];
         self::assertSame(1.0, $comp['jaccardScore']);
         self::assertSame(100, $comp['matchPercentage']);
-        self::assertSame('DUPLICATE', $comp['relationship']);
-        self::assertTrue($comp['hunkOverlap']['hasLineOverlap']);
-        self::assertSame('OVERLAP_WARNING', $result['summary']['verdict']);
-        self::assertStringContainsString('100% match', $result['summary']['headline']);
+        self::assertSame('SHARED_FILES', $comp['relationship']);
+        self::assertStringContainsString('does not establish a duplicate', $comp['verdictBanner']);
+        self::assertSame('REVIEW', $result['summary']['verdict']);
+        self::assertSame('unknown', $result['policy']['coverage']);
     }
 
-    public function testDetectsSupersetAndIndependentRelationships(): void
+    public function testComparesFilePathsWithoutClaimingFixRelationships(): void
     {
         $target = [
             'repository' => 'laravel/framework',
@@ -111,16 +111,16 @@ final class PrTriageAnalyzerTest extends TestCase
 
         // Check superset
         self::assertSame(501, $result['comparisons'][0]['candidate']['number']);
-        self::assertSame('SUPERSET', $result['comparisons'][0]['relationship']);
+        self::assertSame('SHARED_FILES', $result['comparisons'][0]['relationship']);
         self::assertSame(67, $result['comparisons'][0]['matchPercentage']);
 
         // Check independent
         self::assertSame(502, $result['comparisons'][1]['candidate']['number']);
-        self::assertSame('INDEPENDENT', $result['comparisons'][1]['relationship']);
+        self::assertSame('NO_SHARED_FILES_OBSERVED', $result['comparisons'][1]['relationship']);
         self::assertSame(0.0, $result['comparisons'][1]['jaccardScore']);
     }
 
-    public function testQuarantinesPrExceedingMaxDiffLinesOrMissingTests(): void
+    public function testLargePrIsFlaggedForReviewWithoutClaimingMissingCoverageOrAutomaticAction(): void
     {
         $slopPr = [
             'repository' => 'example/repo',
@@ -138,11 +138,25 @@ final class PrTriageAnalyzerTest extends TestCase
 
         $result = $analyzer->triage($slopPr, []);
 
-        self::assertFalse($result['policy']['passed']);
+        self::assertSame('review', $result['policy']['status']);
         self::assertTrue($result['policy']['diffExceeded']);
-        self::assertTrue($result['policy']['testsMissing']);
-        self::assertSame('QUARANTINE_DO_NOT_NOTIFY_MAINTAINER', $result['policy']['action']);
-        self::assertSame('QUARANTINE', $result['summary']['verdict']);
-        self::assertSame('red', $result['summary']['severity']);
+        self::assertSame('unknown', $result['policy']['coverage']);
+        self::assertSame('REVIEW', $result['summary']['verdict']);
+        self::assertSame('amber', $result['summary']['severity']);
+    }
+
+    public function testMissingPatchesCrossRepositoryAndTruncatedEvidenceAreNotOverclaimed(): void
+    {
+        $target = ['repository' => 'org/repo', 'number' => 1, 'filesTruncated' => true,
+            'files' => [['name' => 'src/latest.php', 'additions' => 1, 'deletions' => 0]]];
+        $sameRepo = ['repository' => 'ORG/REPO', 'number' => 2, 'files' => [['name' => 'src/latest.php']]];
+        $differentRepo = ['repository' => 'other/repo', 'number' => 3, 'files' => [['name' => 'src/latest.php']]];
+        $result = (new PrTriageAnalyzer(['requireTestCoverage' => false]))->triage($target, [$sameRepo, $differentRepo]);
+        self::assertCount(1, $result['comparisons']);
+        self::assertSame('SHARED_FILES', $result['comparisons'][0]['relationship']);
+        self::assertTrue($result['comparisons'][0]['incomplete']);
+        self::assertSame([], $result['target']['testPaths']);
+        self::assertSame('unknown', $result['policy']['status']);
+        self::assertStringNotContainsString('distinct line hunks', $result['comparisons'][0]['verdictBanner']);
     }
 }

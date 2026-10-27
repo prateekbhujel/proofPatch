@@ -12,8 +12,10 @@ use ProofPatch\Agent\Credentials;
 use ProofPatch\Agent\ModelProposal;
 use ProofPatch\Agent\RequestBudget;
 use ProofPatch\Evidence\Receipt;
+use ProofPatch\Evidence\RunEvidence;
 use ProofPatch\GitHub\PullRequestReader;
 use ProofPatch\GitHub\PullRequestSnapshot;
+use ProofPatch\GitHub\PublicPatchPreview;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 use ProofPatch\Verifier\CheckoutVerifier;
@@ -69,10 +71,12 @@ final class DashboardController
         $totalRuns = count($runFiles);
         $verifiedRuns = 0;
         foreach ($runFiles as $rf) {
-            $data = json_decode((string) file_get_contents($rf), true);
-            if (($data['decision'] ?? null) === 'VERIFIED') {
-                $verifiedRuns++;
-            }
+            try {
+                $run = (new RunEvidence())->read(dirname($rf));
+                if ($run['receipt'] !== null && $run['report']['decision'] === 'VERIFIED') {
+                    $verifiedRuns++;
+                }
+            } catch (\Throwable) {}
         }
 
         return Inertia::render('Overview', [
@@ -119,6 +123,17 @@ final class DashboardController
             }
         }
 
+        $patchPreview = null;
+        $patchPreviewError = null;
+        if ($request->query('preview') === '1' && is_array($pull) && is_array($snapshot)) {
+            try {
+                // Deliberately unauthenticated: private PR content must never be previewed here.
+                $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
+            } catch (\Throwable) {
+                $patchPreviewError = 'Unable to preview this public pull request. It may have changed, be private, or be unavailable. Capture it again and retry.';
+            }
+        }
+
         $triage = null;
         if ($pull !== null) {
             $policyFile = $this->project.'/.proofpatchrc.json';
@@ -141,6 +156,8 @@ final class DashboardController
             'pull' => $pull,
             'snapshot' => $snapshot,
             'triage' => $triage,
+            'patchPreview' => $patchPreview,
+            'patchPreviewError' => $patchPreviewError,
             'error' => $error ?: null,
         ]);
     }
@@ -215,10 +232,10 @@ final class DashboardController
             if ($runDir($id) === null || is_link($file) || filesize($file) > 1048576) {
                 continue;
             }
-            $record = json_decode((string) file_get_contents($file), true);
-            if (is_array($record) && ($record['id'] ?? null) === $id && in_array($record['decision'] ?? null, ['VERIFIED', 'FAILED', 'INCONCLUSIVE'], true)) {
-                $history[$id] = $record;
-            }
+            try {
+                $run = (new RunEvidence())->read(dirname($file));
+                $history[$id] = array_merge($run['report'], ['integrityValid' => $run['receipt'] !== null]);
+            } catch (\Throwable) {}
         }
         krsort($history, SORT_STRING);
         $history = array_slice($history, 0, 20, true);
@@ -233,7 +250,7 @@ final class DashboardController
         }
         $report = $history[$runId] ?? null;
         $currentHead = trim(LocalProcess::output(['git', '-C', $this->project, 'rev-parse', 'HEAD']));
-        $baselineReady = $report !== null && ($report['baseCommit'] ?? null) === $currentHead
+        $baselineReady = $report !== null && ($report['integrityValid'] ?? false) && ($report['baseCommit'] ?? null) === $currentHead
             && ($report['runs']['baseline']['exitCode'] ?? null) === 1;
         $home = getenv('HOME');
         $budgetStatus = null;

@@ -14,8 +14,6 @@ import {
   Layers,
   AlertTriangle,
   GitPullRequest,
-  CheckCircle,
-  XCircle,
 } from 'lucide-react';
 
 interface ChangedFile {
@@ -63,11 +61,7 @@ interface TriageComparison {
   matchPercentage: number;
   sharedFiles: string[];
   sharedFilesCount: number;
-  hunkOverlap: {
-    hasLineOverlap: boolean;
-    overlappingHunksCount: number;
-    overlappingFiles: Array<{ name: string; overlappingHunks: number }>;
-  };
+  incomplete: boolean;
   relationship: string;
   verdictBanner: string;
 }
@@ -79,19 +73,18 @@ interface TriageData {
     headSha: string;
     title: string;
     totalChanges: number;
-    hasTests: boolean;
+    testPaths: string[];
     fileCount: number;
+    filesTruncated: boolean;
   };
   policy: {
     mode: string;
-    passed: boolean;
+    status: 'review' | 'unknown' | 'within_limit';
     maxDiffLines: number;
     totalChanges: number;
     diffExceeded: boolean;
     requireTestCoverage: boolean;
-    hasTests: boolean;
-    testsMissing: boolean;
-    action: string;
+    coverage: 'unknown';
   };
   summary: {
     verdict: string;
@@ -107,6 +100,14 @@ interface RepositoriesProps {
   snapshot?: SnapshotData | null;
   triage?: TriageData | null;
   error?: string | null;
+  patchPreview?: {
+    headSha: string;
+    baseSha: string;
+    changedFiles: number;
+    filesTruncated: boolean;
+    files: Array<{ name: string; status: 'available' | 'missing' | 'oversize' | 'partial'; patch: string | null }>;
+  } | null;
+  patchPreviewError?: string | null;
   csrf?: string;
 }
 
@@ -115,9 +116,11 @@ export default function Repositories({
   snapshot = null,
   triage = null,
   error = null,
+  patchPreview = null,
+  patchPreviewError = null,
 }: RepositoriesProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'triage' | 'files' | 'checks' | 'receipt' | 'new'>(
-    pull ? 'overview' : 'new'
+    patchPreview || patchPreviewError ? 'files' : pull ? 'overview' : 'new'
   );
   const [fileQuery, setFileQuery] = useState('');
   const [checkQuery, setCheckQuery] = useState('');
@@ -231,7 +234,7 @@ export default function Repositories({
                     className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-600 hover:bg-violet-700 shadow-xs transition"
                   >
                     <Zap className="w-4 h-4" />
-                    <span>Run Workspace</span>
+                    <span>Open sample verifier</span>
                   </Link>
                 </div>
               </div>
@@ -417,13 +420,10 @@ export default function Repositories({
                         </div>
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                            triage.policy.passed
-                              ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                              : 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20'
+                            'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
                           }`}
                         >
-                          {triage.policy.passed ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                          <span>{triage.policy.action}</span>
+                          <span>Human review needed</span>
                         </span>
                       </div>
 
@@ -431,27 +431,27 @@ export default function Repositories({
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
                           <div className="text-slate-500">Max Diff Lines</div>
                           <div className="text-sm font-bold font-mono text-slate-900">
-                            {triage.policy.totalChanges} / {triage.policy.maxDiffLines} lines
+                            {triage.target.filesTruncated ? 'At least ' : ''}{triage.policy.totalChanges} / {triage.policy.maxDiffLines} lines
                           </div>
                           <div className={`font-medium ${triage.policy.diffExceeded ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {triage.policy.diffExceeded ? 'Exceeded limit' : 'Within budget'}
+                            {triage.policy.diffExceeded ? 'Exceeded limit' : triage.target.filesTruncated ? 'Incomplete file list' : 'Within configured limit'}
                           </div>
                         </div>
 
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-                          <div className="text-slate-500">Test File Presence</div>
+                          <div className="text-slate-500">Test coverage</div>
                           <div className="text-sm font-bold text-slate-900">
-                            {triage.target.hasTests ? 'Verified' : 'Missing'}
+                            Not assessed
                           </div>
-                          <div className={`font-medium ${triage.policy.testsMissing ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {triage.policy.testsMissing ? 'Tests required by policy' : 'Test files included'}
+                          <div className="text-slate-500">
+                            {triage.target.testPaths.length} test-like paths in captured files; no tests were run.
                           </div>
                         </div>
 
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
                           <div className="text-slate-500">Enforcement Mode</div>
                           <div className="text-sm font-bold text-slate-900">{triage.policy.mode}</div>
-                          <div className="text-slate-500">Zero maintainer time wasted on unverified slop</div>
+                          <div className="text-slate-500">Advisory only; no action taken</div>
                         </div>
                       </div>
                     </div>
@@ -459,18 +459,17 @@ export default function Repositories({
                     {/* PR Queue Overlap Comparisons */}
                     <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
                       <div>
-                        <h2 className="text-base font-semibold text-slate-900">Queue Overlap & Duplicate Detection</h2>
+                        <h2 className="text-base font-semibold text-slate-900">Captured PR comparisons</h2>
                         <p className="text-xs text-slate-500">
-                          Deterministic Jaccard file overlap and diff hunk line-range intersection across open pull requests
+                          Shared file paths from saved snapshots in this repository. This is not a complete PR queue or a duplicate check.
                         </p>
                       </div>
 
                       {triage.comparisons.length === 0 ? (
                         <div className="p-6 rounded-lg bg-slate-50 border border-slate-200 text-center space-y-2">
-                          <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-                          <div className="text-sm font-semibold text-slate-900">0 Queue Collisions Detected</div>
+                          <div className="text-sm font-semibold text-slate-900">No other captured PRs to compare</div>
                           <p className="text-xs text-slate-500 max-w-md mx-auto">
-                            No overlapping files or diff hunks found with other captured pull requests in this repository.
+                            Capture another PR from this repository to compare file paths.
                           </p>
                         </div>
                       ) : (
@@ -508,7 +507,7 @@ export default function Repositories({
                                         : 'bg-slate-100 text-slate-800 border border-slate-200'
                                     }`}
                                   >
-                                    {comp.matchPercentage}% match
+                                    {comp.matchPercentage}% file overlap{comp.incomplete ? ' (partial)' : ''}
                                   </span>
                                   <span className="px-2 py-0.5 rounded text-2xs font-bold uppercase tracking-wider bg-white border border-slate-200">
                                     {comp.relationship}
@@ -581,6 +580,26 @@ export default function Repositories({
                     ))
                   )}
                 </div>
+                {snapshot && !patchPreview && (
+                  <Link href={`/repositories?snapshot=${encodeURIComponent(snapshot.id)}&preview=1`} className="inline-block text-sm text-violet-700 underline">
+                    Load public patch preview
+                  </Link>
+                )}
+                {patchPreviewError && <p role="alert" className="text-sm text-rose-700">{patchPreviewError}</p>}
+                {patchPreview && (
+                  <div className="space-y-3 border-t border-slate-200 pt-4">
+                    <h3 className="text-sm font-semibold">Public patch preview</h3>
+                    <p className="text-xs text-slate-600">Read-only GitHub data for this captured head and base. No content was sent to a model. GitHub may omit or truncate patches; this is not a code review.</p>
+                    {patchPreview.filesTruncated && <p className="text-sm text-amber-700">Only {patchPreview.files.length} of {patchPreview.changedFiles} changed files were returned.</p>}
+                    {patchPreview.files.map((file) => (
+                      <details key={file.name} className="rounded border border-slate-200 p-3">
+                        <summary className="cursor-pointer text-sm break-all">{file.name} <span className="text-slate-500">— {file.status}</span></summary>
+                        {file.patch === null ? <p className="mt-2 text-xs text-slate-600">Patch {file.status === 'oversize' ? 'exceeds preview limits' : 'not provided by GitHub'}.</p> :
+                          <pre className="mt-2 overflow-auto whitespace-pre text-xs text-slate-800">{file.patch}</pre>}
+                      </details>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -644,7 +663,7 @@ export default function Repositories({
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Cryptographic Evidence Receipt</h2>
                   <p className="text-xs text-slate-500">
-                    Immutable SHA-256 digest binding the pull request snapshot to exact git commits
+                    SHA-256 digest of this saved snapshot. It is not independently authenticated.
                   </p>
                 </div>
 
@@ -711,7 +730,7 @@ export default function Repositories({
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inspect Pull Request</h1>
               <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Enter a GitHub pull request URL or short handle to capture changed files, check runs, and run isolated verification.
+                Enter a GitHub pull request URL or short handle to capture changed files and check runs. The sample verifier is separate.
               </p>
             </div>
 

@@ -19,4 +19,9 @@ return [
     'http_only' => true,
     'same_site' => 'lax',
     'partitioned' => false,
+    // Serialize session requests so approval cannot be consumed twice concurrently.
+    'block' => true,
+    'block_store' => 'file',
+    'block_lock_seconds' => 360,
+    'block_wait_seconds' => 10,
 ];

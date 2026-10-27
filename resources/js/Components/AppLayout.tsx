@@ -1,10 +1,10 @@
 import React, { ReactNode } from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutGrid, GitPullRequest, CheckCircle2, Circle } from 'lucide-react';
+import { LayoutGrid, GitPullRequest, CheckCircle2, Circle, ClipboardList } from 'lucide-react';
 
 interface AppLayoutProps {
   title?: string;
-  activeNav?: 'overview' | 'pulls' | 'checks';
+  activeNav?: 'overview' | 'pulls' | 'checks' | 'issues';
   children: ReactNode;
 }
 
@@ -16,6 +16,7 @@ export function AppLayout({ activeNav = 'overview', children }: AppLayoutProps) 
   const navItems = [
     { key: 'overview', href: '/', label: 'Overview', icon: LayoutGrid },
     { key: 'pulls', href: '/repositories', label: 'Pull Requests', icon: GitPullRequest },
+    { key: 'issues', href: '/issues', label: 'Issues', icon: ClipboardList },
     { key: 'checks', href: '/checks', label: 'Verification', icon: CheckCircle2 },
   ];
 

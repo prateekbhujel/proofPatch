@@ -1,76 +1,90 @@
 {
-  "_AppLayout-CgmQ0qNm.js": {
-    "file": "assets/AppLayout-CgmQ0qNm.js",
+  "_AppLayout-BaBe-HGU.js": {
+    "file": "assets/AppLayout-BaBe-HGU.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.tsx"
     ]
   },
-  "_search-MJse1cAe.js": {
-    "file": "assets/search-MJse1cAe.js",
+  "_search-DEX6XiGL.js": {
+    "file": "assets/search-DEX6XiGL.js",
     "name": "search",
     "imports": [
-      "_AppLayout-CgmQ0qNm.js"
+      "_AppLayout-BaBe-HGU.js"
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-Bxc0hr3P.css",
+    "file": "assets/app-B-X1xZQ7.css",
     "src": "resources/css/app.css",
     "isEntry": true
   },
   "resources/js/Pages/Checks.tsx": {
-    "file": "assets/Checks-D0Onw2-z.js",
+    "file": "assets/Checks-B1PrJCRD.js",
     "name": "Checks",
     "src": "resources/js/Pages/Checks.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-CgmQ0qNm.js",
-      "_search-MJse1cAe.js"
+      "_AppLayout-BaBe-HGU.js",
+      "_search-DEX6XiGL.js"
     ],
     "css": [
-      "assets/app-Bxc0hr3P.css"
+      "assets/app-B-X1xZQ7.css"
+    ]
+  },
+  "resources/js/Pages/Issues.tsx": {
+    "file": "assets/Issues-XRZxmzZN.js",
+    "name": "Issues",
+    "src": "resources/js/Pages/Issues.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_AppLayout-BaBe-HGU.js"
+    ],
+    "css": [
+      "assets/app-B-X1xZQ7.css"
     ]
   },
   "resources/js/Pages/Overview.tsx": {
-    "file": "assets/Overview-BHD_HQfJ.js",
+    "file": "assets/Overview-DODJoHFc.js",
     "name": "Overview",
     "src": "resources/js/Pages/Overview.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-CgmQ0qNm.js"
+      "_AppLayout-BaBe-HGU.js"
     ],
     "css": [
-      "assets/app-Bxc0hr3P.css"
+      "assets/app-B-X1xZQ7.css"
     ]
   },
   "resources/js/Pages/Repositories.tsx": {
-    "file": "assets/Repositories-xUd0Odty.js",
+    "file": "assets/Repositories-FN7qYTrF.js",
     "name": "Repositories",
     "src": "resources/js/Pages/Repositories.tsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.tsx",
-      "_AppLayout-CgmQ0qNm.js",
-      "_search-MJse1cAe.js"
+      "_AppLayout-BaBe-HGU.js",
+      "_search-DEX6XiGL.js"
     ],
     "css": [
-      "assets/app-Bxc0hr3P.css"
+      "assets/app-B-X1xZQ7.css"
     ]
   },
   "resources/js/app.tsx": {
-    "file": "assets/app-B5WwXcp3.js",
+    "file": "assets/app-BgLCGc5c.js",
     "name": "app",
     "src": "resources/js/app.tsx",
     "isEntry": true,
     "dynamicImports": [
       "resources/js/Pages/Checks.tsx",
+      "resources/js/Pages/Issues.tsx",
       "resources/js/Pages/Overview.tsx",
       "resources/js/Pages/Repositories.tsx"
     ],
     "css": [
-      "assets/app-Bxc0hr3P.css"
+      "assets/app-B-X1xZQ7.css"
     ]
   }
 }

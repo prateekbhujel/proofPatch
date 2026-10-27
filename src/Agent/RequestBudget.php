@@ -7,7 +7,7 @@ namespace ProofPatch\Agent;
 /** Persistent reservations in integer millionths of a dollar. */
 final readonly class RequestBudget
 {
-    public function __construct(private string $directory, private int $limitMicros = 100000, private int $maxAttempts = 3)
+    public function __construct(private string $directory, private int $limitMicros = 110000, private int $maxAttempts = 4)
     {
         if ($limitMicros <= 0 || $maxAttempts < 1) {
             throw new \InvalidArgumentException('Request budget limits must be positive.');

@@ -2,9 +2,7 @@
 
 > Built during the **Meta Global AI Developer Hackathon 2026** (Indie Hacker Track).
 
-Independent visual verification and evidence engine for pull requests.
-
-ProofPatch verifies UI bug fixes against real browser baselines in isolated environments, capturing pixel diffs, interaction probes, and tamper-evident receipts before any patch is merged.
+ProofPatch is a local prototype for inspecting GitHub pull requests and testing sample UI repairs. It records PR metadata and existing checks and can show a read-only preview of changes from a public PR at the captured commits. Its visual verifier currently runs on bundled checkout fixtures, not on the selected PR. A worktree is not a security sandbox for untrusted code.
 
 ---
 
@@ -17,11 +15,13 @@ ProofPatch verifies UI bug fixes against real browser baselines in isolated envi
 * Chrome / Chromium (for headless browser verification)
 
 ### 2. Setup
-Install dependencies, build frontend assets, and prepare the local SQLite database:
+For a new installation, install dependencies, create a private application key, build frontend assets, and prepare the local SQLite database. Keep the generated `.env` private and do not regenerate the key for an existing installation:
 
 ```bash
 composer install
 npm install && npm run build
+cp .env.example .env
+php artisan key:generate
 php artisan migrate
 ```
 
@@ -36,12 +36,16 @@ Open **http://127.0.0.1:8000** in your browser.
 
 *(Alternatively, run `php artisan serve --port=8431`).*
 
+### Issue suggestions
+
+The Issues page can preview a public GitHub issue and one selected text file at a specific commit. After reviewing and approving the displayed request, a maintainer can ask Muse for an unverified single-file suggestion within the configured local request budget. The suggestion is not applied, posted, or tested automatically; repository execution requires a separately secured runner. Private repositories and GitHub comment triggers are not supported yet.
+
 ---
 
 ## CLI Usage
 
 ### Inspect a GitHub Pull Request
-Fetch pull request metadata, changed files, and check runs, saving an anchored snapshot. You can use shorthand handles, full URLs, or run interactively:
+Fetch pull request metadata, changed files, and check runs, saving a local snapshot with a digest. The digest is not an independent authenticity guarantee. You can use shorthand handles, full URLs, or run interactively:
 
 ```bash
 # Shorthand handle
@@ -62,7 +66,7 @@ php artisan review:record <SNAPSHOT_ID>
 ```
 
 ### Inspect a Review via HTTP API
-Query review status, repository metadata, and cryptographic digest anchors:
+Query review status, repository metadata, and the saved snapshot digest:
 
 ```bash
 curl http://127.0.0.1:8000/reviews/<REVIEW_ID>

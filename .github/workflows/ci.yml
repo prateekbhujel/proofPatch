@@ -34,6 +34,7 @@ jobs:
       - name: Install NPM dependencies & build assets
         run: |
           npm ci
+          npm run typecheck
           npm run build
 
       - name: Ensure ChromeDriver is available

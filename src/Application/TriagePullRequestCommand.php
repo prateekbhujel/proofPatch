@@ -11,9 +11,9 @@ use Symfony\Component\HttpClient\HttpClient;
 
 final class TriagePullRequestCommand extends Command
 {
-    protected $signature = 'review:triage {target : Target PR handle (e.g. owner/repo#123)} {compare* : One or more comparison PR handles to check for duplicate/superset overlap}';
+    protected $signature = 'review:triage {target : Target PR handle (e.g. owner/repo#123)} {compare* : One or more PR handles to compare file paths}';
 
-    protected $description = 'Perform maintainer anti-slop policy checks and Jaccard file/hunk overlap triage across pull requests';
+    protected $description = 'Compare pull request file paths for human triage';
 
     public function handle(): int
     {
@@ -57,21 +57,20 @@ final class TriagePullRequestCommand extends Command
 
         $this->info("Target: #{$result['target']['number']} - {$result['target']['title']}");
         $this->line("Repository: {$result['target']['repository']}  |  Changed files: {$result['target']['fileCount']}  |  Total lines changed: {$result['target']['totalChanges']}");
-        $this->line("Tests present: ".($result['target']['hasTests'] ? 'YES' : 'NO'));
+        $this->line('Test-like paths: '.count($result['target']['testPaths']).'; test coverage not assessed.');
 
         $this->newLine();
         $this->line("VERDICT: [{$summary['headline']}]");
         $this->line("DETAIL:  {$summary['detail']}");
 
         $this->newLine();
-        $this->line("Policy Enforcement ({$policyEval['mode']}):");
-        $this->line("- Max Diff Lines: {$policyEval['maxDiffLines']} (Current: {$policyEval['totalChanges']}) -> ".($policyEval['diffExceeded'] ? 'EXCEEDED [FAIL]' : 'PASS'));
-        $this->line("- Test Coverage Required: ".($policyEval['requireTestCoverage'] ? 'YES' : 'NO')." -> ".($policyEval['testsMissing'] ? 'MISSING [FAIL]' : 'PASS'));
-        $this->line("- Action: {$policyEval['action']}");
+        $this->line("Advisory policy ({$policyEval['mode']}):");
+        $this->line("- Max Diff Lines: {$policyEval['maxDiffLines']} (observed: {$policyEval['totalChanges']}) -> ".($policyEval['diffExceeded'] ? 'EXCEEDED' : ($result['target']['filesTruncated'] ? 'INCOMPLETE' : 'WITHIN LIMIT')));
+        $this->line('- Test coverage: NOT ASSESSED');
 
         if (!empty($result['comparisons'])) {
             $this->newLine();
-            $this->line("PR Queue Overlap Analysis:");
+            $this->line('Captured PR file-path comparisons (not a duplicate check):');
             $rows = [];
             foreach ($result['comparisons'] as $comp) {
                 $rows[] = [
@@ -80,10 +79,10 @@ final class TriagePullRequestCommand extends Command
                     "{$comp['matchPercentage']}%",
                     $comp['relationship'],
                     $comp['sharedFilesCount'].' shared',
-                    $comp['hunkOverlap']['hasLineOverlap'] ? 'YES' : 'NO',
+                    $comp['incomplete'] ? 'INCOMPLETE' : 'CAPTURED',
                 ];
             }
-            $this->table(['PR', 'Title', 'Match', 'Relationship', 'Files', 'Line Overlap'], $rows);
+            $this->table(['PR', 'Title', 'File overlap', 'Relationship', 'Files', 'Evidence'], $rows);
 
             foreach ($result['comparisons'] as $comp) {
                 $this->line("-> {$comp['verdictBanner']}");
@@ -92,6 +91,6 @@ final class TriagePullRequestCommand extends Command
 
         $this->line('===============================================================');
 
-        return $policyEval['passed'] ? self::SUCCESS : self::FAILURE;
+        return self::SUCCESS;
     }
 }

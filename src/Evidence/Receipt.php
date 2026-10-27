@@ -71,6 +71,18 @@ final class Receipt
             || !preg_match('/\A[a-f0-9]{40}\z/', $result['baseCommit'])) {
             throw new \InvalidArgumentException('Run report is missing required metadata.');
         }
+        if ($result['decision'] === 'VERIFIED') {
+            foreach (['baselineReproduced', 'protectedTestsPassed', 'outsideMaskPreserved', 'authorityIntact'] as $gate) {
+                if (($result['gates'][$gate] ?? null) !== true) {
+                    throw new \InvalidArgumentException('Verified result is missing a passing required gate.');
+                }
+            }
+            if (($result['runs']['baseline']['exitCode'] ?? null) !== 1
+                || ($result['runs']['candidate']['exitCode'] ?? null) !== 0
+                || !is_string($result['patchSha256'] ?? null)) {
+                throw new \InvalidArgumentException('Verified result is missing required run evidence.');
+            }
+        }
         $files = [];
         foreach (self::FILES as $relative) {
             $path = $directory.'/'.$relative;

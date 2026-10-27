@@ -120,7 +120,7 @@ export default function Checks({
     { key: 'authorityIntact', label: 'Checks unchanged' },
   ];
 
-  const historyList = Object.entries(history).map(([id, item]) => ({ id, ...item }));
+  const historyList = Object.entries(history).map(([id, item]) => ({ ...item, id }));
   const filteredHistory = historyList.filter(
     (h) =>
       h.id.toLowerCase().includes(historyQuery.toLowerCase().trim()) ||
@@ -142,7 +142,7 @@ export default function Checks({
                 <span>Verification Workspace</span>
                 <span>/</span>
                 <span className="font-bold text-slate-900">
-                  {fixture.includes('occlusion-b') ? 'Lumen Checkout' : 'Northline Checkout'}
+                  {fixture.includes('occlusion-b') ? 'Lumen Checkout' : fixture.includes('modal-overflow') ? 'Aura Checkout' : 'Northline Checkout'}
                 </span>
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Isolated Worktree Evaluation</h1>
@@ -376,13 +376,13 @@ export default function Checks({
                 {budgetStatus ? (
                   <>
                     <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Spend Reserved</span>
+                      <span className="text-slate-500">Estimated reservation</span>
                       <span className="font-mono font-semibold text-slate-900">
                         ${(budgetStatus.reservedMicros / 1000000).toFixed(3)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Hard Cap</span>
+                      <span className="text-slate-500">Local reservation limit</span>
                       <span className="font-mono text-slate-900">
                         ${(budgetStatus.limitMicros / 1000000).toFixed(2)}
                       </span>
@@ -399,7 +399,7 @@ export default function Checks({
                 )}
 
                 <div className="pt-2 text-slate-500 text-[11px] leading-relaxed">
-                  Budget guard reserves tokens before calling model adapters.
+                  This local estimate is not a provider billing limit. Check your provider account for actual usage.
                 </div>
               </div>
             </div>
@@ -409,7 +409,7 @@ export default function Checks({
         {/* TAB PANE 2: VISUAL COMPARISON (Interactive Studio) */}
         {activeTab === 'visual' && (
           <div className="space-y-4">
-            {report ? (
+            {report && receipt ? (
               <VisualComparisonViewer
                 beforeUrl={`/checks/image?run=${encodeURIComponent(runId)}&image=before`}
                 afterUrl={`/checks/image?run=${encodeURIComponent(runId)}&image=after`}
@@ -418,7 +418,7 @@ export default function Checks({
               />
             ) : (
               <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-12 text-center space-y-2">
-                <p className="text-sm text-slate-600">Run verification to inspect visual screenshots.</p>
+                <p className="text-sm text-slate-600">A run with intact evidence is needed to inspect screenshots.</p>
               </div>
             )}
           </div>
@@ -491,8 +491,8 @@ export default function Checks({
                       <h2 className="text-base font-semibold text-slate-900">Evidence Receipt</h2>
                       <p className="text-xs text-slate-500">Deterministic SHA-256 integrity receipt for this run.</p>
                     </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20">
-                      INTEGRITY PASSED
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${receipt ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                      {receipt ? 'INTEGRITY PASSED' : 'INTEGRITY UNAVAILABLE'}
                     </span>
                   </div>
 

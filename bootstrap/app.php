@@ -14,8 +14,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
         apiPrefix: '',
     )
     ->withMiddleware(static function (\Illuminate\Foundation\Configuration\Middleware $middleware): void {
-        $middleware->validateCsrfTokens(except: ['*']);
-        $middleware->encryptCookies(except: ['*']);
         $middleware->web(append: [
             HandleInertiaRequests::class,
         ]);

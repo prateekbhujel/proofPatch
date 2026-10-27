@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProofPatch\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use ProofPatch\Verifier\LockedCheckoutRunner;
 use ProofPatch\Verifier\PixelDiffGuard;
 use Symfony\Component\Process\Process;
 
@@ -75,50 +76,7 @@ final class CheckoutRepairTest extends TestCase
 
     private function runLockedTest(string $worktree, string $evidence, string $project): array
     {
-        mkdir($evidence, 0700, true);
-        $socket = stream_socket_server('tcp://127.0.0.1:0');
-        if ($socket === false) {
-            throw new \RuntimeException('Cannot reserve a local port.');
-        }
-        $port = (int) substr(strrchr(stream_socket_get_name($socket, false), ':'), 1);
-        fclose($socket);
-        $url = 'http://127.0.0.1:'.$port.'/fixtures/checkout.html';
-        $server = new Process([PHP_BINARY, '-S', '127.0.0.1:'.$port, '-t', $worktree.'/public'], $worktree, $this->environment());
-        $server->start();
-        try {
-            $ready = false;
-            for ($attempt = 0; $attempt < 100; ++$attempt) {
-                $connection = @stream_socket_client('tcp://127.0.0.1:'.$port, $error, $message, 0.1);
-                if ($connection !== false) {
-                    fclose($connection);
-                    $ready = true;
-                    break;
-                }
-                if (!$server->isRunning()) {
-                    throw new \RuntimeException($server->getErrorOutput());
-                }
-                usleep(50000);
-            }
-            if (!$ready) {
-                throw new \RuntimeException('Fixture server did not start.');
-            }
-            $driver = getenv('CHECKOUT_DRIVER') ?: $project.'/drivers/chromedriver-mac-arm64/chromedriver';
-            $browser = getenv('PANTHER_CHROME_BINARY') ?: $project.'/drivers/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
-            $argv = [PHP_BINARY, $project.'/vendor/bin/phpunit', '--no-configuration', '--bootstrap',
-                $project.'/vendor/autoload.php', '--log-junit', $evidence.'/junit.xml', $project.'/tests/Locked/CheckoutLockedTest.php'];
-            $process = new Process($argv, $project, $this->environment([
-                'CHECKOUT_URL' => $url, 'CHECKOUT_ARTIFACT_DIR' => $evidence,
-                'CHECKOUT_DRIVER' => $driver, 'PANTHER_CHROME_BINARY' => $browser,
-            ]));
-            $process->setTimeout(60);
-            $exit = $process->run();
-            $output = $process->getOutput().$process->getErrorOutput();
-            file_put_contents($evidence.'/phpunit.log', $output);
-            return ['argv' => $argv, 'exitCode' => $exit, 'output' => $output,
-                'observation' => json_decode(file_get_contents($evidence.'/observation.json'), true, 512, JSON_THROW_ON_ERROR)];
-        } finally {
-            $server->stop();
-        }
+        return (new LockedCheckoutRunner($project))->run($worktree, $evidence);
     }
 
     private function command(array $argv): string

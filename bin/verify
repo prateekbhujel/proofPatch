@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use ProofPatch\Patch\CssPatch;
+use ProofPatch\Verifier\CheckoutVerifier;
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+try {
+    if ($argc !== 2 || !is_file($argv[1]) || filesize($argv[1]) > 16384) {
+        throw new InvalidArgumentException('Usage: php bin/verify path/to/patch.json (maximum 16 KB).');
+    }
+    $input = json_decode(file_get_contents($argv[1]), true, 32, JSON_THROW_ON_ERROR);
+    if (!is_array($input)) {
+        throw new InvalidArgumentException('Expected a JSON patch object.');
+    }
+    $result = (new CheckoutVerifier(dirname(__DIR__)))->verify(CssPatch::fromArray($input));
+    echo json_encode($result, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT)."\n";
+    exit(match ($result['decision']) {'VERIFIED' => 0, 'FAILED' => 1, default => 78});
+} catch (InvalidArgumentException|JsonException $error) {
+    fwrite(STDERR, $error->getMessage()."\n");
+    exit(1);
+} catch (Throwable $error) {
+    fwrite(STDERR, 'Verification could not finish: '.$error->getMessage()."\n");
+    exit(78);
+}

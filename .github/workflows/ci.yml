@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Tests & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, gd, curl, zip
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install NPM dependencies & build assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Ensure ChromeDriver is available
+        run: |
+          if ! command -v chromedriver &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y chromium-chromedriver chromium-browser || true
+          fi
+          CHROME_BIN=$(which google-chrome || which chromium-browser || which chromium || echo "")
+          DRIVER_BIN=$(which chromedriver || find /usr -name chromedriver 2>/dev/null | head -n 1 || echo "")
+          echo "PANTHER_CHROME_BINARY=${CHROME_BIN}" >> $GITHUB_ENV
+          echo "CHECKOUT_DRIVER=${DRIVER_BIN}" >> $GITHUB_ENV
+
+      - name: Run test suite
+        run: ./vendor/bin/phpunit

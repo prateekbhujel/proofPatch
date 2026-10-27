@@ -14,7 +14,7 @@ final readonly class CheckoutVerifier
     private const MASK = ['x' => 300, 'y' => 280, 'width' => 380, 'height' => 140];
     private const PROTECTED = ['tests/Locked/CheckoutLockedTest.php', 'src/Browser/CheckoutProbe.php'];
 
-    public function __construct(private string $project)
+    public function __construct(private string $project, private ?string $runsRoot = null)
     {
         if (realpath($project) !== $project || trim($this->git('rev-parse', '--show-toplevel')) !== $project) {
             throw new \InvalidArgumentException('Expected the real project Git root.');
@@ -33,7 +33,7 @@ final readonly class CheckoutVerifier
         }
 
         $id = gmdate('Ymd\THis\Z').'-'.bin2hex(random_bytes(6));
-        $evidence = $this->project.'/artifacts/runs/'.$id;
+        $evidence = ($this->runsRoot ?? $this->project.'/artifacts/runs').'/'.$id;
         if (!mkdir($evidence, 0700, true)) {
             throw new \RuntimeException('Cannot allocate evidence directory.');
         }

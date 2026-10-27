@@ -1,0 +1,76 @@
+{
+  "_AppLayout-YJiiGnHD.js": {
+    "file": "assets/AppLayout-YJiiGnHD.js",
+    "name": "AppLayout",
+    "imports": [
+      "resources/js/app.tsx"
+    ]
+  },
+  "_search-CsiTOMxV.js": {
+    "file": "assets/search-CsiTOMxV.js",
+    "name": "search",
+    "imports": [
+      "_AppLayout-YJiiGnHD.js"
+    ]
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-BUTGVslc.css",
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/Pages/Checks.tsx": {
+    "file": "assets/Checks-CyaEyCTS.js",
+    "name": "Checks",
+    "src": "resources/js/Pages/Checks.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_AppLayout-YJiiGnHD.js",
+      "_search-CsiTOMxV.js"
+    ],
+    "css": [
+      "assets/app-BUTGVslc.css"
+    ]
+  },
+  "resources/js/Pages/Overview.tsx": {
+    "file": "assets/Overview-C7pBHGoD.js",
+    "name": "Overview",
+    "src": "resources/js/Pages/Overview.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_AppLayout-YJiiGnHD.js"
+    ],
+    "css": [
+      "assets/app-BUTGVslc.css"
+    ]
+  },
+  "resources/js/Pages/Repositories.tsx": {
+    "file": "assets/Repositories-CrrcgGRu.js",
+    "name": "Repositories",
+    "src": "resources/js/Pages/Repositories.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_AppLayout-YJiiGnHD.js",
+      "_search-CsiTOMxV.js"
+    ],
+    "css": [
+      "assets/app-BUTGVslc.css"
+    ]
+  },
+  "resources/js/app.tsx": {
+    "file": "assets/app-Db7hc5Od.js",
+    "name": "app",
+    "src": "resources/js/app.tsx",
+    "isEntry": true,
+    "dynamicImports": [
+      "resources/js/Pages/Checks.tsx",
+      "resources/js/Pages/Overview.tsx",
+      "resources/js/Pages/Repositories.tsx"
+    ],
+    "css": [
+      "assets/app-BUTGVslc.css"
+    ]
+  }
+}

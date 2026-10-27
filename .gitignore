@@ -1,4 +1,5 @@
 /vendor/
+/node_modules/
 /drivers/
 /artifacts/
 /.phpunit.cache/
@@ -9,4 +10,10 @@
 /.idea/
 /.vscode/
 /.worktrees/
+/database/*.sqlite*
+/bootstrap/cache/*.php
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*.php
 *.log

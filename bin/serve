@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-exec php -S 127.0.0.1:8431 -t "$PROJECT_DIR/public"
+exec php "$PROJECT_DIR/artisan" serve --host=127.0.0.1 --port=8431

@@ -12,12 +12,26 @@ use ProofPatch\Verifier\CheckoutVerifier;
 
 final class CheckoutVerifierTest extends TestCase
 {
+    private string $runsDirectory;
+
+    protected function setUp(): void
+    {
+        $this->runsDirectory = sys_get_temp_dir().'/proofpatch-test-runs-'.bin2hex(random_bytes(8));
+        mkdir($this->runsDirectory, 0700);
+        $this->runsDirectory = realpath($this->runsDirectory);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeDirectory($this->runsDirectory);
+    }
+
     public function testVerifiesARepairWithoutChangingTheSourceCheckout(): void
     {
         $project = dirname(__DIR__, 2);
         $source = file_get_contents($project.'/'.CssPatch::FILE);
         $locked = hash_file('sha256', $project.'/tests/Locked/CheckoutLockedTest.php');
-        $report = (new CheckoutVerifier($project))->verify(CssPatch::fromArray([
+        $report = (new CheckoutVerifier($project, $this->runsDirectory))->verify(CssPatch::fromArray([
             'file' => CssPatch::FILE, 'baseSha256' => hash('sha256', $source),
             'find' => 'pointer-events: auto;', 'replace' => 'pointer-events: none;',
         ]));
@@ -51,7 +65,7 @@ final class CheckoutVerifierTest extends TestCase
         $project = dirname(__DIR__, 2);
         $source = file_get_contents($project.'/'.CssPatch::FILE);
         preg_match('/^    #promo-banner \{.*\}$/m', $source, $match);
-        $report = (new CheckoutVerifier($project))->verify(CssPatch::fromArray([
+        $report = (new CheckoutVerifier($project, $this->runsDirectory))->verify(CssPatch::fromArray([
             'file' => CssPatch::FILE, 'baseSha256' => hash('sha256', $source),
             'find' => $match[0], 'replace' => '#promo-banner { display: none; }',
         ]));
@@ -99,7 +113,7 @@ final class CheckoutVerifierTest extends TestCase
         $previous = getenv('CHECKOUT_DRIVER');
         putenv('CHECKOUT_DRIVER=/nonexistent/proofpatch-test-driver');
         try {
-            $report = (new CheckoutVerifier($project))->verify(CssPatch::fromArray([
+            $report = (new CheckoutVerifier($project, $this->runsDirectory))->verify(CssPatch::fromArray([
                 'file' => CssPatch::FILE, 'baseSha256' => hash('sha256', $source),
                 'find' => 'pointer-events: auto;', 'replace' => 'pointer-events: none;',
             ]));

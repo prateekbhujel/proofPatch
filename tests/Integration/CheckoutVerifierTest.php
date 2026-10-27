@@ -22,6 +22,10 @@ final class CheckoutVerifierTest extends TestCase
         ]));
 
         self::assertSame('VERIFIED', $report['decision'], $report['reason'] ?? '');
+        self::assertSame('proofpatch-json-v1', $report['proposalHashFormat']);
+        $canonical = '{"baseSha256":"'.hash('sha256', $source).'","file":"public/fixtures/checkout.html",'
+            .'"find":"pointer-events: auto;","replace":"pointer-events: none;"}';
+        self::assertSame(hash('sha256', $canonical), $report['proposalSha256']);
         self::assertSame(1, $report['runs']['baseline']['exitCode']);
         self::assertSame(0, $report['runs']['candidate']['exitCode']);
         self::assertSame('Express Next-Day', $report['runs']['candidate']['observation']['selected']);

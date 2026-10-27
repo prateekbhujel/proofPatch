@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ProofPatch\Verifier;
 
+use ProofPatch\Evidence\CanonicalJson;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 
@@ -43,7 +44,8 @@ final readonly class CheckoutVerifier
         $proposal = $patch->toArray();
         $report = ['id' => $id, 'createdAt' => gmdate(DATE_ATOM), 'decision' => 'INCONCLUSIVE',
             'baseCommit' => $head, 'proposal' => $proposal,
-            'proposalSha256' => hash('sha256', json_encode($proposal, JSON_THROW_ON_ERROR)),
+            'proposalHashFormat' => 'proofpatch-json-v1',
+            'proposalSha256' => hash('sha256', CanonicalJson::encode($proposal)),
             'protectedSha256' => $authority, 'allowedMask' => self::MASK, 'evidenceDirectory' => $evidence];
         $worktrees = [];
         try {

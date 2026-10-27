@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aura checkout</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f8fafc; color: #0f172a; font: 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { position: absolute; left: 240px; top: 100px; width: 800px; height: 520px; padding: 40px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    h1 { margin: 0; font-size: 28px; font-weight: 700; color: #0f172a; }
+    .subtitle { color: #64748b; margin-top: 12px; }
+    #promo-banner { position: absolute; left: 40px; top: 108px; width: 720px; height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #312e81; color: white; border-radius: 8px; }
+    #promo-details { border: 0; padding: 8px 12px; background: #e0e7ff; border-radius: 6px; color: #3730a3; font-weight: 600; cursor: pointer; }
+    h2 { position: absolute; left: 80px; top: 168px; margin: 0; font-size: 18px; font-weight: 600; color: #1e293b; }
+    #shipping-drawer { position: absolute; left: 80px; top: 196px; width: 300px; height: 48px; overflow: hidden; max-height: 0px; }
+    #express { width: 300px; height: 48px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #0f172a; font: inherit; text-align: left; padding-left: 18px; cursor: pointer; }
+    #selection { position: absolute; left: 80px; top: 268px; margin: 0; }
+    #summary { position: absolute; left: 480px; top: 172px; width: 240px; line-height: 2; }
+    #summary strong { display: block; font-size: 20px; color: #0f172a; }
+    #offer-feedback { position: absolute; left: 40px; bottom: 32px; color: #64748b; }
+    .footer { position: absolute; left: 80px; bottom: 100px; color: #64748b; }
+    button:focus-visible { outline: 3px solid #6366f1; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Aura / Checkout</h1>
+  <p class="subtitle">Complete your transaction with verified delivery options.</p>
+  <section id="promo-banner" aria-label="Shipping offer">
+    <span>Priority courier complimentary on orders over $100</span>
+    <button id="promo-details" type="button">Offer details</button>
+  </section>
+  <h2>Delivery method</h2>
+  <div id="shipping-drawer">
+    <button id="express" type="button">Express Next-Day &nbsp; + $8.00</button>
+  </div>
+  <p id="selection">Selected: <strong id="shipping-selected">Standard</strong></p>
+  <section id="summary" aria-label="Order summary">Order total<strong>$142.00</strong><span>4 items · Verified checkout</span></section>
+  <p class="footer">Your delivery selection is cryptographically recorded.</p>
+  <p id="offer-feedback" role="status"></p>
+</main>
+<script>
+  document.addEventListener('pointerdown', event => {
+    window.lastPointer = {trusted: event.isTrusted, x: event.clientX, y: event.clientY, target: event.target.id || event.target.className};
+  });
+  document.querySelector('#express').addEventListener('click', () => {
+    document.querySelector('#shipping-selected').textContent = 'Express Next-Day';
+  });
+  document.querySelector('#promo-details').addEventListener('click', () => {
+    document.querySelector('#offer-feedback').textContent = 'Offer terms opened';
+  });
+</script>
+</body>
+</html>

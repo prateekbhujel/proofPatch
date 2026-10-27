@@ -119,9 +119,28 @@ final class DashboardController
             }
         }
 
+        $triage = null;
+        if ($pull !== null) {
+            $policyFile = $this->project.'/.proofpatchrc.json';
+            $policy = is_file($policyFile) ? json_decode((string) file_get_contents($policyFile), true) ?? [] : [];
+            $analyzer = new \ProofPatch\GitHub\PrTriageAnalyzer($policy);
+            $candidatePulls = [];
+            foreach (glob($this->snapshotsDir.'/*.json') ?: [] as $candFile) {
+                try {
+                    $candData = (new PullRequestSnapshot($this->snapshotsDir))->load(basename($candFile, '.json'));
+                    $candPull = $candData['snapshot']['pullRequest'] ?? null;
+                    if (is_array($candPull) && (($candPull['number'] ?? null) !== ($pull['number'] ?? null) || ($candPull['repository'] ?? '') !== ($pull['repository'] ?? ''))) {
+                        $candidatePulls[] = $candPull;
+                    }
+                } catch (\Throwable) {}
+            }
+            $triage = $analyzer->triage($pull, $candidatePulls);
+        }
+
         return Inertia::render('Repositories', [
             'pull' => $pull,
             'snapshot' => $snapshot,
+            'triage' => $triage,
             'error' => $error ?: null,
         ]);
     }

@@ -268,11 +268,20 @@ export default function Checks({
                   <select
                     id="fixture"
                     value={data.fixture}
-                    onChange={(e) => setData('fixture', e.target.value)}
+                    onChange={(e) => {
+                      const fix = e.target.value;
+                      setData('fixture', fix);
+                      if (fix === 'public/fixtures/modal-overflow.html') {
+                        setData((d) => ({ ...d, fixture: fix, find: 'max-height: 0px;', replace: 'max-height: 60px;' }));
+                      } else {
+                        setData((d) => ({ ...d, fixture: fix, find: 'pointer-events: auto;', replace: 'pointer-events: none;' }));
+                      }
+                    }}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-violet-500 shadow-xs"
                   >
-                    <option value="public/fixtures/checkout.html">Northline Checkout</option>
-                    <option value="public/fixtures/occlusion-b.html">Lumen Checkout</option>
+                    <option value="public/fixtures/checkout.html">Northline Checkout (Stacking Context Trap)</option>
+                    <option value="public/fixtures/occlusion-b.html">Lumen Checkout (Pseudo-element Occlusion)</option>
+                    <option value="public/fixtures/modal-overflow.html">Aura Checkout (Responsive Modal Overflow)</option>
                   </select>
                 </div>
 
@@ -304,6 +313,31 @@ export default function Checks({
                     onChange={(e) => setData('replace', e.target.value)}
                     className="w-full rounded-lg border border-slate-300 p-2.5 font-mono text-xs text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-violet-500 shadow-xs"
                   />
+                  <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-slate-500">
+                    <span className="font-medium">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (data.fixture === 'public/fixtures/modal-overflow.html') {
+                          setData((d) => ({ ...d, find: 'max-height: 0px;', replace: 'max-height: 60px;' }));
+                        } else {
+                          setData((d) => ({ ...d, find: 'pointer-events: auto;', replace: 'pointer-events: none;' }));
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 hover:bg-violet-100 font-medium border border-violet-200 transition"
+                    >
+                      Load Valid Repair (4/4 Pass)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setData((d) => ({ ...d, find: '#promo-banner { position: absolute;', replace: '#promo-banner { display: none; position: absolute;' }));
+                      }}
+                      className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 hover:bg-rose-100 font-medium border border-rose-200 transition"
+                    >
+                      Load Damaging Shortcut (Fails Guard)
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">

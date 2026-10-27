@@ -23,6 +23,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         RecordPullRequestSnapshotCommand::class,
         InspectPullRequestCommand::class,
+        \ProofPatch\Application\TriagePullRequestCommand::class,
     ])
     ->withExceptions(static function (): void {})
     ->create();

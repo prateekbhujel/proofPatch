@@ -56,7 +56,14 @@ final class ModelProposalTest extends TestCase
             $payload = json_decode($options['body'], true, 64, JSON_THROW_ON_ERROR);
             self::assertSame('meta-models/muse-spark-open-1026', $payload['model']);
             self::assertSame('low', $payload['reasoning_effort']);
-            self::assertStringContainsString('hitStack', $payload['messages'][1]['content']);
+            $content = $payload['messages'][1]['content'];
+            $text = is_array($content) ? $content[0]['text'] : $content;
+            self::assertStringContainsString('hitStack', $text);
+            if (is_array($content)) {
+                self::assertCount(2, $content);
+                self::assertSame('image_url', $content[1]['type']);
+                self::assertStringStartsWith('data:image/png;base64,', $content[1]['image_url']['url']);
+            }
             return $this->response('stop', ['find' => 'pointer-events: auto;', 'replace' => 'pointer-events: none;']);
         });
         $service = new ModelProposal($this->project, $client, new RequestBudget($this->directory.'/budget', 50000, 1));

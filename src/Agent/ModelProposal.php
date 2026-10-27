@@ -50,18 +50,36 @@ final readonly class ModelProposal
             'initial' => $observation['initial'], 'selected' => $observation['selected'],
             'pointer' => $observation['pointer'], 'hitStack' => $observation['hitStack'], 'banner' => $observation['banner'],
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $screenshotPath = $directory.'/baseline/checkout.png';
+        $userContent = $prompt;
+        $imageAllowance = 0;
+        if (is_file($screenshotPath)) {
+            $imageBytes = file_get_contents($screenshotPath);
+            if ($imageBytes !== false && strlen($imageBytes) > 0 && strlen($imageBytes) <= 5242880) {
+                $userContent = [
+                    ['type' => 'text', 'text' => $prompt],
+                    [
+                        'type' => 'image_url',
+                        'image_url' => [
+                            'url' => 'data:image/png;base64,'.base64_encode($imageBytes),
+                        ],
+                    ],
+                ];
+                $imageAllowance = 4096;
+            }
+        }
         if (strlen($system.$prompt) > 24000 || str_contains($system.$prompt, $key)) {
             throw new \InvalidArgumentException('Model input exceeds the allowed bounds.');
         }
         // Reserve uncached text input by UTF-8 bytes plus framing allowance and maximum output.
-        $reserveMicros = (int) ceil((strlen($system.$prompt) + 4096) * 1.25 + self::MAX_TOKENS * 4.25);
-        return $this->budget->run($reserveMicros, function () use ($key, $system, $prompt, $source, $sourceReceipt, $fixture): array {
+        $reserveMicros = (int) ceil((strlen($system.$prompt) + 4096 + $imageAllowance) * 1.25 + self::MAX_TOKENS * 4.25);
+        return $this->budget->run($reserveMicros, function () use ($key, $system, $userContent, $source, $sourceReceipt, $fixture): array {
             $response = $this->http->request('POST', self::ENDPOINT, [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0, 'timeout' => 90, 'max_duration' => 120,
                 'json' => ['model' => self::MODEL, 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
                     'temperature' => 1.0, 'top_p' => 1.0, 'stream' => false,
-                    'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $prompt]]],
+                    'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $userContent]]],
             ]);
             if ($response->getStatusCode() !== 200) {
                 throw new \RuntimeException('Model request failed with HTTP '.$response->getStatusCode().'.');

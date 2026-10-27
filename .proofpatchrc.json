@@ -1,0 +1,9 @@
+{
+  "maintainerMode": "STRICT_ANTI_SLOP",
+  "maxDiffLines": 50,
+  "maxAllowedMaskViewportRatio": 0.18,
+  "maxOutsideMaskPixelDriftRatio": 0.0015,
+  "requireTestCoverage": true,
+  "onVerificationFailure": "QUARANTINE_DO_NOT_NOTIFY_MAINTAINER",
+  "onVerificationSuccess": "PROMOTE_WITH_EVIDENCE_RECEIPT"
+}

@@ -8,7 +8,8 @@ final readonly class CssPatch
 {
     public const FILE = 'public/fixtures/checkout.html';
     public const SECOND_FILE = 'public/fixtures/occlusion-b.html';
-    public const FILES = [self::FILE, self::SECOND_FILE];
+    public const THIRD_FILE = 'public/fixtures/modal-overflow.html';
+    public const FILES = [self::FILE, self::SECOND_FILE, self::THIRD_FILE];
 
     private function __construct(public string $file, public string $baseSha256, public string $find, public string $replace)
     {

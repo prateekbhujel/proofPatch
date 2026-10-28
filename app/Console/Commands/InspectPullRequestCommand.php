@@ -37,7 +37,7 @@ final class InspectPullRequestCommand extends Command
         try {
             $token = getenv('GITHUB_TOKEN') ?: null;
             $pull = (new PullRequestReader(HttpClient::create(), $token))->read((string) $target);
-            $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: dirname(__DIR__, 2).'/artifacts/pull-requests';
+            $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: (function_exists('base_path') ? base_path('artifacts/pull-requests') : dirname(__DIR__, 3).'/artifacts/pull-requests');
             $snapshot = (new PullRequestSnapshot($directory))->capture($pull);
         } catch (\InvalidArgumentException|\RuntimeException $error) {
             $this->error($error->getMessage());

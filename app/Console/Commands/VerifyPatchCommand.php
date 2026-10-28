@@ -29,7 +29,7 @@ final class VerifyPatchCommand extends Command
                 return self::FAILURE;
             }
 
-            $project = dirname(__DIR__, 2);
+            $project = function_exists('base_path') ? base_path() : dirname(__DIR__, 3);
             $verifier = new CheckoutVerifier($project);
             $result = $verifier->verify(CssPatch::fromArray($input));
 

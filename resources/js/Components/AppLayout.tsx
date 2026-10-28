@@ -250,34 +250,38 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
 
       {/* Clean Global Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-          <div className="flex items-center gap-1.5 text-slate-600">
+      <footer className="mt-auto border-t border-slate-200 bg-white py-3.5">
+        <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-slate-600">
             <span>© 2026 ProofPatch</span>
-            <span>·</span>
-            <span>Built with Laravel & Inertia for Meta Global AI Hackathon</span>
+            <span className="text-slate-300">·</span>
+            <a
+              href="https://github.com/prateekbhujel"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-600 hover:text-slate-900 font-medium transition"
+            >
+              by Pratik Bhujel
+            </a>
           </div>
           <div className="flex items-center gap-3 text-slate-500">
-            <span>
-              Directed by{' '}
-              <a
-                href="https://github.com/prateekbhujel"
-                target="_blank"
-                rel="noreferrer"
-                className="text-violet-700 font-medium hover:underline"
-              >
-                Pratik Bhujel
-              </a>
-            </span>
-            <span>·</span>
-            <Link href="/docs" className="hover:text-slate-800 transition">
-              Documentation
+            <Link href="/docs" className="hover:text-slate-800 transition font-medium">
+              Docs
             </Link>
+            <span className="text-slate-300">·</span>
+            <a
+              href="https://github.com/prateekbhujel/proofPatch"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-slate-800 transition font-medium"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </footer>

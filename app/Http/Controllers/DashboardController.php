@@ -37,7 +37,7 @@ final class DashboardController
         private ?GitHubAppClient $gitHubAppClient = null,
         private ?GitHubDeviceFlow $deviceFlowClient = null,
     ) {
-        $this->project = dirname(__DIR__, 2);
+        $this->project = function_exists('base_path') ? base_path() : dirname(__DIR__, 3);
         $this->runsDir = $this->project.'/artifacts/runs';
         $this->snapshotsDir = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: $this->project.'/artifacts/pull-requests';
         $home = getenv('HOME');

@@ -18,7 +18,7 @@ final class CheckReceiptCommand extends Command
         $run = (string) $this->argument('run');
         $expected = $this->argument('expected') ? (string) $this->argument('expected') : null;
 
-        $directory = is_dir($run) ? $run : dirname(__DIR__, 2).'/artifacts/runs/'.$run;
+        $directory = is_dir($run) ? $run : (function_exists('base_path') ? base_path('artifacts/runs/'.$run) : dirname(__DIR__, 3).'/artifacts/runs/'.$run);
         if (!is_dir($directory)) {
             $this->error("Evidence directory not found: {$run}");
             return self::FAILURE;

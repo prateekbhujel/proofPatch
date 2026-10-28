@@ -16,7 +16,7 @@ final class RecordPullRequestSnapshotCommand extends Command
 
     public function handle(): int
     {
-        $root = dirname(__DIR__, 2);
+        $root = function_exists('base_path') ? base_path() : dirname(__DIR__, 3);
         $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: $root.'/artifacts/pull-requests';
         $id = (string) $this->argument('snapshot');
 

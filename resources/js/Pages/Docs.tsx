@@ -35,21 +35,11 @@ export default function Docs() {
 
       <div className="space-y-6">
         {/* Docs Header */}
-        <div className="border-b border-slate-200 pb-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">ProofPatch Documentation</h1>
-              <p className="mt-1 text-xs text-slate-500">
-                Architecture, falsifiable verification methodology, cryptographic integrity receipts, and execution boundaries.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-violet-50 text-violet-700 border border-violet-200">
-                <Shield className="w-3 h-3 text-violet-600" />
-                Hackathon Protocol v1.0
-              </span>
-            </div>
-          </div>
+        <div className="border-b border-slate-200 pb-4">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">ProofPatch Documentation</h1>
+          <p className="mt-1 text-xs text-slate-500">
+            Developer reference guide for automated code review, verification gates, and cryptographic receipts.
+          </p>
         </div>
 
         {/* Layout: Sidebar Nav + Content */}

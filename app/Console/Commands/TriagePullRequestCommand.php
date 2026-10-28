@@ -41,7 +41,7 @@ final class TriagePullRequestCommand extends Command
             }
         }
 
-        $policyFile = dirname(__DIR__, 2).'/.proofpatchrc.json';
+        $policyFile = function_exists('base_path') ? base_path('.proofpatchrc.json') : dirname(__DIR__, 3).'/.proofpatchrc.json';
         $policy = is_file($policyFile) ? json_decode((string) file_get_contents($policyFile), true) ?? [] : [];
 
         $analyzer = new PrTriageAnalyzer($policy);

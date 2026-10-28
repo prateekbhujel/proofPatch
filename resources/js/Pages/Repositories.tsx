@@ -738,42 +738,31 @@ export default function Repositories({
                     <span>/</span>
                     <span className="font-bold text-slate-900">#{pull.number}</span>
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${
                         pull.state.toLowerCase() === 'open'
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : pull.state.toLowerCase() === 'merged'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                          ? 'bg-purple-50 text-purple-800 border border-purple-200'
                           : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}
                     >
-                      {pull.state.toUpperCase()}
+                      {pull.state.toLowerCase() === 'merged' && <Check className="w-3 h-3 text-purple-700" />}
+                      <span>{pull.state.toUpperCase()}</span>
                     </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-violet-50 text-violet-800 border border-violet-200">
-                      {pull.state.toLowerCase() === 'merged' ? 'Merged PR (Historical)' : 'Contributor PR'}
-                    </span>
+                    {pull.state.toLowerCase() === 'merged' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                        Historical Inspection
+                      </span>
+                    )}
                     {pull.isPrivate && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
                         <Lock className="w-2.5 h-2.5 text-amber-700" />
-                        Private Repository
+                        Private
                       </span>
                     )}
                   </div>
 
                   <h1 className="text-xl font-bold tracking-tight text-slate-900">{pull.title}</h1>
-
-                  {pull.state.toLowerCase() === 'merged' && (
-                    <div className="mt-2.5 p-3 bg-purple-50/80 border border-purple-200 rounded-lg text-xs text-purple-900 flex items-start gap-2.5">
-                      <div className="p-1 bg-purple-200/60 rounded text-purple-800 shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <span className="font-semibold text-purple-950">Historical Merged PR (Read-Only Preview & Review Research)</span>
-                        <p className="text-purple-800 text-[11px] leading-relaxed">
-                          This pull request has already been merged into the default branch. It is loaded for historical code inspection and read-only model-assisted review research. ProofPatch will never post comments, request changes, or create any external activity against this PR.
-                        </p>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs">
                     <span className="inline-flex items-center gap-1 font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
@@ -790,11 +779,39 @@ export default function Repositories({
                         {pull.headSha.slice(0, 8)}
                       </code>
                     </span>
+                    {pull.files && pull.files.length > 0 && (() => {
+                      const totalAdditions = pull.files.reduce((acc, f) => acc + (f.additions || 0), 0);
+                      const totalDeletions = pull.files.reduce((acc, f) => acc + (f.deletions || 0), 0);
+                      const total = totalAdditions + totalDeletions;
+                      const addBlocks = total > 0 ? Math.round((totalAdditions / total) * 5) : 0;
+                      return (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <div className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold">
+                            <span className="text-[#1a7f37]">+{totalAdditions}</span>
+                            <span className="text-[#cf222e]">-{totalDeletions}</span>
+                            <div className="flex items-center gap-0.5">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <span
+                                  key={i}
+                                  className={`w-1.5 h-2 rounded-2xs ${
+                                    total === 0
+                                      ? 'bg-slate-200'
+                                      : i < addBlocks
+                                      ? 'bg-[#1a7f37]'
+                                      : 'bg-[#cf222e]'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 self-start md:self-center">
-                  {/* Co-Maintainer Mode Selector */}
                   <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
                     <button
                       type="button"
@@ -832,64 +849,26 @@ export default function Repositories({
                 </div>
               </div>
 
-              {/* Co-Maintainer Mode Policy & Guardrails Summary */}
-              <div className="p-3 rounded-lg bg-violet-50/60 border border-violet-100 text-xs text-violet-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-violet-900">
-                    {maintainerMode === 'review_first' ? 'Co-Maintainer: Review First' : 'Co-Maintainer: Automatic Review (Policy Configured)'}
-                  </span>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-600 text-[11px]">
-                    {maintainerMode === 'review_first'
-                      ? 'Prepares structured suggestions for maintainer approval before any action is staged.'
-                      : 'Applies automated non-destructive policy gates on authorized repositories.'}
-                  </span>
-                </div>
-                <div className="text-[11px] font-medium text-slate-500 shrink-0">
-                  Guardrails: No deletion · No automatic PR closure
-                </div>
-              </div>
-
-              {/* Maintainer Plain-English Verdict Banner */}
+              {/* Sanitized Triage Alert Bar */}
               {triage && (
-                <div
-                  className={`mt-4 p-3.5 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
-                    triage.summary.severity === 'emerald'
-                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                      : triage.summary.severity === 'amber'
-                      ? 'bg-amber-50/70 border-amber-200 text-amber-950'
-                      : 'bg-rose-50/70 border-rose-200 text-rose-950'
-                  }`}
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          triage.summary.severity === 'emerald'
-                            ? 'bg-emerald-600'
-                            : triage.summary.severity === 'amber'
-                            ? 'bg-amber-500'
-                            : 'bg-rose-600'
-                        }`}
-                      />
-                      <h2 className="text-xs font-bold uppercase tracking-wider">
-                        {triage.summary.headline}
-                      </h2>
-                    </div>
-                    <p className="text-xs opacity-90 pl-4">{triage.summary.detail}</p>
-                  </div>
-                  <div className="flex items-center gap-2 self-start sm:self-center">
-                    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-white border border-slate-200">
-                      {triage.policy.mode}
+                <div className="mt-3 px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${
+                      triage.summary.severity === 'emerald' ? 'bg-emerald-500' : triage.summary.severity === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
+                    }`} />
+                    <span className="font-semibold text-slate-800">
+                      {triage.policy.diffExceeded
+                        ? `Policy check: ${triage.policy.totalChanges} lines changed (${triage.policy.maxDiffLines} max)`
+                        : triage.summary.headline}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('triage')}
-                      className="text-xs font-medium px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition"
-                    >
-                      Inspect Triage →
-                    </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('triage')}
+                    className="text-xs font-medium px-2.5 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 shadow-2xs transition"
+                  >
+                    View Triage →
+                  </button>
                 </div>
               )}
             </div>

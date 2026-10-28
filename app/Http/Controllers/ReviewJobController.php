@@ -17,7 +17,7 @@ final class ReviewJobController
             return response()->json(['message' => 'Review not found.'], 404)->header('Cache-Control', 'no-store');
         }
 
-        $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: dirname(__DIR__, 2).'/artifacts/pull-requests';
+        $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: (function_exists('base_path') ? base_path('artifacts/pull-requests') : dirname(__DIR__, 3).'/artifacts/pull-requests');
         try {
             (new PullRequestSnapshot($directory))->verify($review->snapshot_id, $review->snapshot_sha256);
         } catch (\Throwable) {

@@ -86,7 +86,7 @@ final class CheckoutVerifierTest extends TestCase
         $directory = realpath($directory);
         $project = dirname(__DIR__, 2);
         try {
-            foreach ([CssPatch::FILE, 'tests/Locked/CheckoutLockedTest.php', 'src/Browser/CheckoutProbe.php'] as $file) {
+            foreach ([CssPatch::FILE, 'tests/Locked/CheckoutLockedTest.php', 'app/Browser/CheckoutProbe.php'] as $file) {
                 mkdir(dirname($directory.'/'.$file), 0700, true);
                 copy($project.'/'.$file, $directory.'/'.$file);
             }

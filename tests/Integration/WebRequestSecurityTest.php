@@ -71,6 +71,7 @@ final class WebRequestSecurityTest extends TestCase
                 '/github/device/disconnect',
                 '/github/repositories/select',
                 '/github/pulls/capture',
+                '/notifications/clear',
             ] as $route) {
                 [$status] = $this->request($address, $route, 'POST', [
                     'Cookie: '.$cookieHeader,

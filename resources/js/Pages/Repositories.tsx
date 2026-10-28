@@ -28,6 +28,7 @@ import {
   FolderGit2,
   ChevronDown,
   ChevronUp,
+  Settings,
   Lock,
 } from 'lucide-react';
 
@@ -66,14 +67,24 @@ interface GitHubPull {
   isPrivate: boolean;
 }
 
+interface GitHubStatusMetadata {
+  truncated?: boolean;
+  installationsCount?: number;
+  repositoriesCount?: number;
+  count?: number;
+  errors?: string[];
+}
+
 interface GitHubConnectionData {
   isConfigured: boolean;
   clientId: string | null;
   isConnected: boolean;
   user: GitHubUser | null;
   repositories: GitHubRepo[];
+  repositoriesStatus?: GitHubStatusMetadata | null;
   selectedRepo: string | null;
   repoPulls: GitHubPull[];
+  repoPullsStatus?: GitHubStatusMetadata | null;
   deviceFlow: GitHubDeviceFlowData | null;
   statusMessage: string | null;
   errorMessage: string | null;
@@ -307,12 +318,10 @@ export default function Repositories({
 
   const handleCaptureGitHubPull = (pullItem: GitHubPull) => {
     if (!githubConnection?.selectedRepo) return;
+    if (pullItem.isPrivate) return;
     router.post('/github/pulls/capture', {
       repository: githubConnection.selectedRepo,
       number: pullItem.number,
-      title: pullItem.title,
-      head: pullItem.head,
-      base: pullItem.base,
     });
   };
 
@@ -524,6 +533,28 @@ export default function Repositories({
                       <span className="text-[11px] text-slate-500">Selected during app installation</span>
                     </div>
 
+                    {githubConnection.repositoriesStatus?.truncated && (
+                      <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold">Repositories List Capped:</span> Additional repositories were omitted by pagination limits.
+                        </div>
+                      </div>
+                    )}
+                    {githubConnection.repositoriesStatus?.errors && githubConnection.repositoriesStatus.errors.length > 0 && (
+                      <div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800 flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold">Partial Installation Errors:</span>
+                          <ul className="list-disc list-inside mt-0.5 font-mono text-[11px]">
+                            {githubConnection.repositoriesStatus.errors.map((err, idx) => (
+                              <li key={idx}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
                     {githubConnection.repositories.length === 0 ? (
                       <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs text-slate-500 space-y-1">
                         <p className="font-medium text-slate-700">No repositories granted to this installation.</p>
@@ -580,6 +611,28 @@ export default function Repositories({
                         </span>
                       </div>
 
+                      {githubConnection.repoPullsStatus?.truncated && (
+                        <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold">Pull Requests Capped:</span> Showing first 500 open pull requests.
+                          </div>
+                        </div>
+                      )}
+                      {githubConnection.repoPullsStatus?.errors && githubConnection.repoPullsStatus.errors.length > 0 && (
+                        <div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800 flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold">Partial Retrieval Errors:</span>
+                            <ul className="list-disc list-inside mt-0.5 font-mono text-[11px]">
+                              {githubConnection.repoPullsStatus.errors.map((err, idx) => (
+                                <li key={idx}>{err}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
                       {githubConnection.repoPulls.length === 0 ? (
                         <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs text-slate-500">
                           No open pull requests found in {githubConnection.selectedRepo}.
@@ -606,14 +659,20 @@ export default function Repositories({
                                 </div>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleCaptureGitHubPull(pr)}
-                                className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs transition shrink-0"
-                              >
-                                <Sparkles className="w-3.5 h-3.5" />
-                                <span>Review PR</span>
-                              </button>
+                              {pr.isPrivate ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200">
+                                  Private PR capture disabled
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCaptureGitHubPull(pr)}
+                                  className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs motion-safe:transition motion-reduce:transition-none shrink-0"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>Review PR</span>
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -623,114 +682,45 @@ export default function Repositories({
                 </div>
               ) : githubConnection?.deviceFlow ? (
                 /* State 2: Device Flow Active */
-                <div className="p-4 rounded-lg border border-violet-200 bg-violet-50/50 space-y-3.5">
+                <div className="p-4 rounded-lg border border-violet-200 bg-violet-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="space-y-1">
-                    <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                    <div className="font-semibold text-slate-900 flex items-center gap-1.5">
                       <Key className="w-4 h-4 text-violet-700" />
-                      <span>GitHub Device Authorization Pending</span>
-                    </h4>
-                    <p className="text-xs text-slate-600">
-                      Enter the one-time user code on GitHub to authorize read-only access to your selected repositories:
+                      <span>Authorization In Progress (Code: {githubConnection.deviceFlow.userCode})</span>
+                    </div>
+                    <p className="text-slate-600 text-[11px]">
+                      Enter code <strong className="font-mono text-violet-900">{githubConnection.deviceFlow.userCode}</strong> on GitHub to finish connecting.
                     </p>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="px-3.5 py-2 bg-white rounded-md border border-violet-300 font-mono font-bold text-base tracking-widest text-violet-900 shadow-2xs select-all">
-                      {githubConnection.deviceFlow.userCode}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(githubConnection.deviceFlow?.userCode || '');
-                        setCopiedUserCode(true);
-                        setTimeout(() => setCopiedUserCode(false), 1500);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      href="/settings"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs motion-safe:transition motion-reduce:transition-none"
                     >
-                      {copiedUserCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-                      <span>{copiedUserCode ? 'Copied' : 'Copy Code'}</span>
-                    </button>
-
-                    <a
-                      href={githubConnection.deviceFlow.verificationUri}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs transition"
-                    >
-                      <span>Open GitHub Verification</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-violet-100">
-                    <div className="flex items-center gap-2">
-                      <form onSubmit={handlePollDeviceFlow}>
-                        <button
-                          type="submit"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Check Authorization</span>
-                        </button>
-                      </form>
-
-                      <form onSubmit={handleDisconnectDevice}>
-                        <button
-                          type="submit"
-                          className="text-xs font-medium text-slate-500 hover:text-slate-800 underline px-2 py-1"
-                        >
-                          Cancel
-                        </button>
-                      </form>
-                    </div>
-
-                    <span className="text-[11px] text-slate-500">
-                      RFC 8628 OAuth 2.0 Device Grant
-                    </span>
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Manage in Settings</span>
+                    </Link>
                   </div>
                 </div>
               ) : (
-                /* State 3: Not Connected - Initiate form */
-                <div className="space-y-3">
+                /* State 3: Not Connected - Concise link to Settings */
+                <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="space-y-1">
-                    <h4 className="text-xs font-semibold text-slate-900">Connect Your GitHub Account (Device Flow)</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      ProofPatch connects using the official GitHub App Device Flow (RFC 8628). It operates read-only and accesses strictly the repositories you explicitly choose during installation.
+                    <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                      <Key className="w-4 h-4 text-violet-700" />
+                      <span>Connect Your GitHub Account</span>
+                    </div>
+                    <p className="text-slate-500 text-[11px] leading-relaxed">
+                      Connect via RFC 8628 Device Flow to browse and inspect your owned public repositories directly.
                     </p>
                   </div>
-
-                  <form onSubmit={handleInitiateDeviceFlow} className="space-y-3">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        placeholder="GitHub App Client ID (e.g. Iv1.xxxxxxxxxxxx or set PROOFPATCH_GITHUB_CLIENT_ID)"
-                        value={deviceFormData.client_id}
-                        onChange={(e) => setDeviceFormData('client_id', e.target.value)}
-                        className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-violet-600 shadow-2xs font-mono"
-                      />
-                      <button
-                        type="submit"
-                        disabled={deviceInitiateProcessing}
-                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        <span>{deviceInitiateProcessing ? 'Initiating...' : 'Connect GitHub App'}</span>
-                      </button>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
-                      <span>Setup guide:</span>
-                      <a
-                        href="https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-violet-700 hover:underline inline-flex items-center gap-0.5"
-                      >
-                        GitHub App Device Flow Documentation <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </div>
-                  </form>
+                  <Link
+                    href="/settings"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs motion-safe:transition motion-reduce:transition-none shrink-0 self-start sm:self-center"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Open Settings</span>
+                  </Link>
                 </div>
               )}
             </div>

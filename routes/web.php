@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use ProofPatch\Application\DashboardController;
-use ProofPatch\Application\IssueWorkbenchController;
+use ProofPatch\Http\Controllers\DashboardController;
+use ProofPatch\Http\Controllers\IssueWorkbenchController;
 
 Route::get('/', [DashboardController::class, 'overview']);
 Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/preview', [IssueWorkbenchController::class, 'capture']);
+Route::post('/issues/load-owned', [IssueWorkbenchController::class, 'loadOwnedCase']);
 Route::post('/issues/propose', [IssueWorkbenchController::class, 'propose']);
+Route::post('/issues/draft', [IssueWorkbenchController::class, 'saveDraft']);
 Route::match(['get', 'post'], '/repositories', [DashboardController::class, 'repositories']);
 Route::post('/repositories/review', [DashboardController::class, 'reviewPullRequest']);
 Route::post('/repositories/review/clear', [DashboardController::class, 'clearReview']);
@@ -25,5 +27,7 @@ Route::post('/github/device/disconnect', [DashboardController::class, 'disconnec
 Route::post('/github/repositories/select', [DashboardController::class, 'selectInstalledRepository']);
 Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);
+Route::get('/settings', [DashboardController::class, 'settings']);
+Route::post('/notifications/clear', [DashboardController::class, 'clearNotifications']);
 Route::get('/checks/image', [DashboardController::class, 'image']);
 Route::get('/runs/{runId}/images/{image}', [DashboardController::class, 'imageByPath']);

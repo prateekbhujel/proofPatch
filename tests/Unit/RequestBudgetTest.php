@@ -48,6 +48,23 @@ final class RequestBudgetTest extends TestCase
         }
     }
 
+    public function testDefaultLimitsAndFactoryMethod(): void
+    {
+        self::assertSame(200000, RequestBudget::DEFAULT_LIMIT_MICROS);
+        self::assertSame(5, RequestBudget::DEFAULT_MAX_ATTEMPTS);
+
+        $budget = new RequestBudget($this->directory);
+        $status = $budget->status();
+        self::assertSame(200000, $status['limitMicros']);
+        self::assertSame(5, $status['maxAttempts']);
+        self::assertSame(0, $status['attempts']);
+        self::assertSame(200000, $status['remainingMicros']);
+        self::assertTrue($status['canRequest']);
+
+        $factoryBudget = RequestBudget::forRuntime($this->directory);
+        self::assertSame($status, $factoryBudget->status());
+    }
+
     public function testInvalidLedgerFailsClosed(): void
     {
         mkdir($this->directory, 0700);

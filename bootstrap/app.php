@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Application;
-use ProofPatch\Application\InspectPullRequestCommand;
-use ProofPatch\Application\RecordPullRequestSnapshotCommand;
+use ProofPatch\Console\Commands\CheckReceiptCommand;
+use ProofPatch\Console\Commands\InspectPullRequestCommand;
+use ProofPatch\Console\Commands\RecordPullRequestSnapshotCommand;
+use ProofPatch\Console\Commands\TriagePullRequestCommand;
+use ProofPatch\Console\Commands\VerifyPatchCommand;
 use ProofPatch\Http\Middleware\HandleInertiaRequests;
 
 $app = Application::configure(basePath: dirname(__DIR__))
@@ -21,13 +24,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         RecordPullRequestSnapshotCommand::class,
         InspectPullRequestCommand::class,
-        \ProofPatch\Application\TriagePullRequestCommand::class,
-        \ProofPatch\Application\VerifyPatchCommand::class,
-        \ProofPatch\Application\CheckReceiptCommand::class,
+        TriagePullRequestCommand::class,
+        VerifyPatchCommand::class,
+        CheckReceiptCommand::class,
     ])
     ->withExceptions(static function (): void {})
     ->create();
-
-$app->useAppPath(dirname(__DIR__).'/src');
 
 return $app;

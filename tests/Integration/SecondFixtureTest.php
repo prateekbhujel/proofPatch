@@ -19,7 +19,7 @@ final class SecondFixtureTest extends TestCase
         $root = realpath($root);
         $project = dirname(__DIR__, 2);
         try {
-            foreach ([CssPatch::SECOND_FILE, 'tests/Locked/CheckoutLockedTest.php', 'src/Browser/CheckoutProbe.php'] as $file) {
+            foreach ([CssPatch::SECOND_FILE, 'tests/Locked/CheckoutLockedTest.php', 'app/Browser/CheckoutProbe.php'] as $file) {
                 if (!is_dir(dirname($root.'/'.$file))) {
                     mkdir(dirname($root.'/'.$file), 0700, true);
                 }
@@ -28,7 +28,7 @@ final class SecondFixtureTest extends TestCase
             symlink($project.'/vendor', $root.'/vendor');
             symlink($project.'/drivers', $root.'/drivers');
             LocalProcess::output(['git', 'init', '--quiet', '--initial-branch=main', $root]);
-            LocalProcess::output(['git', '-C', $root, 'add', '--', CssPatch::SECOND_FILE, 'tests/Locked/CheckoutLockedTest.php', 'src/Browser/CheckoutProbe.php']);
+            LocalProcess::output(['git', '-C', $root, 'add', '--', CssPatch::SECOND_FILE, 'tests/Locked/CheckoutLockedTest.php', 'app/Browser/CheckoutProbe.php']);
             LocalProcess::output(['git', '-C', $root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
                 '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'second fixture']);
             $source = file_get_contents($root.'/'.CssPatch::SECOND_FILE);

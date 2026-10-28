@@ -7,7 +7,7 @@ namespace ProofPatch\Tests\Integration;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\Agent\SingleUseReviewApproval;
-use ProofPatch\Application\DashboardController;
+use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\GitHub\PullRequestSnapshot;
 
 final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
@@ -23,7 +23,9 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
         $this->tempDir = sys_get_temp_dir().'/proofpatch_replay_test_'.bin2hex(random_bytes(6));
         $this->approvalsDir = $this->tempDir.'/approvals';
-        $this->snapshotsDir = dirname(__DIR__, 2).'/artifacts/pull-requests';
+        $this->snapshotsDir = $this->tempDir.'/snapshots';
+        @mkdir($this->approvalsDir, 0755, true);
+        @mkdir($this->snapshotsDir, 0755, true);
 
         putenv('PROOFPATCH_APPROVALS_DIR='.$this->approvalsDir);
         putenv('PROOFPATCH_SNAPSHOT_DIR='.$this->snapshotsDir);
@@ -54,24 +56,37 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
         @restore_exception_handler();
     }
 
-    private function loadLivewireSnapshot(): array
+    private function loadPortableReviewSnapshot(): array
     {
-        $snapshotId = '20261027T130515Z-51936019ea87';
-        $saved = (new PullRequestSnapshot($this->snapshotsDir))->load($snapshotId);
-        $pull = $saved['snapshot']['pullRequest'];
-        $snapshot = [
-            'id' => $saved['snapshot']['id'],
-            'capturedAt' => $saved['snapshot']['capturedAt'],
-            'sha256' => $saved['sha256'],
+        $headSha = str_repeat('a', 40);
+        $baseSha = str_repeat('b', 40);
+        $pull = [
+            'repository' => 'prateekbhujel/proofpatch-sandbox',
+            'number' => 1,
+            'title' => 'feat: improve checkout state synchronization',
+            'state' => 'open',
+            'base' => 'main',
+            'head' => 'feat/state-sync',
+            'headSha' => $headSha,
+            'baseSha' => $baseSha,
+            'isPrivate' => false,
+            'changedFiles' => 2,
+            'files' => [
+                ['name' => 'src/ComponentHook.php', 'status' => 'modified', 'additions' => 1, 'deletions' => 1],
+                ['name' => 'src/Features/SupportLifecycleHooks/SupportLifecycleHooks.php', 'status' => 'added', 'additions' => 2, 'deletions' => 0],
+            ],
+            'url' => 'https://github.com/prateekbhujel/proofpatch-sandbox/pull/1',
         ];
 
-        $_SESSION['pullRequest'] = $pull;
-        $_SESSION['pullRequestSnapshot'] = $snapshot;
-        $_SESSION['patch_preview'] = [
+        $store = new PullRequestSnapshot($this->snapshotsDir);
+        $snapshot = $store->capture($pull);
+
+        $patchPreview = [
             'repository' => $pull['repository'],
             'number' => $pull['number'],
             'headSha' => $pull['headSha'],
             'baseSha' => $pull['baseSha'],
+            'isPrivate' => false,
             'changedFiles' => 2,
             'filesTruncated' => false,
             'files' => [
@@ -88,12 +103,18 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
             ],
         ];
 
+        @file_put_contents($this->snapshotsDir.'/'.$snapshot['id'].'-preview.json', json_encode($patchPreview, JSON_PRETTY_PRINT));
+
+        $_SESSION['pullRequest'] = $pull;
+        $_SESSION['pullRequestSnapshot'] = $snapshot;
+        $_SESSION['patch_preview'] = $patchPreview;
+
         return [$pull, $snapshot];
     }
 
     public function testReviewControllerRejectsReplayOfConsumedApprovalToken(): void
     {
-        [$pull, $snapshot] = $this->loadLivewireSnapshot();
+        [$pull, $snapshot] = $this->loadPortableReviewSnapshot();
 
         // 1. Visit repositories with preview=1 to generate preview and issue server-held approval
         $controller = new DashboardController();
@@ -135,7 +156,7 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
     public function testReviewControllerRejectsMissingOrTamperedApprovalToken(): void
     {
-        [$pull, $snapshot] = $this->loadLivewireSnapshot();
+        [$pull, $snapshot] = $this->loadPortableReviewSnapshot();
         $controller = new DashboardController();
 
         // 1. Missing approval token
@@ -158,7 +179,7 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
     public function testDraftCommentRejectsPositiveLineNumberOutsideDiffHunk(): void
     {
-        [$pull, $snapshot] = $this->loadLivewireSnapshot();
+        [$pull, $snapshot] = $this->loadPortableReviewSnapshot();
         $controller = new DashboardController();
 
         // Line 999 is positive, but outside the captured hunks of ComponentHook.php
@@ -184,7 +205,7 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
     public function testDraftCommentAcceptsValidLineAnchorWithinDiffHunk(): void
     {
-        [$pull, $snapshot] = $this->loadLivewireSnapshot();
+        [$pull, $snapshot] = $this->loadPortableReviewSnapshot();
         $controller = new DashboardController();
 
         // In ComponentHook.php patch: @@ -24,63 +24,43 @@
@@ -214,7 +235,7 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
     public function testDraftCommentRejectsStaleHeadCommit(): void
     {
-        [$pull, $snapshot] = $this->loadLivewireSnapshot();
+        [$pull, $snapshot] = $this->loadPortableReviewSnapshot();
         $controller = new DashboardController();
 
         $staleHeadRequest = Request::create('/repositories/review/draft', 'POST', [

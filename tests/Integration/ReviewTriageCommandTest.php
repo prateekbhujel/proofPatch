@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ProofPatch\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
-use ProofPatch\Application\TriagePullRequestCommand;
+use ProofPatch\Console\Commands\TriagePullRequestCommand;
 use ProofPatch\GitHub\PrTriageAnalyzer;
 
 final class ReviewTriageCommandTest extends TestCase

@@ -10,9 +10,14 @@ use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use ProofPatch\Agent\Credentials;
 use ProofPatch\Agent\ModelProposal;
+use ProofPatch\Agent\PullRequestReview;
 use ProofPatch\Agent\RequestBudget;
+use ProofPatch\Agent\SingleUseReviewApproval;
 use ProofPatch\Evidence\Receipt;
 use ProofPatch\Evidence\RunEvidence;
+use ProofPatch\GitHub\DiffHunkParser;
+use ProofPatch\GitHub\GitHubAppClient;
+use ProofPatch\GitHub\GitHubDeviceFlow;
 use ProofPatch\GitHub\PullRequestReader;
 use ProofPatch\GitHub\PullRequestSnapshot;
 use ProofPatch\GitHub\PublicPatchPreview;
@@ -26,12 +31,15 @@ final class DashboardController
     private string $project;
     private string $runsDir;
     private string $snapshotsDir;
+    private string $approvalsDir;
 
     public function __construct()
     {
         $this->project = dirname(__DIR__, 2);
         $this->runsDir = $this->project.'/artifacts/runs';
         $this->snapshotsDir = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: $this->project.'/artifacts/pull-requests';
+        $home = getenv('HOME');
+        $this->approvalsDir = getenv('PROOFPATCH_APPROVALS_DIR') ?: ($home ? $home.'/.local/share/proofpatch/runtime/approvals' : $this->project.'/artifacts/approvals');
         if (session_status() === PHP_SESSION_NONE) {
             session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'path' => '/']);
             @session_start();
@@ -99,8 +107,9 @@ final class DashboardController
                 $token = getenv('GITHUB_TOKEN');
                 $pullRequest = (new PullRequestReader(HttpClient::create(), $token ?: null))->read($url);
                 $snapshot = (new PullRequestSnapshot($this->snapshotsDir))->capture($pullRequest);
-                $_SESSION['pullRequest'] = $pullRequest;
-                $_SESSION['pullRequestSnapshot'] = $snapshot;
+                $this->putSession($request, 'pullRequest', $pullRequest);
+                $this->putSession($request, 'pullRequestSnapshot', $snapshot);
+                $this->forgetSession($request, 'pr_review', 'review_drafts');
 
                 return redirect('/repositories');
             } catch (\Throwable $exception) {
@@ -108,31 +117,107 @@ final class DashboardController
             }
         }
 
-        $pull = $_SESSION['pullRequest'] ?? null;
-        $snapshot = $_SESSION['pullRequestSnapshot'] ?? null;
+        $pull = $this->getSession($request, 'pullRequest');
+        $snapshot = $this->getSession($request, 'pullRequestSnapshot');
         if ($request->has('snapshot')) {
             try {
                 $snapshotId = (string) $request->query('snapshot');
+                $previousSnapshotId = is_array($snapshot) ? ($snapshot['id'] ?? null) : null;
+                $isNewSnapshot = $previousSnapshotId !== $snapshotId;
+
                 $saved = (new PullRequestSnapshot($this->snapshotsDir))->load($snapshotId);
                 $pull = $saved['snapshot']['pullRequest'] ?? null;
                 $snapshot = ['id' => $saved['snapshot']['id'], 'capturedAt' => $saved['snapshot']['capturedAt'], 'sha256' => $saved['sha256']];
+                $this->putSession($request, 'pullRequest', $pull);
+                $this->putSession($request, 'pullRequestSnapshot', $snapshot);
+                if ($isNewSnapshot) {
+                    $this->forgetSession($request, 'pr_review', 'review_drafts');
+                }
+                $cachedPatchPreview = $this->getSession($request, 'patch_preview');
+                if (isset($cachedPatchPreview['headSha']) && !hash_equals((string) $cachedPatchPreview['headSha'], (string) ($pull['headSha'] ?? ''))) {
+                    $this->forgetSession($request, 'patch_preview');
+                }
             } catch (\Throwable) {
                 $pull = null;
                 $snapshot = null;
+                $this->forgetSession($request, 'pullRequest', 'pullRequestSnapshot', 'pr_review', 'review_drafts', 'patch_preview');
                 $error = 'This saved pull-request snapshot is unavailable or invalid.';
             }
         }
 
         $patchPreview = null;
         $patchPreviewError = null;
+        $cachedPreview = $this->getSession($request, 'patch_preview');
+        if (is_array($cachedPreview) && is_array($pull) && !hash_equals((string) ($cachedPreview['headSha'] ?? ''), (string) ($pull['headSha'] ?? ''))) {
+            $cachedPreview = null;
+            $this->forgetSession($request, 'patch_preview');
+        }
+        $diskPreviewFile = is_array($snapshot) && isset($snapshot['id']) ? $this->snapshotsDir.'/'.$snapshot['id'].'-preview.json' : null;
+        if (!is_array($cachedPreview) && $diskPreviewFile && is_file($diskPreviewFile)) {
+            try {
+                $diskData = json_decode((string) file_get_contents($diskPreviewFile), true, 64, JSON_THROW_ON_ERROR);
+                if (is_array($diskData) && hash_equals($diskData['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                    $cachedPreview = $diskData;
+                    $this->putSession($request, 'patch_preview', $diskData);
+                }
+            } catch (\Throwable) {}
+        }
+
         if ($request->query('preview') === '1' && is_array($pull) && is_array($snapshot)) {
             try {
-                // Deliberately unauthenticated: private PR content must never be previewed here.
-                $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
+                if (is_array($cachedPreview) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                    $patchPreview = $cachedPreview;
+                } else {
+                    // Deliberately unauthenticated: private PR content must never be previewed here.
+                    $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
+                    $this->putSession($request, 'patch_preview', $patchPreview);
+                    if ($diskPreviewFile) {
+                        @file_put_contents($diskPreviewFile, json_encode($patchPreview, JSON_PRETTY_PRINT));
+                    }
+                }
             } catch (\Throwable) {
-                $patchPreviewError = 'Unable to preview this public pull request. It may have changed, be private, or be unavailable. Capture it again and retry.';
+                if (is_array($cachedPreview) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                    $patchPreview = $cachedPreview;
+                } else {
+                    $patchPreviewError = 'Unable to preview this public pull request. It may have changed, be private, or be unavailable. Capture it again and retry.';
+                }
+            }
+        } elseif (is_array($cachedPreview) && is_array($pull) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+            $patchPreview = $cachedPreview;
+        }
+
+        $budget = null;
+        try {
+            $budget = $this->budget()->status();
+        } catch (\Throwable) {}
+
+        $reviewPreview = null;
+        if ($patchPreview !== null && is_array($pull)) {
+            try {
+                $reviewAgent = new PullRequestReview(HttpClient::create(), $this->budget());
+                $reviewPreview = $reviewAgent->preview($pull, $patchPreview);
+                if ($budget !== null) {
+                    $budget['canRequest'] = $budget['canRequest'] && $budget['remainingMicros'] >= $reviewPreview['estimatedMicros'];
+                }
+
+                // Issue a server-held single-use approval token bound to repository, PR, head SHA, and digest
+                $approvalStore = $this->approvalStore();
+                $approval = $approvalStore->issue(
+                    (string) $pull['repository'],
+                    (int) $pull['number'],
+                    (string) $pull['headSha'],
+                    (string) $reviewPreview['digest'],
+                );
+                $reviewPreview['approvalToken'] = $approval['token'];
+                $this->putSession($request, 'review_approval_token', $approval['token']);
+            } catch (\Throwable) {
+                $reviewPreview = null;
             }
         }
+
+        $review = $this->getSession($request, 'pr_review');
+        $reviewError = session('review_error') ?? $this->getSession($request, 'review_error');
+        $this->forgetSession($request, 'review_error');
 
         $triage = null;
         if ($pull !== null) {
@@ -152,12 +237,41 @@ final class DashboardController
             $triage = $analyzer->triage($pull, $candidatePulls);
         }
 
+        $githubAuth = $this->getSession($request, 'github_auth');
+        $deviceFlow = $this->getSession($request, 'github_device_flow');
+        $clientIdConfigured = (bool) (getenv('PROOFPATCH_GITHUB_CLIENT_ID') || getenv('GITHUB_APP_CLIENT_ID'));
+
+        $githubConnection = [
+            'isConfigured' => $clientIdConfigured,
+            'clientId' => getenv('PROOFPATCH_GITHUB_CLIENT_ID') ?: getenv('GITHUB_APP_CLIENT_ID') ?: null,
+            'isConnected' => is_array($githubAuth) && isset($githubAuth['token']),
+            'user' => is_array($githubAuth) ? ($githubAuth['user'] ?? null) : null,
+            'repositories' => is_array($githubAuth) ? ($githubAuth['repositories'] ?? []) : [],
+            'selectedRepo' => $this->getSession($request, 'selected_github_repo'),
+            'repoPulls' => $this->getSession($request, 'github_repo_pulls') ?? [],
+            'deviceFlow' => is_array($deviceFlow) ? [
+                'userCode' => (string) ($deviceFlow['userCode'] ?? ''),
+                'verificationUri' => (string) ($deviceFlow['verificationUri'] ?? ''),
+                'expiresAt' => (int) ($deviceFlow['expiresAt'] ?? 0),
+                'interval' => (int) ($deviceFlow['interval'] ?? 5),
+            ] : null,
+            'statusMessage' => session('github_status') ?? $this->getSession($request, 'github_status'),
+            'errorMessage' => session('github_error') ?? $this->getSession($request, 'github_error'),
+        ];
+        $this->forgetSession($request, 'github_status', 'github_error');
+
         return Inertia::render('Repositories', [
             'pull' => $pull,
             'snapshot' => $snapshot,
             'triage' => $triage,
             'patchPreview' => $patchPreview,
             'patchPreviewError' => $patchPreviewError,
+            'reviewPreview' => $reviewPreview,
+            'review' => $review,
+            'reviewError' => $reviewError,
+            'drafts' => array_values($this->getSession($request, 'review_drafts', [])),
+            'budget' => $budget,
+            'githubConnection' => $githubConnection,
             'error' => $error ?: null,
         ]);
     }
@@ -188,7 +302,7 @@ final class DashboardController
                         throw new \InvalidArgumentException('Run the selected fixture first so the model sees its own baseline.');
                     }
                     $agent = new ModelProposal($this->project, HttpClient::create(), new RequestBudget($home.'/.local/share/proofpatch/runtime'));
-                    $_SESSION['proposal'] = $agent->propose($dir, Credentials::baseten());
+                    $this->putSession($request, 'proposal', $agent->propose($dir, Credentials::baseten()));
 
                     return redirect('/checks?run='.rawurlencode($id));
                 }
@@ -207,7 +321,7 @@ final class DashboardController
                     'find' => $request->input('find'),
                     'replace' => $request->input('replace'),
                 ]);
-                $generated = $_SESSION['proposal'] ?? null;
+                $generated = $this->getSession($request, 'proposal');
                 $provenance = null;
                 if (is_array($generated) && ($generated['patch'] ?? null) === $patch->toArray()
                     && ($generated['sourceRunId'] ?? null) === $request->input('source_run')) {
@@ -260,7 +374,7 @@ final class DashboardController
             }
         } catch (\Throwable) {}
 
-        $proposal = $_SESSION['proposal'] ?? null;
+        $proposal = $this->getSession($request, 'proposal');
         if (!is_array($proposal) || ($proposal['sourceRunId'] ?? null) !== $runId) {
             $proposal = null;
         }
@@ -290,6 +404,396 @@ final class DashboardController
             'proposal' => $proposal,
             'error' => session('error'),
         ]);
+    }
+
+    public function reviewPullRequest(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $pull = $this->getSession($request, 'pullRequest');
+        $snapshot = $this->getSession($request, 'pullRequestSnapshot');
+        if (!is_array($pull) || !is_array($snapshot)) {
+            return redirect('/repositories')->with('error', 'Capture or load a pull request before requesting a review.');
+        }
+
+        try {
+            if (!$request->boolean('confirm')) {
+                throw new \InvalidArgumentException('You must review and explicitly approve the request before sending.');
+            }
+
+            $digest = (string) $request->input('digest', '');
+            if (!preg_match('/\A[a-f0-9]{64}\z/', $digest)) {
+                throw new \InvalidArgumentException('A valid preview digest is required.');
+            }
+
+            $approvalToken = (string) $request->input('approval_token', '');
+            if (!preg_match('/\A[a-f0-9]{64}\z/', $approvalToken)) {
+                throw new \InvalidArgumentException('A valid server-held approval token is required.');
+            }
+
+            // ATOMIC SERVER-HELD SINGLE-USE CONSUMPTION BEFORE PROVIDER CALL
+            // Strictly consumes the approval token and fails closed on replays or duplicates.
+            $approvalStore = $this->approvalStore();
+            $approvalStore->consume(
+                $approvalToken,
+                (string) $pull['repository'],
+                (int) $pull['number'],
+                (string) $pull['headSha'],
+                $digest,
+            );
+            $this->forgetSession($request, 'review_approval_token');
+
+            $cachedPreview = $this->getSession($request, 'patch_preview');
+            if (is_array($cachedPreview) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                $patchPreview = $cachedPreview;
+            } else {
+                $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
+                $this->putSession($request, 'patch_preview', $patchPreview);
+            }
+            $reviewAgent = new PullRequestReview(HttpClient::create(), $this->budget());
+            $key = Credentials::baseten();
+            $privateConsent = (bool) $request->input('private_consent', false);
+
+            $result = $reviewAgent->review($pull, $patchPreview, $digest, $key, $privateConsent);
+            $this->putSession($request, 'pr_review', $result);
+
+            return redirect('/repositories?preview=1');
+        } catch (\Throwable $exception) {
+            return redirect('/repositories?preview=1')->with('review_error', $exception->getMessage());
+        }
+    }
+
+    public function clearReview(Request $request = null): \Illuminate\Http\RedirectResponse
+    {
+        $this->forgetSession($request, 'pr_review');
+        return redirect('/repositories?preview=1');
+    }
+
+    public function saveDraftComment(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $pull = $this->getSession($request, 'pullRequest');
+        if (!is_array($pull)) {
+            return redirect('/repositories')->with('error', 'Capture or load a pull request before drafting comments.');
+        }
+
+        try {
+            $path = (string) $request->input('path', '');
+            $comment = trim((string) $request->input('comment', ''));
+            $headSha = (string) $request->input('headSha', '');
+            $lineRaw = $request->input('line');
+            $line = is_numeric($lineRaw) ? (int) $lineRaw : null;
+            $side = (string) $request->input('side', 'RIGHT');
+
+            if ($path === '' || strlen($path) > 4096) {
+                throw new \InvalidArgumentException('A valid file path is required.');
+            }
+            if ($comment === '' || strlen($comment) > 2000 || str_contains($comment, "\0")) {
+                throw new \InvalidArgumentException('Draft comment must be between 1 and 2000 characters.');
+            }
+            if (!preg_match('/\A[a-f0-9]{40}\z/', $headSha)) {
+                throw new \InvalidArgumentException('A valid 40-character head SHA is required.');
+            }
+
+            if (!hash_equals($pull['headSha'] ?? '', $headSha)) {
+                throw new \InvalidArgumentException('Cannot anchor comment: draft head SHA does not match current captured head SHA.');
+            }
+
+            $cachedPreview = $this->getSession($request, 'patch_preview');
+            $snapshot = $this->getSession($request, 'pullRequestSnapshot');
+            $diskPreviewFile = is_array($snapshot) && isset($snapshot['id']) ? $this->snapshotsDir.'/'.$snapshot['id'].'-preview.json' : null;
+            if (!is_array($cachedPreview) && $diskPreviewFile && is_file($diskPreviewFile)) {
+                try {
+                    $diskData = json_decode((string) file_get_contents($diskPreviewFile), true, 64, JSON_THROW_ON_ERROR);
+                    if (is_array($diskData) && hash_equals($diskData['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                        $cachedPreview = $diskData;
+                        $this->putSession($request, 'patch_preview', $diskData);
+                    }
+                } catch (\Throwable) {}
+            }
+
+            if (is_array($cachedPreview) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
+                $patchPreview = $cachedPreview;
+            } else {
+                $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
+                $this->putSession($request, 'patch_preview', $patchPreview);
+            }
+            $filePatch = null;
+            foreach ($patchPreview['files'] ?? [] as $f) {
+                if (($f['name'] ?? null) === $path) {
+                    $filePatch = $f['patch'] ?? null;
+                    break;
+                }
+            }
+
+            $anchorResult = DiffHunkParser::validateAnchor($filePatch, $line, $headSha, $pull['headSha'], $side);
+
+            // A positive lineHint alone is not proof it is commentable:
+            // if a line number is specified, it MUST be commentable within the captured diff hunk!
+            if ($line !== null && !$anchorResult['commentable']) {
+                throw new \InvalidArgumentException("Line {$line} is not commentable on {$side} side: {$anchorResult['message']}");
+            }
+
+            $draftId = hash('sha256', $path.':'.($line ?? 'file').':'.$headSha);
+            $drafts = $this->getSession($request, 'review_drafts', []);
+            $drafts[$draftId] = [
+                'id' => $draftId,
+                'path' => $path,
+                'line' => $line,
+                'side' => $side,
+                'comment' => $comment,
+                'headSha' => $headSha,
+                'status' => $anchorResult['status'],
+                'valid' => $anchorResult['valid'],
+                'commentable' => $anchorResult['commentable'],
+                'lineType' => $anchorResult['lineType'],
+                'message' => $anchorResult['message'],
+                'updatedAt' => gmdate(DATE_ATOM),
+            ];
+            $this->putSession($request, 'review_drafts', $drafts);
+
+            $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
+            return redirect('/repositories?preview=1'.$snapshotQuery);
+        } catch (\Throwable $exception) {
+            $snapshot = $this->getSession($request, 'pullRequestSnapshot');
+            $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
+            $this->putSession($request, 'review_error', $exception->getMessage());
+            return redirect('/repositories?preview=1'.$snapshotQuery)->with('review_error', $exception->getMessage());
+        }
+    }
+
+    public function deleteDraftComment(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $id = (string) $request->input('id', '');
+        $drafts = $this->getSession($request, 'review_drafts', []);
+        if (isset($drafts[$id])) {
+            unset($drafts[$id]);
+            $this->putSession($request, 'review_drafts', $drafts);
+        }
+        $snapshot = $this->getSession($request, 'pullRequestSnapshot');
+        $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
+        return redirect('/repositories?preview=1'.$snapshotQuery);
+    }
+
+    public function clearDraftComments(Request $request = null): \Illuminate\Http\RedirectResponse
+    {
+        $this->forgetSession($request, 'review_drafts');
+        $snapshot = $this->getSession($request, 'pullRequestSnapshot');
+        $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
+        return redirect('/repositories?preview=1'.$snapshotQuery);
+    }
+
+    public function initiateDeviceFlow(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            $clientId = (string) ($request->input('client_id') ?: getenv('PROOFPATCH_GITHUB_CLIENT_ID') ?: getenv('GITHUB_APP_CLIENT_ID') ?: '');
+            $clientId = trim($clientId);
+            if ($clientId === '') {
+                throw new \InvalidArgumentException('A GitHub App Client ID is required. Set PROOFPATCH_GITHUB_CLIENT_ID or provide it in the form.');
+            }
+
+            $flow = new GitHubDeviceFlow(HttpClient::create());
+            $initData = $flow->initiate($clientId);
+
+            $flowData = [
+                'clientId' => $clientId,
+                'deviceCode' => $initData['deviceCode'],
+                'userCode' => $initData['userCode'],
+                'verificationUri' => $initData['verificationUri'],
+                'expiresAt' => time() + $initData['expiresIn'],
+                'interval' => $initData['interval'],
+            ];
+            $this->putSession($request, 'github_device_flow', $flowData);
+            $this->forgetSession($request, 'github_auth', 'selected_github_repo', 'github_repo_pulls');
+
+            return redirect('/repositories')->with('github_status', 'Device flow initiated. Enter code '.$initData['userCode'].' on GitHub.');
+        } catch (\Throwable $e) {
+            $this->putSession($request, 'github_error', $e->getMessage());
+            return redirect('/repositories')->with('github_error', $e->getMessage());
+        }
+    }
+
+    public function pollDeviceFlow(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $flow = $this->getSession($request, 'github_device_flow');
+        if (!is_array($flow) || !isset($flow['clientId'], $flow['deviceCode'])) {
+            return redirect('/repositories')->with('github_error', 'No active device flow session. Please initiate first.');
+        }
+
+        if (time() > ($flow['expiresAt'] ?? 0)) {
+            $this->forgetSession($request, 'github_device_flow');
+            return redirect('/repositories')->with('github_error', 'Verification code expired. Please initiate connection again.');
+        }
+
+        try {
+            $deviceFlow = new GitHubDeviceFlow(HttpClient::create());
+            $result = $deviceFlow->poll((string) $flow['clientId'], (string) $flow['deviceCode']);
+
+            if ($result['status'] === 'authorized' && isset($result['accessToken'])) {
+                $token = (string) $result['accessToken'];
+                $client = new GitHubAppClient(HttpClient::create());
+                $user = $client->getCurrentUser($token);
+                $repos = $client->listSelectedRepositories($token);
+
+                $authData = [
+                    'token' => $token,
+                    'user' => $user,
+                    'repositories' => $repos,
+                    'connectedAt' => gmdate(DATE_ATOM),
+                ];
+                $this->putSession($request, 'github_auth', $authData);
+                $this->forgetSession($request, 'github_device_flow');
+
+                return redirect('/repositories')->with('github_status', 'Successfully connected to GitHub as @'.$user['login'].'.');
+            }
+
+            if ($result['status'] === 'pending') {
+                return redirect('/repositories')->with('github_status', 'Authorization pending. Enter user code '.$flow['userCode'].' at '.$flow['verificationUri'].'.');
+            }
+
+            if ($result['status'] === 'slow_down') {
+                $flow['interval'] = $result['interval'] ?? 10;
+                $this->putSession($request, 'github_device_flow', $flow);
+                return redirect('/repositories')->with('github_status', 'Rate limited by GitHub. Please wait a few seconds before checking again.');
+            }
+
+            if ($result['status'] === 'expired') {
+                $this->forgetSession($request, 'github_device_flow');
+                return redirect('/repositories')->with('github_error', 'Verification code expired. Please initiate connection again.');
+            }
+
+            if ($result['status'] === 'denied') {
+                $this->forgetSession($request, 'github_device_flow');
+                return redirect('/repositories')->with('github_error', 'Authorization was declined on GitHub.');
+            }
+
+            return redirect('/repositories')->with('github_error', 'GitHub authorization error: '.($result['error'] ?? 'Unknown error'));
+        } catch (\Throwable $e) {
+            return redirect('/repositories')->with('github_error', 'Failed to poll GitHub: '.$e->getMessage());
+        }
+    }
+
+    public function disconnectDeviceFlow(?Request $request = null): \Illuminate\Http\RedirectResponse
+    {
+        $this->forgetSession(
+            $request,
+            'github_auth',
+            'github_device_flow',
+            'selected_github_repo',
+            'github_repo_pulls'
+        );
+        return redirect('/repositories')->with('github_status', 'Disconnected from GitHub.');
+    }
+
+    public function selectInstalledRepository(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $auth = $this->getSession($request, 'github_auth');
+        if (!is_array($auth) || !isset($auth['token'])) {
+            return redirect('/repositories')->with('github_error', 'GitHub account is not connected.');
+        }
+
+        $repoName = trim((string) $request->input('repository', ''));
+        $authorizedRepos = $auth['repositories'] ?? [];
+        $found = null;
+        foreach ($authorizedRepos as $r) {
+            if (is_array($r) && ($r['fullName'] ?? '') === $repoName) {
+                $found = $r;
+                break;
+            }
+        }
+
+        if ($found === null) {
+            return redirect('/repositories')->with('github_error', 'Selected repository is not authorized for this installation.');
+        }
+
+        try {
+            $client = new GitHubAppClient(HttpClient::create());
+            $pulls = $client->listOpenPullRequests((string) $auth['token'], $repoName);
+            $this->putSession($request, 'selected_github_repo', $repoName);
+            $this->putSession($request, 'github_repo_pulls', $pulls);
+
+            return redirect('/repositories')->with('github_status', 'Loaded open pull requests for '.$repoName.'.');
+        } catch (\Throwable $e) {
+            return redirect('/repositories')->with('github_error', 'Failed to list pull requests: '.$e->getMessage());
+        }
+    }
+
+    public function captureInstalledPullRequest(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $auth = $this->getSession($request, 'github_auth');
+        if (!is_array($auth) || !isset($auth['token'])) {
+            return redirect('/repositories')->with('github_error', 'GitHub account is not connected.');
+        }
+
+        $repoName = trim((string) $request->input('repository', ''));
+        $number = (int) $request->input('number', 0);
+        if ($number <= 0) {
+            return redirect('/repositories')->with('github_error', 'A valid pull request number is required.');
+        }
+
+        $authorizedRepos = $auth['repositories'] ?? [];
+        $foundRepo = null;
+        foreach ($authorizedRepos as $r) {
+            if (is_array($r) && ($r['fullName'] ?? '') === $repoName) {
+                $foundRepo = $r;
+                break;
+            }
+        }
+
+        if ($foundRepo === null) {
+            return redirect('/repositories')->with('github_error', 'Selected repository is not authorized for this installation.');
+        }
+
+        try {
+            $client = new GitHubAppClient(HttpClient::create());
+            $token = (string) $auth['token'];
+
+            $patchPreview = $client->fetchPullRequestPatch($token, $repoName, $number);
+
+            $pull = [
+                'repository' => $repoName,
+                'number' => $number,
+                'title' => (string) $request->input('title', 'PR #'.$number),
+                'state' => 'open',
+                'head' => (string) $request->input('head', 'head'),
+                'base' => (string) $request->input('base', 'main'),
+                'headSha' => $patchPreview['headSha'],
+                'baseSha' => $patchPreview['baseSha'],
+                'url' => 'https://github.com/'.$repoName.'/pull/'.$number,
+                'isPrivate' => $patchPreview['isPrivate'],
+                'changedFiles' => $patchPreview['changedFiles'],
+                'files' => array_map(static fn(array $f): array => [
+                    'name' => $f['name'],
+                    'status' => $f['status'],
+                    'additions' => 0,
+                    'deletions' => 0,
+                ], $patchPreview['files']),
+            ];
+
+            $snapshot = (new PullRequestSnapshot($this->snapshotsDir))->capture($pull);
+            $this->putSession($request, 'pullRequest', $pull);
+            $this->putSession($request, 'pullRequestSnapshot', $snapshot);
+            $this->putSession($request, 'patch_preview', $patchPreview);
+            $this->forgetSession($request, 'pr_review', 'review_drafts');
+
+            $diskPreviewFile = $this->snapshotsDir.'/'.$snapshot['id'].'-preview.json';
+            @file_put_contents($diskPreviewFile, json_encode($patchPreview, JSON_PRETTY_PRINT));
+
+            return redirect('/repositories?preview=1&snapshot='.$snapshot['id']);
+        } catch (\Throwable $e) {
+            return redirect('/repositories')->with('github_error', 'Failed to capture pull request: '.$e->getMessage());
+        }
+    }
+
+    private function budget(): RequestBudget
+    {
+        $home = getenv('HOME');
+        if (!$home) {
+            throw new \RuntimeException('The local request budget is unavailable.');
+        }
+        return new RequestBudget($home.'/.local/share/proofpatch/runtime', 200000, 5);
+    }
+
+    private function approvalStore(): SingleUseReviewApproval
+    {
+        return new SingleUseReviewApproval($this->approvalsDir);
     }
 
     public function image(Request $request): Response
@@ -326,5 +830,36 @@ final class DashboardController
             'Content-Type' => 'image/png',
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    private function getSession(?Request $request, string $key, mixed $default = null): mixed
+    {
+        if ($request !== null && $request->hasSession()) {
+            $val = $request->session()->get($key);
+            if ($val !== null) {
+                return $val;
+            }
+        }
+        return $_SESSION[$key] ?? $default;
+    }
+
+    private function putSession(?Request $request, string $key, mixed $value): void
+    {
+        if ($request !== null && $request->hasSession()) {
+            $request->session()->put($key, $value);
+            $request->session()->save();
+        }
+        $_SESSION[$key] = $value;
+    }
+
+    private function forgetSession(?Request $request, string ...$keys): void
+    {
+        if ($request !== null && $request->hasSession()) {
+            $request->session()->forget($keys);
+            $request->session()->save();
+        }
+        foreach ($keys as $k) {
+            unset($_SESSION[$k]);
+        }
     }
 }

@@ -99,7 +99,7 @@ export function VisualComparisonViewer({
             onClick={() => setMode('slider')}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
               mode === 'slider'
-                ? 'bg-violet-600 text-white shadow-xs'
+                ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
@@ -112,7 +112,7 @@ export function VisualComparisonViewer({
             onClick={() => setMode('sideBySide')}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
               mode === 'sideBySide'
-                ? 'bg-violet-600 text-white shadow-xs'
+                ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
@@ -125,7 +125,7 @@ export function VisualComparisonViewer({
             onClick={() => setMode('toggle')}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
               mode === 'toggle'
-                ? 'bg-violet-600 text-white shadow-xs'
+                ? 'bg-slate-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
@@ -164,7 +164,7 @@ export function VisualComparisonViewer({
               type="button"
               onClick={resetZoom}
               title="Reset 100% (0)"
-              className="px-2 py-0.5 text-[11px] font-sans font-medium text-violet-600 hover:bg-violet-50 rounded"
+              className="px-2 py-0.5 text-[11px] font-sans font-medium text-slate-800 hover:bg-slate-100 rounded"
             >
               1:1
             </button>
@@ -176,7 +176,7 @@ export function VisualComparisonViewer({
             onClick={() => setIsCrisp(!isCrisp)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition ${
               isCrisp
-                ? 'bg-violet-50 text-violet-700 border-violet-300'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                 : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
             title="Preserve sharp pixel edges on high zoom"
@@ -254,10 +254,10 @@ export function VisualComparisonViewer({
 
             {/* Divider line */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-violet-400 shadow-[0_0_10px_rgba(124,58,237,0.8)] pointer-events-none"
+              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.6)] pointer-events-none"
               style={{ left: `${sliderPosition}%` }}
             >
-              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md">
+              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shadow-md border border-slate-700">
                 ↔
               </div>
             </div>
@@ -276,7 +276,7 @@ export function VisualComparisonViewer({
             <div className="absolute bottom-3 left-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
               Baseline (Before)
             </div>
-            <div className="absolute bottom-3 right-3 pointer-events-none px-2.5 py-1 rounded bg-violet-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-violet-700/60">
+            <div className="absolute bottom-3 right-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
               Candidate (Patched)
             </div>
           </div>

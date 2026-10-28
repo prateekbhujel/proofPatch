@@ -56,7 +56,22 @@ final class WebRequestSecurityTest extends TestCase
                 array_keys($cookies), array_values($cookies),
             ));
 
-            foreach (['/repositories', '/checks', '/issues/preview', '/issues/propose'] as $route) {
+            foreach ([
+                '/repositories',
+                '/checks',
+                '/issues/preview',
+                '/issues/propose',
+                '/repositories/review',
+                '/repositories/review/clear',
+                '/repositories/review/draft',
+                '/repositories/review/draft/delete',
+                '/repositories/review/draft/clear',
+                '/github/device/initiate',
+                '/github/device/poll',
+                '/github/device/disconnect',
+                '/github/repositories/select',
+                '/github/pulls/capture',
+            ] as $route) {
                 [$status] = $this->request($address, $route, 'POST', [
                     'Cookie: '.$cookieHeader,
                     'Origin: https://example.invalid',
@@ -80,6 +95,15 @@ final class WebRequestSecurityTest extends TestCase
             self::assertSame(302, $status, 'An unapproved proposal must return to the issue page');
             [, , $issuePage] = $this->request($address, '/issues', 'GET', ['Cookie: '.$cookieHeader]);
             self::assertStringContainsString('Review and approve the request first.', $issuePage);
+
+            [$status] = $this->request($address, '/github/device/initiate', 'POST', [
+                'Cookie: '.$cookieHeader,
+                'X-XSRF-TOKEN: '.rawurldecode($cookies['XSRF-TOKEN']),
+                'Origin: http://'.$address,
+            ]);
+            self::assertSame(302, $status, 'A legitimate local device initiate request should reach validation and redirect');
+            [, , $repoPage] = $this->request($address, '/repositories', 'GET', ['Cookie: '.$cookieHeader]);
+            self::assertStringContainsString('Client ID is required', $repoPage);
         } finally {
             $server->stop();
         }

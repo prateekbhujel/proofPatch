@@ -101,4 +101,33 @@ final class PullRequestReaderTest extends TestCase
             self::assertStringNotContainsString('private details', $error->getMessage());
         }
     }
+
+    public function testRecognizesMergedPullRequestState(): void
+    {
+        $sha = str_repeat('a', 40);
+        $client = new MockHttpClient(function (string $method, string $url) use ($sha): MockResponse {
+            if (str_contains($url, '/files?')) {
+                return new MockResponse('[]');
+            }
+            if (str_contains($url, '/check-runs?')) {
+                return new MockResponse('{"total_count":0,"check_runs":[]}');
+            }
+            $data = [
+                'number' => 83,
+                'title' => 'Preserve split POSIX UTF-8 input across key reads',
+                'state' => 'closed',
+                'merged' => true,
+                'merged_at' => '2026-09-25T12:16:11Z',
+                'changed_files' => 0,
+                'head' => ['sha' => $sha, 'ref' => 'fix-posix-readkey-utf8-state'],
+                'base' => ['sha' => str_repeat('b', 40), 'ref' => 'main', 'repo' => ['private' => false, 'visibility' => 'public']],
+            ];
+            return new MockResponse(json_encode($data, JSON_THROW_ON_ERROR));
+        });
+
+        $result = (new PullRequestReader($client))->read('https://github.com/prateekbhujel/php-terminal/pull/83');
+        self::assertSame('merged', $result['state']);
+        self::assertTrue($result['isMerged']);
+        self::assertFalse($result['isPrivate']);
+    }
 }

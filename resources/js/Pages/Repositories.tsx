@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import React, { useState, useEffect } from 'react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
+import { DiffViewer, PatchFile } from '../Components/DiffViewer';
 import {
   FileText,
   CheckCircle2,
@@ -14,7 +15,69 @@ import {
   Layers,
   AlertTriangle,
   GitPullRequest,
+  Sparkles,
+  Info,
+  Clock,
+  MessageSquare,
+  Trash2,
+  Edit3,
+  CornerDownRight,
+  Key,
+  RefreshCw,
+  LogOut,
+  FolderGit2,
+  ChevronDown,
+  ChevronUp,
+  Lock,
 } from 'lucide-react';
+
+interface GitHubRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  isPrivate: boolean;
+  defaultBranch: string;
+  htmlUrl: string;
+}
+
+interface GitHubUser {
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+  htmlUrl: string;
+}
+
+interface GitHubDeviceFlowData {
+  userCode: string;
+  verificationUri: string;
+  expiresAt: number;
+  interval: number;
+}
+
+interface GitHubPull {
+  number: number;
+  title: string;
+  head: string;
+  base: string;
+  headSha: string;
+  baseSha: string;
+  user: string;
+  isPrivate: boolean;
+}
+
+interface GitHubConnectionData {
+  isConfigured: boolean;
+  clientId: string | null;
+  isConnected: boolean;
+  user: GitHubUser | null;
+  repositories: GitHubRepo[];
+  selectedRepo: string | null;
+  repoPulls: GitHubPull[];
+  deviceFlow: GitHubDeviceFlowData | null;
+  statusMessage: string | null;
+  errorMessage: string | null;
+}
 
 interface ChangedFile {
   name: string;
@@ -39,6 +102,7 @@ interface PullData {
   base: string;
   headSha: string;
   url: string;
+  isPrivate?: boolean;
   files?: ChangedFile[];
   checks?: CheckRun[];
 }
@@ -95,6 +159,66 @@ interface TriageData {
   comparisons: TriageComparison[];
 }
 
+interface ReviewFinding {
+  path: string;
+  status: 'note' | 'concern' | 'approval';
+  lineHint: number | null;
+  comment: string;
+  commentable?: boolean;
+  anchorStatus?: 'anchored' | 'hint_only' | 'stale';
+  anchorMessage?: string;
+  lineType?: string | null;
+}
+
+interface ReviewResult {
+  unverified: boolean;
+  model: string;
+  reviewedAt: string;
+  inputDigest: string;
+  summary: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  recommendation: 'approve' | 'request_changes' | 'discuss';
+  fileFindings: ReviewFinding[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+  };
+}
+
+interface ReviewPreviewData {
+  destination: string;
+  digest: string;
+  estimatedMicros: number;
+  filesCount: number;
+  fileNames: string[];
+  body?: Record<string, any>;
+  approvalToken?: string;
+  isPrivate?: boolean;
+}
+
+interface CommentDraft {
+  id: string;
+  path: string;
+  line: number | null;
+  side: string;
+  comment: string;
+  headSha: string;
+  status: 'anchored' | 'hint_only' | 'stale';
+  valid: boolean;
+  lineType: string | null;
+  message: string;
+  updatedAt: string;
+}
+
+interface BudgetData {
+  attempts: number;
+  limitAttempts: number;
+  reservedMicros: number;
+  limitMicros: number;
+  remainingMicros: number;
+  canRequest: boolean;
+}
+
 interface RepositoriesProps {
   pull?: PullData | null;
   snapshot?: SnapshotData | null;
@@ -103,11 +227,18 @@ interface RepositoriesProps {
   patchPreview?: {
     headSha: string;
     baseSha: string;
+    isPrivate?: boolean;
     changedFiles: number;
     filesTruncated: boolean;
     files: Array<{ name: string; status: 'available' | 'missing' | 'oversize' | 'partial'; patch: string | null }>;
   } | null;
   patchPreviewError?: string | null;
+  review?: ReviewResult | null;
+  reviewPreview?: ReviewPreviewData | null;
+  reviewError?: string | null;
+  drafts?: CommentDraft[];
+  budget?: BudgetData | null;
+  githubConnection?: GitHubConnectionData | null;
   csrf?: string;
 }
 
@@ -118,14 +249,127 @@ export default function Repositories({
   error = null,
   patchPreview = null,
   patchPreviewError = null,
+  review = null,
+  reviewPreview = null,
+  reviewError = null,
+  drafts = [],
+  budget = null,
+  githubConnection = null,
 }: RepositoriesProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'triage' | 'files' | 'checks' | 'receipt' | 'new'>(
-    patchPreview || patchPreviewError ? 'files' : pull ? 'overview' : 'new'
+  const [activeTab, setActiveTab] = useState<'overview' | 'triage' | 'files' | 'review' | 'checks' | 'receipt' | 'new'>(
+    review || reviewError ? 'review' : patchPreview || patchPreviewError ? 'files' : pull ? 'overview' : 'new'
   );
   const [fileQuery, setFileQuery] = useState('');
   const [checkQuery, setCheckQuery] = useState('');
   const [copiedSha, setCopiedSha] = useState(false);
   const [copiedDigest, setCopiedDigest] = useState(false);
+  const [copiedReviewDigest, setCopiedReviewDigest] = useState(false);
+  const [copiedUserCode, setCopiedUserCode] = useState(false);
+  const [reviewApproved, setReviewApproved] = useState(false);
+  const [privateConsentApproved, setPrivateConsentApproved] = useState(false);
+  const [reviewDecision, setReviewDecision] = useState<'comment' | 'approve' | 'request_changes'>('comment');
+  const [maintainerMode, setMaintainerMode] = useState<'review_first' | 'automatic_review'>('review_first');
+  const [gitHubSectionOpen, setGitHubSectionOpen] = useState(
+    Boolean(githubConnection?.isConnected || githubConnection?.deviceFlow || !pull)
+  );
+
+  const isPrivate = Boolean(pull?.isPrivate || patchPreview?.isPrivate || reviewPreview?.isPrivate);
+
+  const { data: reviewFormData, setData: setReviewFormData, post: postReview, processing: reviewProcessing } = useForm({
+    digest: reviewPreview?.digest || '',
+    confirm: false,
+    approval_token: reviewPreview?.approvalToken || '',
+    private_consent: false,
+  });
+
+  const { data: deviceFormData, setData: setDeviceFormData, post: postDeviceInitiate, processing: deviceInitiateProcessing } = useForm({
+    client_id: githubConnection?.clientId || '',
+  });
+
+  const handleInitiateDeviceFlow = (e: React.FormEvent) => {
+    e.preventDefault();
+    postDeviceInitiate('/github/device/initiate');
+  };
+
+  const handlePollDeviceFlow = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.post('/github/device/poll', {}, { preserveScroll: true });
+  };
+
+  const handleDisconnectDevice = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.post('/github/device/disconnect', {}, { preserveScroll: true });
+  };
+
+  const handleSelectRepository = (repoFullName: string) => {
+    router.post('/github/repositories/select', { repository: repoFullName }, { preserveScroll: true });
+  };
+
+  const handleCaptureGitHubPull = (pullItem: GitHubPull) => {
+    if (!githubConnection?.selectedRepo) return;
+    router.post('/github/pulls/capture', {
+      repository: githubConnection.selectedRepo,
+      number: pullItem.number,
+      title: pullItem.title,
+      head: pullItem.head,
+      base: pullItem.base,
+    });
+  };
+
+  useEffect(() => {
+    if (reviewPreview?.approvalToken) {
+      setReviewFormData('approval_token', reviewPreview.approvalToken);
+      setReviewFormData('digest', reviewPreview.digest);
+    }
+  }, [reviewPreview?.approvalToken, reviewPreview?.digest]);
+
+  const { post: postClearReview, processing: clearReviewProcessing } = useForm({});
+
+  const { data: draftData, setData: setDraftData, post: postDraft, processing: draftProcessing } = useForm({
+    path: '',
+    line: null as number | null,
+    side: 'RIGHT',
+    comment: '',
+    headSha: pull?.headSha || '',
+  });
+
+  const { post: postDeleteDraft, processing: deleteDraftProcessing } = useForm({ id: '' });
+  const { post: postClearDrafts, processing: clearDraftsProcessing } = useForm({});
+
+  const handleReviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewPreview || !reviewApproved) return;
+    if (isPrivate && !privateConsentApproved) return;
+    postReview('/repositories/review');
+  };
+
+  const handleClearReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    postClearReview('/repositories/review/clear');
+  };
+
+  const handleSaveDraft = (path: string, line: number | null, side: string, comment: string) => {
+    if (!comment.trim() || !pull) return;
+
+    router.post('/repositories/review/draft', {
+      path,
+      line,
+      side,
+      comment: comment.trim(),
+      headSha: pull.headSha,
+    }, {
+      preserveScroll: true,
+    });
+  };
+
+  const handleDeleteDraft = (id: string) => {
+    router.post('/repositories/review/draft/delete', { id }, { preserveScroll: true });
+  };
+
+  const handleClearAllDrafts = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.post('/repositories/review/draft/clear', {}, { preserveScroll: true });
+  };
 
   const { data, setData, post, processing } = useForm({
     url: '',
@@ -136,14 +380,17 @@ export default function Repositories({
     post('/repositories');
   };
 
-  const copyText = (text: string, type: 'sha' | 'digest') => {
+  const copyText = (text: string, type: 'sha' | 'digest' | 'reviewDigest') => {
     navigator.clipboard.writeText(text);
     if (type === 'sha') {
       setCopiedSha(true);
       setTimeout(() => setCopiedSha(false), 1500);
-    } else {
+    } else if (type === 'digest') {
       setCopiedDigest(true);
       setTimeout(() => setCopiedDigest(false), 1500);
+    } else {
+      setCopiedReviewDigest(true);
+      setTimeout(() => setCopiedReviewDigest(false), 1500);
     }
   };
 
@@ -167,87 +414,461 @@ export default function Repositories({
   ).length;
 
   return (
-    <AppLayout activeNav="pulls">
+    <AppLayout activeNav="repositories">
       <Head title={pull ? `${pull.repository}#${pull.number}` : 'Inspect Pull Request'} />
 
       <div className="space-y-6">
         {/* Error notification */}
         {error && (
-          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-3">
+          <div role="alert" className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
             <span>{error}</span>
           </div>
         )}
+        {reviewError && (
+          <div role="alert" className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+            <span>{reviewError}</span>
+          </div>
+        )}
+
+        {/* GitHub App Connection Section (RFC 8628 Device Flow) */}
+        <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+          <div
+            onClick={() => setGitHubSectionOpen(!gitHubSectionOpen)}
+            className="p-4 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between cursor-pointer select-none hover:bg-slate-100/60 transition"
+          >
+            <div className="flex items-center gap-2.5">
+              <FolderGit2 className="w-4 h-4 text-violet-700" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-900">GitHub Connection</span>
+                <span className="text-[11px] text-slate-500 font-normal hidden sm:inline">(GitHub App Device Flow)</span>
+              </div>
+              {githubConnection?.isConnected ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Connected as @{githubConnection.user?.login}
+                </span>
+              ) : githubConnection?.deviceFlow ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Code: {githubConnection.deviceFlow.userCode}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                  Not Connected
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              {gitHubSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </div>
+
+          {gitHubSectionOpen && (
+            <div className="p-5 space-y-4">
+              {/* Feedback messages */}
+              {githubConnection?.statusMessage && (
+                <div className="p-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{githubConnection.statusMessage}</span>
+                </div>
+              )}
+              {githubConnection?.errorMessage && (
+                <div className="p-3 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{githubConnection.errorMessage}</span>
+                </div>
+              )}
+
+              {/* State 1: Connected */}
+              {githubConnection?.isConnected ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="flex items-center gap-3">
+                      {githubConnection.user?.avatarUrl ? (
+                        <img
+                          src={githubConnection.user.avatarUrl}
+                          alt={githubConnection.user.login}
+                          className="w-8 h-8 rounded-full border border-slate-300"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs">
+                          {githubConnection.user?.login.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                          <span>{githubConnection.user?.name || githubConnection.user?.login}</span>
+                          <span className="text-slate-400 font-mono font-normal">(@{githubConnection.user?.login})</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          {githubConnection.repositories.length} authorized {githubConnection.repositories.length === 1 ? 'repository' : 'repositories'} available
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleDisconnectDevice}>
+                      <button
+                        type="submit"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Disconnect</span>
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Selected Repositories List */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-slate-800">Installed Repositories (Least Privilege Scope)</h4>
+                      <span className="text-[11px] text-slate-500">Selected during app installation</span>
+                    </div>
+
+                    {githubConnection.repositories.length === 0 ? (
+                      <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs text-slate-500 space-y-1">
+                        <p className="font-medium text-slate-700">No repositories granted to this installation.</p>
+                        <p className="text-[11px]">
+                          Configure repository permissions on GitHub to grant ProofPatch access to selected owned repositories.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {githubConnection.repositories.map((repo) => {
+                          const isCurrent = githubConnection.selectedRepo === repo.fullName;
+                          return (
+                            <button
+                              key={repo.fullName}
+                              type="button"
+                              onClick={() => handleSelectRepository(repo.fullName)}
+                              className={`p-2.5 rounded-lg border text-left transition flex items-center justify-between gap-2 ${
+                                isCurrent
+                                  ? 'bg-violet-50/70 border-violet-300 ring-1 ring-violet-400'
+                                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold text-slate-900 truncate">{repo.fullName}</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                  <span>{repo.defaultBranch}</span>
+                                  <span>·</span>
+                                  <span className={repo.isPrivate ? 'text-amber-700 font-medium' : 'text-emerald-700 font-medium'}>
+                                    {repo.isPrivate ? 'Private' : 'Public'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                                isCurrent ? 'bg-violet-700 text-white' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {isCurrent ? 'Selected' : 'Select'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Open Pull Requests in Selected Repo */}
+                  {githubConnection.selectedRepo && (
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-slate-800">
+                          Open Pull Requests in <span className="font-mono text-violet-900">{githubConnection.selectedRepo}</span>
+                        </h4>
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          {githubConnection.repoPulls.length} open
+                        </span>
+                      </div>
+
+                      {githubConnection.repoPulls.length === 0 ? (
+                        <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs text-slate-500">
+                          No open pull requests found in {githubConnection.selectedRepo}.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white">
+                          {githubConnection.repoPulls.map((pr) => (
+                            <div key={pr.number} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-xs text-slate-900">#{pr.number}</span>
+                                  <span className="text-xs font-medium text-slate-800 truncate">{pr.title}</span>
+                                  {pr.isPrivate && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                      <Lock className="w-2.5 h-2.5 text-amber-700" />
+                                      Private
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2 font-mono">
+                                  <span>by @{pr.user}</span>
+                                  <span>·</span>
+                                  <span>{pr.head} → {pr.base}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCaptureGitHubPull(pr)}
+                                className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs transition shrink-0"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Review PR</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : githubConnection?.deviceFlow ? (
+                /* State 2: Device Flow Active */
+                <div className="p-4 rounded-lg border border-violet-200 bg-violet-50/50 space-y-3.5">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                      <Key className="w-4 h-4 text-violet-700" />
+                      <span>GitHub Device Authorization Pending</span>
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      Enter the one-time user code on GitHub to authorize read-only access to your selected repositories:
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="px-3.5 py-2 bg-white rounded-md border border-violet-300 font-mono font-bold text-base tracking-widest text-violet-900 shadow-2xs select-all">
+                      {githubConnection.deviceFlow.userCode}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(githubConnection.deviceFlow?.userCode || '');
+                        setCopiedUserCode(true);
+                        setTimeout(() => setCopiedUserCode(false), 1500);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                    >
+                      {copiedUserCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>{copiedUserCode ? 'Copied' : 'Copy Code'}</span>
+                    </button>
+
+                    <a
+                      href={githubConnection.deviceFlow.verificationUri}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-2xs transition"
+                    >
+                      <span>Open GitHub Verification</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-violet-100">
+                    <div className="flex items-center gap-2">
+                      <form onSubmit={handlePollDeviceFlow}>
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Check Authorization</span>
+                        </button>
+                      </form>
+
+                      <form onSubmit={handleDisconnectDevice}>
+                        <button
+                          type="submit"
+                          className="text-xs font-medium text-slate-500 hover:text-slate-800 underline px-2 py-1"
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    </div>
+
+                    <span className="text-[11px] text-slate-500">
+                      RFC 8628 OAuth 2.0 Device Grant
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* State 3: Not Connected - Initiate form */
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-semibold text-slate-900">Connect Your GitHub Account (Device Flow)</h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      ProofPatch connects using the official GitHub App Device Flow (RFC 8628). It operates read-only and accesses strictly the repositories you explicitly choose during installation.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleInitiateDeviceFlow} className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        placeholder="GitHub App Client ID (e.g. Iv1.xxxxxxxxxxxx or set PROOFPATCH_GITHUB_CLIENT_ID)"
+                        value={deviceFormData.client_id}
+                        onChange={(e) => setDeviceFormData('client_id', e.target.value)}
+                        className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-violet-600 shadow-2xs font-mono"
+                      />
+                      <button
+                        type="submit"
+                        disabled={deviceInitiateProcessing}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>{deviceInitiateProcessing ? 'Initiating...' : 'Connect GitHub App'}</span>
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5">
+                      <span>Setup guide:</span>
+                      <a
+                        href="https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-violet-700 hover:underline inline-flex items-center gap-0.5"
+                      >
+                        GitHub App Device Flow Documentation <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {pull ? (
           <>
-            {/* PR Header Card */}
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+            {/* PR Header Card & Co-Maintainer Context */}
+            <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-5 space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
                     <span>{pull.repository}</span>
                     <span>/</span>
                     <span className="font-bold text-slate-900">#{pull.number}</span>
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
                         pull.state.toLowerCase() === 'open'
-                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                          : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : pull.state.toLowerCase() === 'merged'
+                          ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}
                     >
                       {pull.state.toUpperCase()}
                     </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-violet-50 text-violet-800 border border-violet-200">
+                      {pull.state.toLowerCase() === 'merged' ? 'Merged PR (Historical)' : 'Contributor PR'}
+                    </span>
+                    {pull.isPrivate && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                        <Lock className="w-2.5 h-2.5 text-amber-700" />
+                        Private Repository
+                      </span>
+                    )}
                   </div>
 
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-900">{pull.title}</h1>
+                  <h1 className="text-xl font-bold tracking-tight text-slate-900">{pull.title}</h1>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                    <span className="inline-flex items-center gap-1 font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200">
+                  {pull.state.toLowerCase() === 'merged' && (
+                    <div className="mt-2.5 p-3 bg-purple-50/80 border border-purple-200 rounded-lg text-xs text-purple-900 flex items-start gap-2.5">
+                      <div className="p-1 bg-purple-200/60 rounded text-purple-800 shrink-0">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="font-semibold text-purple-950">Historical Merged PR (Read-Only Preview & Review Research)</span>
+                        <p className="text-purple-800 text-[11px] leading-relaxed">
+                          This pull request has already been merged into the default branch. It is loaded for historical code inspection and read-only model-assisted review research. ProofPatch will never post comments, request changes, or create any external activity against this PR.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs">
+                    <span className="inline-flex items-center gap-1 font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
                       <span>{pull.head}</span>
                     </span>
                     <span className="text-slate-400 font-mono">→</span>
-                    <span className="inline-flex items-center gap-1 font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200">
+                    <span className="inline-flex items-center gap-1 font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
                       <span>{pull.base}</span>
                     </span>
                     <span className="text-slate-300">|</span>
                     <span className="font-mono text-slate-500 text-xs">
                       Commit{' '}
-                      <code className="bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded font-mono">
+                      <code className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-mono text-[11px] border border-slate-200">
                         {pull.headSha.slice(0, 8)}
                       </code>
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 self-start md:self-center">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 self-start md:self-center">
+                  {/* Co-Maintainer Mode Selector */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setMaintainerMode('review_first')}
+                      className={`px-2.5 py-1 text-xs rounded-md transition font-medium ${
+                        maintainerMode === 'review_first'
+                          ? 'bg-white text-violet-900 shadow-2xs font-semibold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Review First
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMaintainerMode('automatic_review')}
+                      className={`px-2.5 py-1 text-xs rounded-md transition font-medium ${
+                        maintainerMode === 'automatic_review'
+                          ? 'bg-white text-violet-900 shadow-2xs font-semibold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Automatic Review
+                    </button>
+                  </div>
+
                   <a
                     href={pull.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-xs transition"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
                   >
                     <span>View on GitHub</span>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                   </a>
-                  <Link
-                    href="/checks"
-                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-600 hover:bg-violet-700 shadow-xs transition"
-                  >
-                    <Zap className="w-4 h-4" />
-                    <span>Open sample verifier</span>
-                  </Link>
+                </div>
+              </div>
+
+              {/* Co-Maintainer Mode Policy & Guardrails Summary */}
+              <div className="p-3 rounded-lg bg-violet-50/60 border border-violet-100 text-xs text-violet-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-violet-900">
+                    {maintainerMode === 'review_first' ? 'Co-Maintainer: Review First' : 'Co-Maintainer: Automatic Review (Policy Configured)'}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-600 text-[11px]">
+                    {maintainerMode === 'review_first'
+                      ? 'Prepares structured suggestions for maintainer approval before any action is staged.'
+                      : 'Applies automated non-destructive policy gates on authorized repositories.'}
+                  </span>
+                </div>
+                <div className="text-[11px] font-medium text-slate-500 shrink-0">
+                  Guardrails: No deletion · No automatic PR closure
                 </div>
               </div>
 
               {/* Maintainer Plain-English Verdict Banner */}
               {triage && (
                 <div
-                  className={`mt-4 p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                  className={`mt-4 p-3.5 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
                     triage.summary.severity === 'emerald'
-                      ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
                       : triage.summary.severity === 'amber'
-                      ? 'bg-amber-50/80 border-amber-200 text-amber-950'
-                      : 'bg-rose-50/80 border-rose-200 text-rose-950'
+                      ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                      : 'bg-rose-50/70 border-rose-200 text-rose-950'
                   }`}
                 >
                   <div className="space-y-0.5">
@@ -257,7 +878,7 @@ export default function Repositories({
                           triage.summary.severity === 'emerald'
                             ? 'bg-emerald-600'
                             : triage.summary.severity === 'amber'
-                            ? 'bg-amber-500 animate-pulse'
+                            ? 'bg-amber-500'
                             : 'bg-rose-600'
                         }`}
                       />
@@ -268,13 +889,13 @@ export default function Repositories({
                     <p className="text-xs opacity-90 pl-4">{triage.summary.detail}</p>
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-center">
-                    <span className="text-2xs uppercase tracking-wider font-bold px-2 py-0.5 rounded bg-white/80 border border-slate-200/80 shadow-2xs">
+                    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded bg-white border border-slate-200">
                       {triage.policy.mode}
                     </span>
                     <button
                       type="button"
                       onClick={() => setActiveTab('triage')}
-                      className="text-xs font-semibold px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition"
+                      className="text-xs font-medium px-2.5 py-1 rounded bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition"
                     >
                       Inspect Triage →
                     </button>
@@ -285,33 +906,33 @@ export default function Repositories({
 
             {/* Sub-Navigation Tabs */}
             <div className="border-b border-slate-200">
-              <nav className="flex space-x-6 sm:space-x-8">
+              <nav className="flex space-x-6 sm:space-x-8 overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setActiveTab('overview')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                     activeTab === 'overview'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <Layers className="w-4 h-4" />
+                  <Layers className="w-3.5 h-3.5" />
                   <span>Overview</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('triage')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                     activeTab === 'triage'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-3.5 h-3.5" />
                   <span>Triage & Overlap</span>
                   {triage?.comparisons && triage.comparisons.length > 0 && (
-                    <span className="ml-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs font-semibold">
+                    <span className="ml-1 bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded text-[10px] font-semibold">
                       {triage.comparisons.length}
                     </span>
                   )}
@@ -320,31 +941,62 @@ export default function Repositories({
                 <button
                   type="button"
                   onClick={() => setActiveTab('files')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                     activeTab === 'files'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-3.5 h-3.5" />
                   <span>Changed Files</span>
-                  <span className="ml-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+                  <span className="ml-1 bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-semibold">
                     {files.length}
                   </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('checks')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
-                    activeTab === 'checks'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                  onClick={() => setActiveTab('review')}
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
+                    activeTab === 'review'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <FileText className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Review & Findings</span>
+                  {review && (
+                    <span
+                      className={`ml-1 px-1.5 py-0.2 rounded text-[10px] font-semibold ${
+                        review.riskLevel === 'low'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : review.riskLevel === 'medium'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {review.riskLevel} risk
+                    </span>
+                  )}
+                  {drafts && drafts.length > 0 && (
+                    <span className="ml-1 bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-semibold">
+                      {drafts.length} draft{drafts.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('checks')}
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
+                    activeTab === 'checks'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>GitHub Checks</span>
-                  <span className="ml-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+                  <span className="ml-1 bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-semibold">
                     {passedChecks}/{checks.length}
                   </span>
                 </button>
@@ -352,26 +1004,26 @@ export default function Repositories({
                 <button
                   type="button"
                   onClick={() => setActiveTab('receipt')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                     activeTab === 'receipt'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-3.5 h-3.5" />
                   <span>Receipt</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('new')}
-                  className={`py-3 px-1 border-b-2 text-sm inline-flex items-center gap-2 transition ${
+                  className={`py-2.5 px-1 border-b-2 text-xs inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                     activeTab === 'new'
-                      ? 'border-violet-600 text-violet-700 font-semibold'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 font-medium'
+                      ? 'border-violet-700 text-violet-900 font-semibold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
-                  <PlusCircle className="w-4 h-4" />
+                  <PlusCircle className="w-3.5 h-3.5" />
                   <span>Inspect Another</span>
                 </button>
               </nav>
@@ -399,9 +1051,9 @@ export default function Repositories({
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-5 space-y-2">
-                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Verification Engine</div>
-                  <div className="text-sm font-semibold text-slate-900">Panther Headless Chromium</div>
-                  <div className="text-xs text-slate-500">1280×720 @ 1x scale · Coordinate Pointers</div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Verification Scope</div>
+                  <div className="text-sm font-semibold text-slate-900">Local Fixture Engine Only</div>
+                  <div className="text-xs text-slate-500">Panther verifies bundled checkout fixtures in Checks; external PRs are read-only reviews.</div>
                 </div>
               </div>
             )}
@@ -548,7 +1200,9 @@ export default function Repositories({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-semibold text-slate-900">Changed Files</h2>
-                    <p className="text-xs text-slate-500">Files modified in this pull request</p>
+                    <p className="text-xs text-slate-500">
+                      Click any file row to expand its unified diff, inspect inline findings, and draft local line comments.
+                    </p>
                   </div>
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -562,44 +1216,413 @@ export default function Repositories({
                   </div>
                 </div>
 
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-                  {filteredFiles.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-500">No matching files found.</div>
-                  ) : (
-                    filteredFiles.map((f, i) => (
-                      <div key={i} className="p-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/50">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="font-mono text-xs text-slate-900 truncate">{f.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-mono shrink-0">
-                          {f.additions > 0 && <span className="text-emerald-600">+{f.additions}</span>}
-                          {f.deletions > 0 && <span className="text-rose-600">-{f.deletions}</span>}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {snapshot && !patchPreview && (
-                  <Link href={`/repositories?snapshot=${encodeURIComponent(snapshot.id)}&preview=1`} className="inline-block text-sm text-violet-700 underline">
-                    Load public patch preview
-                  </Link>
-                )}
-                {patchPreviewError && <p role="alert" className="text-sm text-rose-700">{patchPreviewError}</p>}
-                {patchPreview && (
-                  <div className="space-y-3 border-t border-slate-200 pt-4">
-                    <h3 className="text-sm font-semibold">Public patch preview</h3>
-                    <p className="text-xs text-slate-600">Read-only GitHub data for this captured head and base. No content was sent to a model. GitHub may omit or truncate patches; this is not a code review.</p>
-                    {patchPreview.filesTruncated && <p className="text-sm text-amber-700">Only {patchPreview.files.length} of {patchPreview.changedFiles} changed files were returned.</p>}
-                    {patchPreview.files.map((file) => (
-                      <details key={file.name} className="rounded border border-slate-200 p-3">
-                        <summary className="cursor-pointer text-sm break-all">{file.name} <span className="text-slate-500">— {file.status}</span></summary>
-                        {file.patch === null ? <p className="mt-2 text-xs text-slate-600">Patch {file.status === 'oversize' ? 'exceeds preview limits' : 'not provided by GitHub'}.</p> :
-                          <pre className="mt-2 overflow-auto whitespace-pre text-xs text-slate-800">{file.patch}</pre>}
-                      </details>
-                    ))}
+                {!patchPreview && snapshot && (
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-slate-800">Unified diffs and inline commenting require patch preview</p>
+                      <p className="text-slate-500 text-[11px]">Load public patch diffs to expand files, view Muse findings, and draft maintainer comments.</p>
+                    </div>
+                    <Link
+                      href={`/repositories?snapshot=${encodeURIComponent(snapshot.id)}&preview=1`}
+                      className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition"
+                    >
+                      Load Public Patch Preview
+                    </Link>
                   </div>
                 )}
+
+                {patchPreviewError && (
+                  <div role="alert" className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{patchPreviewError}</span>
+                  </div>
+                )}
+
+                {patchPreview?.filesTruncated && (
+                  <p className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-200">
+                    GitHub returned only {patchPreview.files.length} of {patchPreview.changedFiles} changed files.
+                  </p>
+                )}
+
+                <div className="space-y-3">
+                  {filteredFiles.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-slate-200">
+                      No matching files found.
+                    </div>
+                  ) : (
+                    filteredFiles.map((f) => {
+                      const patchForFile = patchPreview?.files.find((pf) => pf.name === f.name);
+                      const patchFile: PatchFile = {
+                        name: f.name,
+                        status: f.status || 'modified',
+                        additions: f.additions,
+                        deletions: f.deletions,
+                        patch: patchForFile ? patchForFile.patch : null,
+                      };
+
+                      return (
+                        <DiffViewer
+                          key={f.name}
+                          file={patchFile}
+                          headSha={pull?.headSha || ''}
+                          findings={review?.fileFindings || []}
+                          drafts={drafts}
+                          initiallyExpanded={false}
+                          onSaveDraft={handleSaveDraft}
+                          onDeleteDraft={handleDeleteDraft}
+                          isSavingDraft={draftProcessing}
+                        />
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB PANE: STRUCTURED REVIEW & DIFFS */}
+            {activeTab === 'review' && (
+              <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-6">
+                <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-800" />
+                        <span>Review & Inline Findings</span>
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Diff-first code review. Inspect captured diffs, review advisory findings, and draft local line comments.
+                      </p>
+                    </div>
+
+                    {review && (
+                      <form onSubmit={handleClearReview}>
+                        <button
+                          type="submit"
+                          disabled={clearReviewProcessing}
+                          className="px-3 py-1.5 text-xs font-medium rounded-md text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition disabled:opacity-50"
+                        >
+                          Clear Review
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+
+                {/* Honest Disclosure Alert */}
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-slate-900">Advisory Review Only</p>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">
+                      All repository diffs, commit metadata, and filenames are treated strictly as untrusted data. ProofPatch does not post comments, submit GitHub reviews, or execute external repository test suites. Human verification is required.
+                    </p>
+                  </div>
+                </div>
+
+                {reviewError && (
+                  <div role="alert" className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{reviewError}</span>
+                  </div>
+                )}
+
+                {/* Top Review Verdict Summary if available */}
+                {review && (
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-500">Recommendation:</span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider ${
+                            review.recommendation === 'approve'
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : review.recommendation === 'request_changes'
+                              ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                              : 'bg-sky-50 text-sky-800 border border-sky-200'
+                          }`}
+                        >
+                          {review.recommendation.replace('_', ' ')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-500">Risk Assessment:</span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider ${
+                            review.riskLevel === 'low'
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : review.riskLevel === 'medium'
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : 'bg-rose-50 text-rose-800 border border-rose-200'
+                          }`}
+                        >
+                          {review.riskLevel} risk
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-2.5">
+                      <h3 className="text-xs font-semibold text-slate-900 mb-0.5">Summary</h3>
+                      <p className="text-xs text-slate-700 leading-relaxed">{review.summary}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-mono">
+                      <span>Tokens: {review.usage.prompt_tokens} in / {review.usage.completion_tokens} out</span>
+                      <span>Reviewed: {new Date(review.reviewedAt).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pre-review: Technical Request Disclosure & Maintainer Consent */}
+                {!review && reviewPreview && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                      <span>{reviewPreview.filesCount} diff {reviewPreview.filesCount === 1 ? 'file' : 'files'} included in review scope</span>
+                      <span className="font-mono text-[11px]">~${(reviewPreview.estimatedMicros / 1000000).toFixed(4)} estimated reservation</span>
+                    </div>
+
+                    {/* Accessible Full Request Inspection Disclosure */}
+                    <details className="border border-slate-200 rounded-lg p-3 bg-white space-y-3">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-800 flex items-center justify-between">
+                        <span>Inspect Complete Model Request Payload & Cryptographic Digest</span>
+                        <span className="text-[11px] text-slate-500 font-normal">Click to expand</span>
+                      </summary>
+                      <div className="space-y-3 pt-3 text-xs border-t border-slate-100">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          <div><span className="text-slate-500">Destination:</span> <code className="font-mono text-slate-800">{reviewPreview.destination}</code></div>
+                          <div><span className="text-slate-500">Model:</span> <code className="font-mono text-slate-800">{reviewPreview.body?.model || 'meta-models/muse-spark-open-1026'}</code></div>
+                          <div className="col-span-2 flex items-center justify-between gap-2">
+                            <span className="text-slate-500">Payload SHA-256 Digest:</span>
+                            <button
+                              type="button"
+                              onClick={() => copyText(reviewPreview.digest, 'reviewDigest')}
+                              className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
+                            >
+                              {copiedReviewDigest ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span className="text-[10px]">{copiedReviewDigest ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                          <p className="col-span-2 font-mono text-[11px] text-slate-700 break-all bg-slate-50 p-2 rounded border border-slate-200">
+                            {reviewPreview.digest}
+                          </p>
+                        </div>
+
+                        {reviewPreview.body && (
+                          <div>
+                            <span className="text-slate-500 text-[11px] font-medium">Exact Request Body (Sent to engine):</span>
+                            <pre className="mt-1.5 p-3 rounded bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto max-h-80 whitespace-pre-wrap">
+                              {JSON.stringify(reviewPreview.body, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+
+                    {/* Explicit Consent Form & Honest Budget Status */}
+                    <form onSubmit={handleReviewSubmit} className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+                      {isPrivate && (
+                        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-2">
+                          <div className="flex items-center gap-2 font-semibold text-amber-900">
+                            <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                            <span>Private Repository Security Boundary</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-amber-900">
+                            This pull request originates from private repository <strong>{pull?.repository}</strong>.
+                            Transmitting proprietary source code to third-party model inference requires your separate, explicit authorization.
+                          </p>
+                          <label className="flex items-start gap-2.5 cursor-pointer font-medium pt-1 text-amber-950">
+                            <input
+                              type="checkbox"
+                              checked={privateConsentApproved}
+                              onChange={(e) => {
+                                setPrivateConsentApproved(e.target.checked);
+                                setReviewFormData('private_consent', e.target.checked);
+                              }}
+                              className="mt-0.5 rounded border-amber-300 text-amber-800 focus:ring-amber-700"
+                            />
+                            <span className="text-[11px] leading-relaxed">
+                              I explicitly authorize transmitting this private repository diff to Baseten Muse (meta-models/muse-spark-open-1026).
+                            </span>
+                          </label>
+                        </div>
+                      )}
+
+                      <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={reviewApproved}
+                          onChange={(e) => {
+                            setReviewApproved(e.target.checked);
+                            setReviewFormData('confirm', e.target.checked);
+                            setReviewFormData('digest', reviewPreview.digest);
+                            setReviewFormData('approval_token', reviewPreview.approvalToken || '');
+                          }}
+                          className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                        />
+                        <span className="leading-relaxed">
+                          I have inspected the complete request payload and SHA-256 digest above. I approve sending this untrusted diff to the review engine.
+                        </span>
+                      </label>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
+                        <div className="text-xs">
+                          {budget ? (
+                            <span className={budget.canRequest ? 'text-slate-600' : 'text-rose-600 font-medium'}>
+                              Budget: {budget.attempts} / {budget.limitAttempts} attempts used ({budget.canRequest ? `$${(budget.remainingMicros / 1000000).toFixed(4)} remaining` : 'Exhausted — live model requests disabled'})
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={!reviewApproved || (isPrivate && !privateConsentApproved) || !budget?.canRequest || reviewProcessing}
+                          className="px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        >
+                          {!budget?.canRequest ? 'Request Review (Budget Exhausted)' : reviewProcessing ? 'Requesting Review...' : 'Request Code Review'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Diff-First Layout: Files & Inline Findings */}
+                {patchPreview && patchPreview.files ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Diffs & File Findings ({patchPreview.files.length} files)
+                      </h3>
+                      {drafts.length > 0 && (
+                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                          {drafts.length} saved local draft{drafts.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      {patchPreview.files.map((file) => {
+                        const fileFromPull = files.find((f) => f.name === file.name);
+                        const patchFile: PatchFile = {
+                          name: file.name,
+                          status: file.status,
+                          additions: fileFromPull?.additions,
+                          deletions: fileFromPull?.deletions,
+                          patch: file.patch,
+                        };
+
+                        return (
+                          <DiffViewer
+                            key={file.name}
+                            file={patchFile}
+                            headSha={pull?.headSha || ''}
+                            findings={review?.fileFindings || []}
+                            drafts={drafts}
+                            initiallyExpanded={true}
+                            onSaveDraft={handleSaveDraft}
+                            onDeleteDraft={handleDeleteDraft}
+                            isSavingDraft={draftProcessing}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : !patchPreview ? (
+                  <div className="p-8 text-center rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                    <FileText className="w-8 h-8 text-slate-400 mx-auto" />
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-slate-900">Public Patch Preview Required</h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        ProofPatch needs to capture and verify the public patch diff locally before preparing the review payload.
+                      </p>
+                    </div>
+                    {snapshot && (
+                      <Link
+                        href={`/repositories?snapshot=${encodeURIComponent(snapshot.id)}&preview=1`}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition"
+                      >
+                        <span>Load Public Patch Preview</span>
+                      </Link>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Local Saved Drafts & Review Decision Bar */}
+                <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-900">Maintainer Review Decision (Local Draft)</h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Record a maintainer conclusion and draft comments for this pull request.
+                      </p>
+                    </div>
+                    {drafts.length > 0 && (
+                      <form onSubmit={handleClearAllDrafts}>
+                        <button
+                          type="submit"
+                          disabled={clearDraftsProcessing}
+                          className="text-[11px] font-medium text-rose-600 hover:text-rose-800 underline disabled:opacity-50"
+                        >
+                          Clear All Drafts ({drafts.length})
+                        </button>
+                      </form>
+                    )}
+                  </div>
+
+                  {/* Decision Radio Selector */}
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-700">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="reviewDecision"
+                        checked={reviewDecision === 'comment'}
+                        onChange={() => setReviewDecision('comment')}
+                        className="text-violet-700 focus:ring-violet-600"
+                      />
+                      <span>Comment</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="reviewDecision"
+                        checked={reviewDecision === 'approve'}
+                        onChange={() => setReviewDecision('approve')}
+                        className="text-violet-700 focus:ring-violet-600"
+                      />
+                      <span>Approve</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="reviewDecision"
+                        checked={reviewDecision === 'request_changes'}
+                        onChange={() => setReviewDecision('request_changes')}
+                        className="text-violet-700 focus:ring-violet-600"
+                      />
+                      <span>Request Changes</span>
+                    </label>
+                  </div>
+
+                  {/* Honest Disclosure regarding GitHub Publishing */}
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                    <p className="font-semibold text-slate-800">GitHub Publishing Not Implemented</p>
+                    <p className="text-[11px] leading-relaxed">
+                      ProofPatch operates in local-only read and advisory review mode. It does not submit comments, approvals, or change requests to GitHub.
+                    </p>
+                  </div>
+
+                  {/* Disabled Submission Button */}
+                  <div>
+                    <button
+                      type="button"
+                      disabled
+                      className="px-4 py-2 text-xs font-medium rounded-md bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                    >
+                      Publish Review to GitHub (Not Implemented)
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -693,26 +1716,26 @@ export default function Repositories({
 
             {/* TAB PANE 6: INSPECT ANOTHER */}
             {activeTab === 'new' && (
-              <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+              <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-5 space-y-4">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">Inspect Another Pull Request</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">Inspect Another Pull Request</h2>
                   <p className="text-xs text-slate-500">Enter a short handle or complete GitHub URL.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex flex-col sm:flex-row gap-2.5">
                     <input
                       type="text"
                       required
                       placeholder="owner/repo#123 or https://github.com/owner/repo/pull/123"
                       value={data.url}
                       onChange={(e) => setData('url', e.target.value)}
-                      className="flex-1 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-xs"
+                      className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-violet-600 shadow-2xs"
                     />
                     <button
                       type="submit"
                       disabled={processing}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg text-white bg-violet-600 hover:bg-violet-700 shadow-xs transition disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
                     >
                       <span>{processing ? 'Loading...' : 'Inspect PR'}</span>
                     </button>
@@ -723,13 +1746,13 @@ export default function Repositories({
           </>
         ) : (
           /* Empty / Initial Inspect Hero Card */
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-8 max-w-2xl mx-auto space-y-6">
-            <div className="space-y-2 text-center">
-              <div className="w-12 h-12 mx-auto rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
-                <FileText className="w-6 h-6" />
+          <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-6 max-w-xl mx-auto space-y-5">
+            <div className="space-y-1.5 text-center">
+              <div className="w-10 h-10 mx-auto rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center">
+                <FileText className="w-5 h-5" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Inspect Pull Request</h1>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
+              <h1 className="text-lg font-bold tracking-tight text-slate-900">Inspect Pull Request</h1>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 Enter a GitHub pull request URL or short handle to capture changed files and check runs. The sample verifier is separate.
               </p>
             </div>
@@ -742,21 +1765,21 @@ export default function Repositories({
                   placeholder="owner/repo#123 or https://github.com/owner/repo/pull/123"
                   value={data.url}
                   onChange={(e) => setData('url', e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-xs"
+                  className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-violet-600 shadow-2xs"
                 />
                 <button
                   type="submit"
                   disabled={processing}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg text-white bg-violet-600 hover:bg-violet-700 shadow-xs transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
                 >
                   <span>{processing ? 'Loading...' : 'Inspect'}</span>
                 </button>
               </div>
-              <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2 pt-1">
+              <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5 pt-0.5">
                 <span>Supports:</span>
-                <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">owner/repo#123</code>
+                <code className="bg-slate-100 text-slate-700 px-1 py-0.5 rounded border border-slate-200">owner/repo#123</code>
                 <span className="text-slate-300">·</span>
-                <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">github.com/owner/repo/pull/123</code>
+                <code className="bg-slate-100 text-slate-700 px-1 py-0.5 rounded border border-slate-200">github.com/owner/repo/pull/123</code>
               </div>
             </form>
           </div>

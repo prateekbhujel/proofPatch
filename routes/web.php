@@ -12,17 +12,18 @@ Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/preview', [IssueWorkbenchController::class, 'capture']);
 Route::post('/issues/propose', [IssueWorkbenchController::class, 'propose']);
 Route::match(['get', 'post'], '/repositories', [DashboardController::class, 'repositories']);
+Route::post('/repositories/review', [DashboardController::class, 'reviewPullRequest']);
+Route::post('/repositories/review/clear', [DashboardController::class, 'clearReview']);
+Route::post('/repositories/review/draft', [DashboardController::class, 'saveDraftComment']);
+Route::post('/repositories/review/draft/delete', [DashboardController::class, 'deleteDraftComment']);
+Route::post('/repositories/review/draft/clear', [DashboardController::class, 'clearDraftComments']);
+
+// GitHub App Device Flow (Local Desktop Connection per RFC 8628)
+Route::post('/github/device/initiate', [DashboardController::class, 'initiateDeviceFlow']);
+Route::post('/github/device/poll', [DashboardController::class, 'pollDeviceFlow']);
+Route::post('/github/device/disconnect', [DashboardController::class, 'disconnectDeviceFlow']);
+Route::post('/github/repositories/select', [DashboardController::class, 'selectInstalledRepository']);
+Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);
 Route::get('/checks/image', [DashboardController::class, 'image']);
 Route::get('/runs/{runId}/images/{image}', [DashboardController::class, 'imageByPath']);
-
-// Backward compatibility redirects:
-Route::match(['get', 'post'], '/repositories.php', static function (Request $request) {
-    return redirect('/repositories'.($request->getQueryString() ? '?'.$request->getQueryString() : ''));
-});
-Route::match(['get', 'post'], '/checks.php', static function (Request $request) {
-    if ($request->has('image')) {
-        return app(DashboardController::class)->image($request);
-    }
-    return redirect('/checks'.($request->getQueryString() ? '?'.$request->getQueryString() : ''));
-});

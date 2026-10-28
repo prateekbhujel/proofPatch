@@ -78,10 +78,15 @@ final readonly class PullRequestReader
             }
             $checkRows[] = ['name' => $check['name'], 'status' => $check['status'], 'conclusion' => $check['conclusion'] ?? null];
         }
+        $baseRepo = $pull['base']['repo'] ?? null;
+        $isPrivate = !is_array($baseRepo) || ($baseRepo['private'] ?? null) !== false || (($baseRepo['visibility'] ?? 'public') !== 'public');
+        $isMerged = ($pull['merged'] ?? false) === true || ($pull['merged_at'] ?? null) !== null;
+        $state = $isMerged ? 'merged' : $pull['state'];
+
         return ['repository' => $owner.'/'.$repo, 'number' => (int) $number,
             'url' => 'https://github.com/'.$owner.'/'.$repo.'/pull/'.$number,
-            'title' => $pull['title'], 'state' => $pull['state'], 'base' => $pull['base']['ref'],
-            'head' => $pull['head']['ref'], 'headSha' => $sha, 'baseSha' => $baseSha, 'changedFiles' => $pull['changed_files'],
+            'title' => $pull['title'], 'state' => $state, 'isMerged' => $isMerged, 'base' => $pull['base']['ref'],
+            'head' => $pull['head']['ref'], 'headSha' => $sha, 'baseSha' => $baseSha, 'isPrivate' => $isPrivate, 'changedFiles' => $pull['changed_files'],
             'files' => $fileRows, 'filesTruncated' => $pull['changed_files'] > count($fileRows),
             'checks' => $checkRows, 'checksTotal' => $checks['total_count'], 'checksTruncated' => $checks['total_count'] > count($checkRows)];
     }

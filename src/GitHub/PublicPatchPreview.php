@@ -77,7 +77,7 @@ final readonly class PublicPatchPreview
         }
 
         return ['repository' => $repository, 'number' => $number, 'headSha' => $head, 'baseSha' => $base,
-            'files' => $result, 'filesTruncated' => $count > count($result), 'changedFiles' => $count];
+            'isPrivate' => false, 'files' => $result, 'filesTruncated' => $count > count($result), 'changedFiles' => $count];
     }
 
     private function assertPublic(array $repo, string $expected): void

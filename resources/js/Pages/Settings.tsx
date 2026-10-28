@@ -123,12 +123,6 @@ export default function Settings({
     router.post('/github/repositories/select', { repository: repoName });
   };
 
-  const activeStep = (() => {
-    if (githubConnection.isConnected) return 3;
-    if (githubConnection.deviceFlow) return 2;
-    return 1;
-  })();
-
   const spentDollars = budget ? ((budget.reservedMicros || 0) / 1000000).toFixed(4) : '0.0000';
   const remainingDollars = budget ? ((budget.remainingMicros || 0) / 1000000).toFixed(4) : '0.2000';
   const ceilingDollars = budget ? ((budget.limitMicros || 0) / 1000000).toFixed(2) : '0.20';
@@ -142,7 +136,7 @@ export default function Settings({
         <div className="border-b border-slate-200 pb-5">
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Workbench Settings</h1>
           <p className="mt-1 text-xs text-slate-500">
-            Configure local GitHub App Device Flow, monitor model runtime budget limits, and inspect security boundaries.
+            Configure your GitHub App connection, monitor model runtime budget limits, and inspect security boundaries.
           </p>
         </div>
 
@@ -161,7 +155,7 @@ export default function Settings({
           </div>
         )}
 
-        {/* Section 1: GitHub App Connection (3-Step Wizard) */}
+        {/* Section 1: GitHub App Connection */}
         <section className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -169,7 +163,7 @@ export default function Settings({
                 <Key className="w-4 h-4" />
               </span>
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">GitHub Connection (RFC 8628 Device Flow)</h2>
+                <h2 className="text-sm font-semibold text-slate-900">GitHub Connection</h2>
                 <p className="text-xs text-slate-500">Connect to selected owned public repositories without pasting secret access tokens.</p>
               </div>
             </div>
@@ -182,42 +176,7 @@ export default function Settings({
             )}
           </div>
 
-          {/* 3-Step Wizard Stepper */}
-          <div className="p-5 border-b border-slate-100 bg-slate-50/30">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className={`p-3 rounded-lg border ${activeStep === 1 ? 'border-violet-300 bg-violet-50/60 text-violet-950 font-medium' : activeStep > 1 ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep === 1 ? 'bg-violet-700 text-white' : activeStep > 1 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {activeStep > 1 ? '✓' : '1'}
-                  </span>
-                  <span className="font-semibold">Step 1: Client ID</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Configure public GitHub App Client ID</p>
-              </div>
-
-              <div className={`p-3 rounded-lg border ${activeStep === 2 ? 'border-violet-300 bg-violet-50/60 text-violet-950 font-medium' : activeStep > 2 ? 'border-slate-200 bg-white text-slate-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep === 2 ? 'bg-violet-700 text-white' : activeStep > 2 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {activeStep > 2 ? '✓' : '2'}
-                  </span>
-                  <span className="font-semibold">Step 2: Device Code</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Verify 8-character user code on GitHub</p>
-              </div>
-
-              <div className={`p-3 rounded-lg border ${activeStep === 3 ? 'border-emerald-300 bg-emerald-50/60 text-emerald-950 font-medium' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${activeStep === 3 ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    3
-                  </span>
-                  <span className="font-semibold">Step 3: Repositories</span>
-                </div>
-                <p className="text-[11px] text-slate-500">Select owned repository for PR review</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Wizard Content Panels */}
+          {/* Connection Content */}
           <div className="p-5 space-y-6">
             {!githubConnection.isConnected && !githubConnection.deviceFlow && (
               <form onSubmit={handleInitiate} className="max-w-xl space-y-4">
@@ -241,10 +200,10 @@ export default function Settings({
                 <button
                   type="submit"
                   disabled={isSubmitting || !clientIdInput.trim()}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-50 shadow-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 shadow-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
                 >
                   <Key className="w-3.5 h-3.5" />
-                  <span>{isSubmitting ? 'Starting Flow...' : 'Start Device Flow'}</span>
+                  <span>{isSubmitting ? 'Starting Flow...' : 'Connect GitHub'}</span>
                 </button>
               </form>
             )}
@@ -290,6 +249,14 @@ export default function Settings({
                     <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
                     <span>2. Check Authorization Status</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    className="text-xs text-slate-500 hover:text-slate-700 hover:underline px-2 py-1"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             )}
@@ -325,7 +292,7 @@ export default function Settings({
                         </a>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Connected via GitHub App Device Flow (read-only repository access)
+                        Connected via GitHub App (read-only repository access)
                       </p>
                     </div>
                   </div>

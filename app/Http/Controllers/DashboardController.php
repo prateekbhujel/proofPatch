@@ -379,6 +379,7 @@ final class DashboardController
 
         $runId = (string) $request->query('run', '');
         $history = [];
+        $latestVisualRunId = null;
         foreach (glob($this->runsDir.'/*/result.json') ?: [] as $file) {
             $id = basename(dirname($file));
             if ($runDir($id) === null || is_link($file) || filesize($file) > 1048576) {
@@ -386,21 +387,48 @@ final class DashboardController
             }
             try {
                 $run = (new RunEvidence())->read(dirname($file));
-                $history[$id] = array_merge($run['report'], ['integrityValid' => $run['receipt'] !== null]);
+                $runPath = dirname($file);
+                $hasVisual = is_file($runPath.'/baseline/checkout.png') && is_file($runPath.'/candidate/checkout.png');
+                $history[$id] = array_merge($run['report'], [
+                    'integrityValid' => $run['receipt'] !== null,
+                    'hasVisual' => $hasVisual,
+                ]);
             } catch (\Throwable) {}
         }
         krsort($history, SORT_STRING);
         $history = array_slice($history, 0, 20, true);
-        if ($runId === '' && $history !== []) {
+
+        // Find the latest verified run with visual screenshots
+        foreach ($history as $id => $item) {
+            if (!empty($item['hasVisual']) && ($item['decision'] ?? '') === 'VERIFIED') {
+                $latestVisualRunId = $id;
+                break;
+            }
+        }
+        if ($latestVisualRunId === null) {
             foreach ($history as $id => $item) {
-                if ($item['decision'] === 'VERIFIED') {
-                    $runId = $id;
+                if (!empty($item['hasVisual'])) {
+                    $latestVisualRunId = $id;
                     break;
+                }
+            }
+        }
+
+        if ($runId === '' && $history !== []) {
+            // Default to the latest verified visual checkout run if present, or first verified run
+            $runId = $latestVisualRunId;
+            if (!$runId) {
+                foreach ($history as $id => $item) {
+                    if (($item['decision'] ?? '') === 'VERIFIED') {
+                        $runId = $id;
+                        break;
+                    }
                 }
             }
             $runId = $runId ?: array_key_first($history);
         }
         $report = $history[$runId] ?? null;
+        $selectedHasVisual = $report !== null && is_file($this->runsDir.'/'.$runId.'/baseline/checkout.png') && is_file($this->runsDir.'/'.$runId.'/candidate/checkout.png');
         $currentHead = trim(LocalProcess::output(['git', '-C', $this->project, 'rev-parse', 'HEAD']));
         $baselineReady = $report !== null && ($report['integrityValid'] ?? false) && ($report['baseCommit'] ?? null) === $currentHead
             && ($report['runs']['baseline']['exitCode'] ?? null) === 1;
@@ -437,6 +465,8 @@ final class DashboardController
             'budgetStatus' => $budgetStatus,
             'baselineReady' => $baselineReady,
             'proposal' => $proposal,
+            'hasVisual' => $selectedHasVisual,
+            'latestVisualRunId' => $latestVisualRunId,
             'error' => session('error'),
         ]);
     }
@@ -1009,12 +1039,12 @@ final class DashboardController
             default => null,
         };
         if (!$validId || $folder === null) {
-            return response('Image unavailable.', 404);
+            return response('Image unavailable.', 404, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
         }
         $path = realpath($this->runsDir.'/'.$runId.'/'.$folder.'/checkout.png');
         $base = realpath($this->runsDir);
         if ($path === false || $base === false || !str_starts_with($path, $base) || !is_file($path)) {
-            return response('Image unavailable.', 404);
+            return response('Image unavailable.', 404, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
         }
 
         return response(file_get_contents($path) ?: '', 200, [

@@ -14,6 +14,7 @@ import {
   Copy,
   Search,
   ChevronDown,
+  ArrowRight,
 } from 'lucide-react';
 
 interface GateRecord {
@@ -52,6 +53,8 @@ interface BudgetStatus {
 interface HistoryItem {
   id: string;
   decision: string;
+  kind?: string;
+  hasVisual?: boolean;
   proposal?: {
     file: string;
   };
@@ -67,6 +70,8 @@ interface ChecksProps {
   budgetStatus?: BudgetStatus | null;
   baselineReady: boolean;
   proposal?: any;
+  hasVisual?: boolean;
+  latestVisualRunId?: string | null;
   error?: string | null;
 }
 
@@ -80,9 +85,19 @@ export default function Checks({
   budgetStatus = null,
   baselineReady = false,
   proposal = null,
+  hasVisual = false,
+  latestVisualRunId = null,
   error = null,
 }: ChecksProps) {
-  const [activeTab, setActiveTab] = useState<'workspace' | 'visual' | 'evidence' | 'history'>('workspace');
+  const [activeTab, setActiveTab] = useState<'workspace' | 'visual' | 'evidence' | 'history'>(() => {
+    if (typeof window !== 'undefined') {
+      const paramTab = new URLSearchParams(window.location.search).get('tab');
+      if (paramTab === 'visual' || paramTab === 'evidence' || paramTab === 'history') {
+        return paramTab;
+      }
+    }
+    return 'workspace';
+  });
   const [copiedReceipt, setCopiedReceipt] = useState(false);
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyPage, setHistoryPage] = useState(1);
@@ -420,7 +435,7 @@ export default function Checks({
         {/* TAB PANE 2: VISUAL COMPARISON (Interactive Studio) */}
         {activeTab === 'visual' && (
           <div className="space-y-4">
-            {report && receipt ? (
+            {hasVisual && report && receipt ? (
               <VisualComparisonViewer
                 beforeUrl={`/checks/image?run=${encodeURIComponent(runId)}&image=before`}
                 afterUrl={`/checks/image?run=${encodeURIComponent(runId)}&image=after`}
@@ -428,8 +443,35 @@ export default function Checks({
                 runId={runId}
               />
             ) : (
-              <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-10 text-center space-y-2">
-                <p className="text-xs text-slate-600">A run with intact evidence is needed to inspect screenshots.</p>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-8 text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-violet-50 text-violet-700 flex items-center justify-center mx-auto">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <div className="max-w-md mx-auto space-y-1.5">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {report?.proposal?.file?.endsWith('.php') || (report as any)?.kind === 'owned_backend'
+                      ? 'Headless Backend Verification Run'
+                      : 'Visual Screenshots Unavailable'}
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {report?.proposal?.file?.endsWith('.php') || (report as any)?.kind === 'owned_backend'
+                      ? `Run ${runId} verified PHP backend logic (${report?.proposal?.file || (report as any)?.targetFile || 'src/OrderTotal.php'}) through test assertions, negative controls, and AST safety. Headless backend tests do not generate browser DOM screenshots.`
+                      : `Run ${runId} does not have browser screenshot evidence attached.`}
+                  </p>
+                </div>
+
+                {latestVisualRunId && (
+                  <div className="pt-2">
+                    <Link
+                      href={`/checks?run=${encodeURIComponent(latestVisualRunId)}&tab=visual`}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 transition shadow-xs"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span>Inspect Latest Visual Checkout Check ({latestVisualRunId.slice(0, 15)}...)</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -590,9 +632,21 @@ export default function Checks({
                         >
                           <td className="py-3 px-5 font-mono text-[11px] text-slate-800">{item.id}</td>
                           <td className="py-3 px-5 text-slate-600">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-700 border border-slate-200">
-                              {(item.proposal?.file || 'checkout.html').split('/').pop()}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-slate-100 text-slate-700 border border-slate-200">
+                                {(item.proposal?.file || (item as any).targetFile || 'checkout.html').split('/').pop()}
+                              </span>
+                              {item.hasVisual ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200">
+                                  <ImageIcon className="w-2.5 h-2.5" />
+                                  <span>Visual UI</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                  <span>Backend</span>
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-5">
                             <span

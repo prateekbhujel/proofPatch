@@ -32,8 +32,13 @@ export function VisualComparisonViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [beforeUrl, afterUrl]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -220,157 +225,176 @@ export function VisualComparisonViewer({
           zoomLevel > 100 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
         } ${isFullscreen ? 'h-[calc(100vh-80px)]' : 'min-h-[520px]'}`}
       >
-        {/* MODE 1: SPLIT SLIDER */}
-        {mode === 'slider' && (
-          <div
-            className="relative overflow-hidden shadow-2xl transition-transform duration-75"
-            style={{
-              width: `${(1280 * zoomLevel) / 100}px`,
-              height: `${(720 * zoomLevel) / 100}px`,
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-          >
-            {/* Candidate image (background) */}
-            <img
-              src={afterUrl}
-              alt="Candidate"
-              className={`absolute inset-0 w-full h-full object-cover select-none ${crispClass}`}
-              draggable={false}
-            />
-
-            {/* Baseline image (clipped on top) */}
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{ width: `${sliderPosition}%` }}
-            >
-              <img
-                src={beforeUrl}
-                alt="Baseline"
-                className={`w-full h-full object-cover select-none ${crispClass}`}
-                style={{ width: `${(1280 * zoomLevel) / 100}px`, maxWidth: 'none' }}
-                draggable={false}
-              />
+        {imageLoadError ? (
+          <div className="p-8 text-center text-slate-300 space-y-3 max-w-md">
+            <div className="w-10 h-10 rounded-full bg-slate-800 text-amber-400 flex items-center justify-center mx-auto">
+              <Eye className="w-5 h-5" />
             </div>
-
-            {/* Divider line */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.6)] pointer-events-none"
-              style={{ left: `${sliderPosition}%` }}
-            >
-              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shadow-md border border-slate-700">
-                ↔
-              </div>
-            </div>
-
-            {/* Range input overlay for smooth slider dragging */}
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={sliderPosition}
-              onChange={(e) => setSliderPosition(Number(e.target.value))}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-20"
-            />
-
-            {/* Badges */}
-            <div className="absolute bottom-3 left-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
-              Baseline (Before)
-            </div>
-            <div className="absolute bottom-3 right-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
-              Candidate (Patched)
-            </div>
+            <p className="text-xs font-semibold text-white">Visual Screenshot Unavailable</p>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Screenshot assets for run <code className="font-mono text-slate-300">{runId || 'current'}</code> could not be rendered. This run may be a headless backend test suite without UI screenshots.
+            </p>
           </div>
-        )}
-
-        {/* MODE 2: SIDE-BY-SIDE */}
-        {mode === 'sideBySide' && (
-          <div
-            className="flex gap-4 p-4 transition-transform duration-75 overflow-auto"
-            style={{
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-          >
-            {/* Before */}
-            <div className="space-y-1.5 flex-1 min-w-[500px]">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                <span>Baseline (Before Fix)</span>
-                <span className="text-rose-400">Bug Active</span>
-              </div>
+        ) : (
+          <>
+            {/* MODE 1: SPLIT SLIDER */}
+            {mode === 'slider' && (
               <div
-                className="rounded-lg overflow-hidden border border-slate-800 shadow-lg bg-black"
+                className="relative overflow-hidden shadow-2xl transition-transform duration-75"
                 style={{
-                  width: `${(640 * zoomLevel) / 100}px`,
-                  height: `${(360 * zoomLevel) / 100}px`,
+                  width: `${(1280 * zoomLevel) / 100}px`,
+                  height: `${(720 * zoomLevel) / 100}px`,
+                  transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
                 }}
               >
-                <img
-                  src={beforeUrl}
-                  alt="Baseline"
-                  className={`w-full h-full object-cover select-none ${crispClass}`}
-                  draggable={false}
-                />
-              </div>
-            </div>
-
-            {/* After */}
-            <div className="space-y-1.5 flex-1 min-w-[500px]">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                <span>Candidate (With Patch)</span>
-                <span className="text-emerald-400">Fixed</span>
-              </div>
-              <div
-                className="rounded-lg overflow-hidden border border-slate-800 shadow-lg bg-black"
-                style={{
-                  width: `${(640 * zoomLevel) / 100}px`,
-                  height: `${(360 * zoomLevel) / 100}px`,
-                }}
-              >
+                {/* Candidate image (background) */}
                 <img
                   src={afterUrl}
                   alt="Candidate"
-                  className={`w-full h-full object-cover select-none ${crispClass}`}
+                  onError={() => setImageLoadError(true)}
+                  className={`absolute inset-0 w-full h-full object-cover select-none ${crispClass}`}
                   draggable={false}
                 />
+
+                {/* Baseline image (clipped on top) */}
+                <div
+                  className="absolute inset-0 overflow-hidden"
+                  style={{ width: `${sliderPosition}%` }}
+                >
+                  <img
+                    src={beforeUrl}
+                    alt="Baseline"
+                    onError={() => setImageLoadError(true)}
+                    className={`w-full h-full object-cover select-none ${crispClass}`}
+                    style={{ width: `${(1280 * zoomLevel) / 100}px`, maxWidth: 'none' }}
+                    draggable={false}
+                  />
+                </div>
+
+                {/* Divider line */}
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.6)] pointer-events-none"
+                  style={{ left: `${sliderPosition}%` }}
+                >
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shadow-md border border-slate-700">
+                    ↔
+                  </div>
+                </div>
+
+                {/* Range input overlay for smooth slider dragging */}
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={sliderPosition}
+                  onChange={(e) => setSliderPosition(Number(e.target.value))}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-20"
+                />
+
+                {/* Badges */}
+                <div className="absolute bottom-3 left-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
+                  Baseline (Before)
+                </div>
+                <div className="absolute bottom-3 right-3 pointer-events-none px-2.5 py-1 rounded bg-slate-900/80 backdrop-blur-xs text-white text-[11px] font-mono border border-slate-700/60">
+                  Candidate (Patched)
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* MODE 3: INSTANT A/B FLIP TOGGLE */}
-        {mode === 'toggle' && (
-          <div
-            className="relative cursor-pointer transition-transform duration-75"
-            onClick={() => setToggleState((prev) => (prev === 'before' ? 'after' : 'before'))}
-            style={{
-              width: `${(1280 * zoomLevel) / 100}px`,
-              height: `${(720 * zoomLevel) / 100}px`,
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-          >
-            <img
-              src={toggleState === 'before' ? beforeUrl : afterUrl}
-              alt={toggleState === 'before' ? 'Baseline' : 'Candidate'}
-              className={`w-full h-full object-cover shadow-2xl select-none ${crispClass}`}
-              draggable={false}
-            />
-
-            {/* Pill showing active state */}
-            <div className="absolute top-4 right-4 pointer-events-none flex items-center gap-2">
-              <span
-                className={`px-3 py-1.5 rounded-full text-xs font-bold font-mono shadow-md ${
-                  toggleState === 'before'
-                    ? 'bg-rose-500 text-white'
-                    : 'bg-emerald-500 text-white'
-                }`}
+            {/* MODE 2: SIDE-BY-SIDE */}
+            {mode === 'sideBySide' && (
+              <div
+                className="flex gap-4 p-4 transition-transform duration-75 overflow-auto"
+                style={{
+                  transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+                }}
               >
-                {toggleState === 'before' ? 'BASELINE (BEFORE FIX)' : 'CANDIDATE (PATCHED)'}
-              </span>
-            </div>
+                {/* Before */}
+                <div className="space-y-1.5 flex-1 min-w-[500px]">
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span>Baseline (Before Fix)</span>
+                    <span className="text-rose-400">Bug Active</span>
+                  </div>
+                  <div
+                    className="rounded-lg overflow-hidden border border-slate-800 shadow-lg bg-black"
+                    style={{
+                      width: `${(640 * zoomLevel) / 100}px`,
+                      height: `${(360 * zoomLevel) / 100}px`,
+                    }}
+                  >
+                    <img
+                      src={beforeUrl}
+                      alt="Baseline"
+                      onError={() => setImageLoadError(true)}
+                      className={`w-full h-full object-cover select-none ${crispClass}`}
+                      draggable={false}
+                    />
+                  </div>
+                </div>
 
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none px-4 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-slate-300 text-xs border border-slate-700">
-              Click image or tap <kbd className="bg-slate-800 px-1.5 py-0.5 rounded font-mono text-white">Space</kbd> to flip
-            </div>
-          </div>
+                {/* After */}
+                <div className="space-y-1.5 flex-1 min-w-[500px]">
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span>Candidate (With Patch)</span>
+                    <span className="text-emerald-400">Fixed</span>
+                  </div>
+                  <div
+                    className="rounded-lg overflow-hidden border border-slate-800 shadow-lg bg-black"
+                    style={{
+                      width: `${(640 * zoomLevel) / 100}px`,
+                      height: `${(360 * zoomLevel) / 100}px`,
+                    }}
+                  >
+                    <img
+                      src={afterUrl}
+                      alt="Candidate"
+                      onError={() => setImageLoadError(true)}
+                      className={`w-full h-full object-cover select-none ${crispClass}`}
+                      draggable={false}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODE 3: INSTANT A/B FLIP TOGGLE */}
+            {mode === 'toggle' && (
+              <div
+                className="relative cursor-pointer transition-transform duration-75"
+                onClick={() => setToggleState((prev) => (prev === 'before' ? 'after' : 'before'))}
+                style={{
+                  width: `${(1280 * zoomLevel) / 100}px`,
+                  height: `${(720 * zoomLevel) / 100}px`,
+                  transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
+                }}
+              >
+                <img
+                  src={toggleState === 'before' ? beforeUrl : afterUrl}
+                  alt={toggleState === 'before' ? 'Baseline' : 'Candidate'}
+                  onError={() => setImageLoadError(true)}
+                  className={`w-full h-full object-cover shadow-2xl select-none ${crispClass}`}
+                  draggable={false}
+                />
+
+                {/* Pill showing active state */}
+                <div className="absolute top-4 right-4 pointer-events-none flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold font-mono shadow-md ${
+                      toggleState === 'before'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                  >
+                    {toggleState === 'before' ? 'BASELINE (BEFORE FIX)' : 'CANDIDATE (PATCHED)'}
+                  </span>
+                </div>
+
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none px-4 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-slate-300 text-xs border border-slate-700">
+                  Click image or tap <kbd className="bg-slate-800 px-1.5 py-0.5 rounded font-mono text-white">Space</kbd> to flip
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

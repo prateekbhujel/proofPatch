@@ -76,13 +76,16 @@ final readonly class IssueSuggestion
             }
             $keys = is_array($suggestion) ? array_keys($suggestion) : [];
             sort($keys);
+            $find = $suggestion['find'] ?? null;
+            $first = is_string($find) && $find !== '' ? strpos($context['source'], $find) : false;
+            $unique = $first !== false && strpos($context['source'], $find, $first + 1) === false;
             if ($keys !== ['explanation', 'find', 'path', 'replace']
                 || $suggestion['path'] !== $context['path']
                 || !is_string($suggestion['find']) || $suggestion['find'] === '' || strlen($suggestion['find']) > 4096
                 || !is_string($suggestion['replace']) || strlen($suggestion['replace']) > 4096
                 || !is_string($suggestion['explanation']) || trim($suggestion['explanation']) === '' || strlen($suggestion['explanation']) > 2000
                 || str_contains($suggestion['find'].$suggestion['replace'].$suggestion['explanation'], "\0")
-                || $suggestion['find'] === $suggestion['replace'] || substr_count($context['source'], $suggestion['find']) !== 1) {
+                || $suggestion['find'] === $suggestion['replace'] || !$unique) {
                 throw new \RuntimeException('Model suggestion did not satisfy the selected-file constraints.');
             }
             $usage = $result['usage'] ?? null;
@@ -90,11 +93,24 @@ final readonly class IssueSuggestion
                 || $usage['prompt_tokens'] < 0 || $usage['completion_tokens'] < 0 || $usage['completion_tokens'] > self::MAX_TOKENS) {
                 throw new \RuntimeException('Model response lacks bounded usage data.');
             }
+            $candidateSource = SingleFileCandidate::create(
+                $context['source'],
+                $context['sourceSha256'],
+                $suggestion['find'],
+                $suggestion['replace'],
+            );
             return ['status' => 'unverified_suggestion', 'repository' => $context['repository'],
                 'issueNumber' => $context['issueNumber'], 'commit' => $context['commit'], 'path' => $context['path'],
                 'sourceSha256' => $context['sourceSha256'], 'find' => $suggestion['find'], 'replace' => $suggestion['replace'],
                 'explanation' => $suggestion['explanation'], 'model' => self::MODEL, 'requestDigest' => $preview['digest'],
-                'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']]];
+                'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']],
+                'candidate' => [
+                    'status' => 'unverified_in_memory_preview',
+                    'source' => $candidateSource,
+                    'sha256' => hash('sha256', $candidateSource),
+                    'applied' => false,
+                    'verified' => false,
+                ]];
         });
     }
 }

@@ -62,6 +62,12 @@ final class IssueSuggestionTest extends TestCase
         self::assertSame($context['commit'], $result['commit']);
         self::assertSame($context['sourceSha256'], $result['sourceSha256']);
         self::assertSame('value = 2', $result['replace']);
+        self::assertArrayHasKey('candidate', $result);
+        self::assertSame('unverified_in_memory_preview', $result['candidate']['status']);
+        self::assertFalse($result['candidate']['applied']);
+        self::assertFalse($result['candidate']['verified']);
+        self::assertSame('const value = 2;', $result['candidate']['source']);
+        self::assertSame(hash('sha256', 'const value = 2;'), $result['candidate']['sha256']);
         try {
             $service->propose($context, $preview['digest'], 'test-key-1234567890');
             self::fail('Attempt budget bypassed.');
@@ -95,6 +101,19 @@ final class IssueSuggestionTest extends TestCase
                 self::fail('Unsafe suggestion accepted.');
             } catch (\RuntimeException $error) { self::assertStringContainsString('constraints', $error->getMessage()); }
         }
+    }
+
+    public function testOverlappingFindStringCannotBeAccepted(): void
+    {
+        $suggestion = ['path' => 'src/file.js', 'find' => 'aa', 'replace' => 'bb', 'explanation' => 'Change'];
+        $client = new MockHttpClient(fn (): MockResponse => $this->response($suggestion));
+        $service = new IssueSuggestion($client, new RequestBudget($this->directory, 100000, 3));
+        $context = $this->context();
+        $context['source'] = 'aaa';
+        $context['sourceSha256'] = hash('sha256', $context['source']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('constraints');
+        $service->propose($context, $service->preview($context)['digest'], 'test-key-1234567890');
     }
 
     public function testTruncatedModelOutputIsRejected(): void

@@ -21,6 +21,14 @@ interface Preview {
   estimatedMicros: number;
 }
 
+interface CandidatePreview {
+  status: string;
+  source: string;
+  sha256: string;
+  applied: boolean;
+  verified: boolean;
+}
+
 interface Suggestion {
   path: string;
   commit: string;
@@ -28,6 +36,7 @@ interface Suggestion {
   replace: string;
   explanation: string;
   model: string;
+  candidate?: CandidatePreview;
 }
 
 interface Props {
@@ -128,6 +137,19 @@ export default function Issues({ context, preview, suggestion, budget, error }: 
             <p className="text-sm text-slate-700">{suggestion.explanation}</p>
             <div><h3 className="text-sm font-medium">Find</h3><pre className="mt-1 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">{suggestion.find}</pre></div>
             <div><h3 className="text-sm font-medium">Replace with</h3><pre className="mt-1 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">{suggestion.replace}</pre></div>
+            {suggestion.candidate && (
+              <details className="rounded border border-slate-200 p-3" open>
+                <summary className="cursor-pointer text-sm font-medium">In-memory candidate preview (unverified)</summary>
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-slate-500">
+                    SHA-256: <span className="font-mono">{suggestion.candidate.sha256}</span> · Status: {suggestion.candidate.status} · Applied: No · Verified: No
+                  </p>
+                  <pre className="max-h-72 overflow-auto whitespace-pre rounded bg-slate-50 p-3 text-xs text-slate-700">
+                    {suggestion.candidate.source}
+                  </pre>
+                </div>
+              </details>
+            )}
             <p className="text-sm text-amber-800">Tests not run. Nothing was applied or posted to GitHub.</p>
           </section>
         )}

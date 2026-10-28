@@ -918,6 +918,11 @@ final class DashboardController
         ]);
     }
 
+    public function docs(Request $request): InertiaResponse
+    {
+        return Inertia::render('Docs');
+    }
+
     public function clearNotifications(Request $request): \Illuminate\Http\RedirectResponse
     {
         $this->forgetSession($request, 'notifications');

@@ -13,6 +13,7 @@ import {
   X,
   Copy,
   Search,
+  ChevronDown,
 } from 'lucide-react';
 
 interface GateRecord {
@@ -140,7 +141,7 @@ export default function Checks({
 
       <div className="space-y-6">
         {/* Workspace Context Hero */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-5 space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
@@ -150,9 +151,9 @@ export default function Checks({
                   {fixture.includes('occlusion-b') ? 'Lumen Checkout' : fixture.includes('modal-overflow') ? 'Aura Checkout' : 'Northline Checkout'}
                 </span>
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Isolated Worktree Evaluation</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Visual Layout Verification</h1>
               <p className="text-xs text-slate-500">
-                Evaluates candidate CSS patches for bundled checkout fixtures in ephemeral Git worktrees with headless Chromium probes, visual drift guards, and protected tests. (Note: isolated checkouts, not containerized security sandboxes).
+                4-gate verification suite for bundled CSS fixtures with headless Chromium probes.
               </p>
             </div>
 
@@ -267,27 +268,32 @@ export default function Checks({
 
               <form onSubmit={handleVerify} className="space-y-4">
                 <div>
-                  <label htmlFor="fixture" className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="fixture" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Target Fixture
                   </label>
-                  <select
-                    id="fixture"
-                    value={data.fixture}
-                    onChange={(e) => {
-                      const fix = e.target.value;
-                      setData('fixture', fix);
-                      if (fix === 'public/fixtures/modal-overflow.html') {
-                        setData((d) => ({ ...d, fixture: fix, find: 'max-height: 0px;', replace: 'max-height: 60px;' }));
-                      } else {
-                        setData((d) => ({ ...d, fixture: fix, find: 'pointer-events: auto;', replace: 'pointer-events: none;' }));
-                      }
-                    }}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 shadow-2xs"
-                  >
-                    <option value="public/fixtures/checkout.html">Northline Checkout (Stacking Context Trap)</option>
-                    <option value="public/fixtures/occlusion-b.html">Lumen Checkout (Pseudo-element Occlusion)</option>
-                    <option value="public/fixtures/modal-overflow.html">Aura Checkout (Responsive Modal Overflow)</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      id="fixture"
+                      value={data.fixture}
+                      onChange={(e) => {
+                        const fix = e.target.value;
+                        setData('fixture', fix);
+                        if (fix === 'public/fixtures/modal-overflow.html') {
+                          setData((d) => ({ ...d, fixture: fix, find: 'max-height: 0px;', replace: 'max-height: 60px;' }));
+                        } else {
+                          setData((d) => ({ ...d, fixture: fix, find: 'pointer-events: auto;', replace: 'pointer-events: none;' }));
+                        }
+                      }}
+                      className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent shadow-2xs transition cursor-pointer"
+                    >
+                      <option value="public/fixtures/checkout.html">Northline Checkout (Stacking Context Trap)</option>
+                      <option value="public/fixtures/occlusion-b.html">Lumen Checkout (Pseudo-element Occlusion)</option>
+                      <option value="public/fixtures/modal-overflow.html">Aura Checkout (Responsive Modal Overflow)</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

@@ -79,117 +79,117 @@ export default function Overview({
     <AppLayout activeNav="overview">
       <Head title="ProofPatch - Maintainer Workbench" />
 
-      <div className="space-y-8">
-        {/* Hero Section */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-xs">
-          <div className="max-w-3xl space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-200">
-              <Shield className="w-3.5 h-3.5" />
-              <span>Co-Maintainer Workbench</span>
+      <div className="space-y-6">
+        {/* Modern Clean Hero Banner */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-7 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1.5 max-w-2xl">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                Code Review & Verification Engine
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                Autonomous AI co-maintainer powered by Muse Spark Open with falsifiable baseline checks and cryptographic receipts.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-              Inspect public PRs, verify fixtures, and compose reviews.
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              ProofPatch is a local workbench for public open-source maintainers. Inspect bounded diffs with TOCTOU race protection, test checkout repairs against automated verification gates, and draft precision line comments without leaking proprietary code.
-            </p>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <Link
+                href="/issues"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 transition shadow-xs"
+              >
+                <span>Issues Workbench</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link
+                href="/checks"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition"
+              >
+                <span>Run Checks</span>
+              </Link>
+            </div>
           </div>
 
-          {/* Quick Action Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-slate-100 mt-6">
-            <Link
-              href="/settings"
-              className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-violet-50/50 hover:border-violet-300 motion-safe:transition motion-reduce:transition-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-700 group-hover:text-violet-700 group-hover:border-violet-200 shadow-2xs">
-                    <Settings className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-900">
-                    GitHub Connection
-                  </span>
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 group-hover:translate-x-0.5 motion-safe:transition-transform" />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-2">
-                Set up RFC 8628 Device Flow and manage repository access.
-              </p>
-            </Link>
-
-            <Link
-              href="/repositories"
-              className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-violet-50/50 hover:border-violet-300 motion-safe:transition motion-reduce:transition-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-700 group-hover:text-violet-700 group-hover:border-violet-200 shadow-2xs">
-                    <GitPullRequest className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-900">
-                    Inspect Pull Request
-                  </span>
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 group-hover:translate-x-0.5 motion-safe:transition-transform" />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-2">
-                Review unified diffs, anchor line comments, and triage issues.
-              </p>
-            </Link>
-
-            <Link
-              href="/checks"
-              className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-violet-50/50 hover:border-violet-300 motion-safe:transition motion-reduce:transition-none group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-7 h-7 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-700 group-hover:text-violet-700 group-hover:border-violet-200 shadow-2xs">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-900">
-                    Checkout Verifier
-                  </span>
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 group-hover:translate-x-0.5 motion-safe:transition-transform" />
-              </div>
-              <p className="text-[11px] text-slate-500 mt-2">
-                Run 4-gate verification suite on bundled checkout fixtures.
-              </p>
-            </Link>
+          {/* Metric Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-slate-100 mt-6">
+            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Captured PRs</span>
+              <span className="text-xl font-bold text-slate-900 mt-0.5 block">{totalSnapshots}</span>
+            </div>
+            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Verification Runs</span>
+              <span className="text-xl font-bold text-slate-900 mt-0.5 block">{totalRuns}</span>
+            </div>
+            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Verified Receipts</span>
+              <span className="text-xl font-bold text-emerald-700 mt-0.5 block">{verifiedRuns}</span>
+            </div>
+            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
+              <span className="text-[11px] font-medium text-slate-500 block">Protocol</span>
+              <span className="text-xs font-bold text-violet-700 mt-1 block">SHA-256 Anchored</span>
+            </div>
           </div>
         </div>
 
-        {/* Workbench Guarantees & Scope Disclosures */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-1.5">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <CheckSquare className="w-4 h-4 text-emerald-600" />
-              <span>Public Repositories Only</span>
+        {/* Core Workspaces Navigation */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            href="/repositories"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
+                  <GitPullRequest className="w-4 h-4" />
+                </span>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
+                  Pull Requests
+                </span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Private and unknown-visibility repository data is strictly excluded from public reviews, triage comparisons, and external inference. Local snapshots fail closed unless explicitly authorized.
+            <p className="text-[11px] text-slate-500 mt-2">
+              Inspect public pull requests, review unified diffs, and draft inline comments.
             </p>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-1.5">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <Layers className="w-4 h-4 text-violet-700" />
-              <span>Isolated Worktrees</span>
+          <Link
+            href="/issues"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
+                  <CheckSquare className="w-4 h-4" />
+                </span>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
+                  Issues Workbench
+                </span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Checkouts run in separate Git worktree directories with cryptographic receipts. Note: worktrees are isolated checkouts, not security sandboxes.
+            <p className="text-[11px] text-slate-500 mt-2">
+              Triage tickets, request Muse proposals, and run falsifiable 5-gate verifications.
             </p>
-          </div>
+          </Link>
 
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-1.5">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <FileCode2 className="w-4 h-4 text-amber-600" />
-              <span>Advisory Review Engine</span>
+          <Link
+            href="/checks"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
+                  <CheckCircle2 className="w-4 h-4" />
+                </span>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
+                  Checks & Probes
+                </span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Model reviews are strictly advisory. The automated verifier currently covers bundled checkout visual and DOM fixtures.
+            <p className="text-[11px] text-slate-500 mt-2">
+              Run 4-gate verification suites on bundled checkout fixtures with browser layout probes.
             </p>
-          </div>
+          </Link>
         </div>
 
         {/* Recent Pull Requests Datatable with Real Pagination */}

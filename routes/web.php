@@ -29,6 +29,7 @@ Route::post('/github/repositories/select', [DashboardController::class, 'selectI
 Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);
 Route::get('/settings', [DashboardController::class, 'settings']);
+Route::get('/docs', [DashboardController::class, 'docs']);
 Route::post('/notifications/clear', [DashboardController::class, 'clearNotifications']);
 Route::get('/checks/image', [DashboardController::class, 'image']);
 Route::get('/runs/{runId}/images/{image}', [DashboardController::class, 'imageByPath']);

@@ -40,6 +40,8 @@ final class WebRequestSecurityTest extends TestCase
 
             [$status, $headers] = $this->request($address, '/repositories');
             self::assertSame(200, $status);
+            [$docsStatus] = $this->request($address, '/docs');
+            self::assertSame(200, $docsStatus);
             $cookies = [];
             foreach ($headers as $header) {
                 if (preg_match('/^Set-Cookie:\s*([^=;]+)=([^;]*)/i', $header, $matches)) {

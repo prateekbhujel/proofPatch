@@ -11,6 +11,7 @@ import {
   X,
   Info,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react';
 
 interface NotificationItem {
@@ -25,7 +26,7 @@ interface NotificationItem {
 
 interface AppLayoutProps {
   title?: string;
-  activeNav?: 'overview' | 'repositories' | 'pulls' | 'checks' | 'issues' | 'settings';
+  activeNav?: 'overview' | 'repositories' | 'pulls' | 'checks' | 'issues' | 'settings' | 'docs';
   children: ReactNode;
 }
 
@@ -46,15 +47,17 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
     if (url.startsWith('/issues')) return 'issues';
     if (url.startsWith('/checks')) return 'checks';
     if (url.startsWith('/settings')) return 'settings';
+    if (url.startsWith('/docs')) return 'docs';
     return 'overview';
   })();
 
   const navItems = [
-    { key: 'overview', href: '/', label: 'Overview', shortLabel: 'Overview', icon: LayoutGrid },
-    { key: 'repositories', href: '/repositories', label: 'Repositories', shortLabel: 'Repos', icon: GitPullRequest },
-    { key: 'issues', href: '/issues', label: 'Issues', shortLabel: 'Issues', icon: ClipboardList },
-    { key: 'checks', href: '/checks', label: 'Checks', shortLabel: 'Checks', icon: CheckCircle2 },
-    { key: 'settings', href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings },
+    { key: 'overview', href: '/', label: 'Overview', icon: LayoutGrid },
+    { key: 'repositories', href: '/repositories', label: 'Repositories', icon: GitPullRequest },
+    { key: 'issues', href: '/issues', label: 'Issues', icon: ClipboardList },
+    { key: 'checks', href: '/checks', label: 'Checks', icon: CheckCircle2 },
+    { key: 'settings', href: '/settings', label: 'Settings', icon: Settings },
+    { key: 'docs', href: '/docs', label: 'Docs', icon: BookOpen },
   ];
 
   // Close notifications tray on outside click or escape
@@ -95,42 +98,34 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
     }
   };
 
+  const formatNotificationMessage = (msg: string) => {
+    // Shorten long SHA-256 strings in notifications so they don't break layout
+    return msg.replace(/\b([a-f0-9]{12})[a-f0-9]{52}\b/g, '$1…');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/60 text-slate-800 antialiased">
+    <div className="min-h-screen flex flex-col bg-slate-50/60 text-slate-800 antialiased font-sans">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 gap-2">
-            {/* Brand & Breadcrumb */}
-            <div className="flex items-center gap-3 sm:gap-5 shrink-0">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 gap-3">
+            {/* Brand Logo */}
+            <div className="flex items-center gap-4 shrink-0">
               <Link
                 href="/"
-                className="flex items-center gap-2 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 rounded-lg"
+                className="flex items-center gap-2 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 rounded-lg"
               >
-                <span className="w-7 h-7 rounded-md bg-violet-700 flex items-center justify-center text-white font-bold text-xs tracking-tight shadow-xs group-hover:bg-violet-800 motion-safe:transition motion-reduce:transition-none">
+                <span className="w-7 h-7 rounded-md bg-violet-700 flex items-center justify-center text-white font-bold text-xs tracking-tight shadow-xs group-hover:bg-violet-800 transition">
                   P
                 </span>
-                <div className="hidden sm:flex flex-col">
-                  <span className="font-semibold text-slate-900 tracking-tight text-sm leading-none">
-                    ProofPatch
-                  </span>
-                  <span className="text-[10px] text-violet-700 font-medium tracking-normal mt-0.5">
-                    Co-Maintainer
-                  </span>
-                </div>
-              </Link>
-
-              <div className="hidden md:flex items-center text-xs text-slate-400 gap-1.5 font-medium border-l border-slate-200 pl-3.5">
-                <span className="text-slate-500">local</span>
-                <span>/</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                  sqlite:proofpatch
+                <span className="font-bold text-slate-900 tracking-tight text-sm">
+                  ProofPatch
                 </span>
-              </div>
+              </Link>
             </div>
 
             {/* Navigation Links */}
-            <nav className="flex items-center gap-0.5 sm:gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
+            <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isCurrent = currentNav === item.key;
@@ -138,21 +133,20 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   <Link
                     key={item.key}
                     href={item.href}
-                    className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-md motion-safe:transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-1 whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 whitespace-nowrap ${
                       isCurrent
                         ? 'bg-violet-700 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
                     <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-white' : 'text-slate-400'}`} />
-                    <span className="hidden sm:inline">{item.label}</span>
-                    <span className="inline sm:hidden">{item.shortLabel}</span>
+                    <span>{item.label}</span>
                   </Link>
                 );
               })}
             </nav>
 
-            {/* Right Header Actions: Notifications & Worktree Status */}
+            {/* Right Header Actions: Notifications */}
             <div className="flex items-center gap-2 relative">
               {/* Notifications Tray Toggle */}
               <div className="relative">
@@ -160,7 +154,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   type="button"
                   onClick={() => setIsTrayOpen(!isTrayOpen)}
                   aria-label="View notifications"
-                  className={`p-1.5 rounded-md border text-slate-600 hover:text-slate-900 hover:bg-slate-100 motion-safe:transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
+                  className={`p-2 rounded-md border text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
                     isTrayOpen ? 'bg-slate-100 border-slate-300' : 'border-slate-200 bg-white'
                   }`}
                 >
@@ -176,7 +170,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                 {isTrayOpen && (
                   <div
                     ref={trayRef}
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden motion-safe:transition motion-reduce:transition-none"
+                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden"
                   >
                     <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
@@ -210,7 +204,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                         <div className="p-6 text-center text-xs text-slate-500 space-y-1">
                           <p className="font-medium text-slate-700">No new notifications</p>
                           <p className="text-[11px] text-slate-400">
-                            Workflow events, review drafts, and verifications will appear here.
+                            Workflow events and verifications appear here.
                           </p>
                         </div>
                       ) : (
@@ -239,8 +233,8 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                                   {formatTimestamp(item.timestamp)}
                                 </span>
                               </div>
-                              <p className="text-slate-600 pl-5 text-[11px] leading-relaxed">
-                                {item.message}
+                              <p className="text-slate-600 pl-5 text-[11px] leading-relaxed break-words font-mono">
+                                {formatNotificationMessage(item.message)}
                               </p>
                             </div>
                           );
@@ -250,34 +244,40 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   </div>
                 )}
               </div>
-
-              {/* System Worktree Status */}
-              <div className="hidden md:flex items-center">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>Worktree Runner</span>
-                </span>
-              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-7">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800">ProofPatch</span>
+      {/* Clean Global Footer */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-1.5 text-slate-600">
+            <span>© 2026 ProofPatch</span>
             <span>·</span>
-            <span>Muse co-maintainer & verification engine</span>
+            <span>Built with Laravel & Inertia for Meta Global AI Hackathon</span>
           </div>
-          <div className="text-[11px] text-slate-400">
-            Isolated worktrees · Cryptographic receipts · Public repositories only
+          <div className="flex items-center gap-3 text-slate-500">
+            <span>
+              Directed by{' '}
+              <a
+                href="https://github.com/prateekbhujel"
+                target="_blank"
+                rel="noreferrer"
+                className="text-violet-700 font-medium hover:underline"
+              >
+                Pratik Bhujel
+              </a>
+            </span>
+            <span>·</span>
+            <Link href="/docs" className="hover:text-slate-800 transition">
+              Documentation
+            </Link>
           </div>
         </div>
       </footer>

@@ -13,6 +13,13 @@ final class Receipt
         'candidate/checkout.png', 'candidate/observation.json', 'candidate/phpunit.log', 'candidate/junit.xml',
     ];
 
+    private const OWNED_BACKEND_FILES = [
+        'result.json', 'patch.diff',
+        'baseline/run.log',
+        'negative/run.log',
+        'candidate/run.log',
+    ];
+
     public function create(string $directory): array
     {
         $manifest = $this->manifest($directory);
@@ -71,6 +78,59 @@ final class Receipt
             || !preg_match('/\A[a-f0-9]{40}\z/', $result['baseCommit'])) {
             throw new \InvalidArgumentException('Run report is missing required metadata.');
         }
+        $kind = $result['kind'] ?? 'checkout';
+        if (!in_array($kind, ['checkout', 'owned_backend'], true)) {
+            throw new \InvalidArgumentException('Unsupported run kind in report.');
+        }
+
+        if ($kind === 'owned_backend') {
+            if ($result['decision'] === 'VERIFIED') {
+                foreach (['baselineReproduced', 'negativeControlCaught', 'candidatePassed', 'candidateStaticSafetyPassed', 'allowlistIntegrityIntact'] as $gate) {
+                    if (($result['gates'][$gate] ?? null) !== true) {
+                        throw new \InvalidArgumentException('Verified result is missing a passing required gate.');
+                    }
+                }
+                if (($result['runs']['baseline']['exitCode'] ?? null) !== 1
+                    || ($result['runs']['negative']['exitCode'] ?? null) !== 1
+                    || ($result['runs']['candidate']['exitCode'] ?? null) !== 0
+                    || !is_string($result['patchSha256'] ?? null)) {
+                    throw new \InvalidArgumentException('Verified result is missing required run evidence.');
+                }
+            }
+            $files = [];
+            foreach (self::OWNED_BACKEND_FILES as $relative) {
+                $path = $directory.'/'.$relative;
+                if ($relative !== 'result.json' && !file_exists($path) && !is_link($path)) {
+                    continue;
+                }
+                $files[$relative] = hash_file('sha256', $this->path($directory, $relative));
+            }
+            foreach (['baseline', 'negative', 'candidate'] as $name) {
+                if (!isset($result['runs'][$name])) {
+                    continue;
+                }
+                if (!isset($files[$name.'/run.log'])) {
+                    throw new \InvalidArgumentException('Run evidence is incomplete.');
+                }
+                $hash = $result['runs'][$name]['logSha256'] ?? null;
+                if (!is_string($hash) || !hash_equals($hash, $files[$name.'/run.log'])) {
+                    throw new \InvalidArgumentException('Run report and evidence hashes disagree.');
+                }
+            }
+            if (isset($result['patchSha256']) && (!isset($files['patch.diff'])
+                || !is_string($result['patchSha256']) || !hash_equals($result['patchSha256'], $files['patch.diff']))) {
+                throw new \InvalidArgumentException('Patch does not match the run report.');
+            }
+            return [
+                'format' => 'proofpatch-receipt-v1',
+                'kind' => 'owned_backend',
+                'runId' => $result['id'],
+                'baseCommit' => $result['baseCommit'],
+                'decision' => $result['decision'],
+                'files' => $files,
+            ];
+        }
+
         if ($result['decision'] === 'VERIFIED') {
             foreach (['baselineReproduced', 'protectedTestsPassed', 'outsideMaskPreserved', 'authorityIntact'] as $gate) {
                 if (($result['gates'][$gate] ?? null) !== true) {

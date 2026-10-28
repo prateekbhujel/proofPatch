@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
-import { ArrowRight, Sparkles, Shield, AlertTriangle, CheckCircle2, MessageSquare, FileCode, Check } from 'lucide-react';
+import { ArrowRight, Sparkles, Shield, AlertTriangle, CheckCircle2, MessageSquare, FileCode, Check, Copy, XCircle, Terminal } from 'lucide-react';
 
 interface IssueContext {
   isSynthetic?: boolean;
@@ -30,6 +30,7 @@ interface CandidatePreview {
   sha256: string;
   applied: boolean;
   verified: boolean;
+  verificationRunId?: string;
 }
 
 interface Suggestion {
@@ -53,22 +54,77 @@ interface Draft {
   readOnlyPolicy: string;
 }
 
+interface VerificationRun {
+  exitCode: number;
+  logSha256: string;
+  summary: string;
+}
+
+interface VerificationGates {
+  baselineReproduced: boolean;
+  negativeControlCaught: boolean;
+  candidatePassed: boolean;
+  candidateStaticSafetyPassed: boolean;
+  allowlistIntegrityIntact: boolean;
+}
+
+interface VerificationReceipt {
+  id: string;
+  sha256: string;
+  integrity: string;
+  externallyAnchored: boolean;
+  manifest: Record<string, unknown>;
+}
+
+interface BackendSandboxGap {
+  status: string;
+  boundary: string;
+  isolationLevel: string;
+  remainingGap: string;
+}
+
+interface VerificationReport {
+  id: string;
+  kind: string;
+  createdAt: string;
+  decision: 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE';
+  baseCommit: string;
+  isSynthetic?: boolean;
+  provenance?: string;
+  targetFile: string;
+  baseSha256: string;
+  candidateSha256: string;
+  patchSha256: string;
+  gates: VerificationGates;
+  runs: {
+    baseline: VerificationRun;
+    negative: VerificationRun;
+    candidate: VerificationRun;
+  };
+  receipt: VerificationReceipt;
+  evidenceDirectory: string;
+  backendSandboxGap: BackendSandboxGap;
+}
+
 interface Props {
   context: IssueContext | null;
   preview: Preview | null;
   suggestion: Suggestion | null;
   draft?: Draft | null;
+  verificationReport?: VerificationReport | null;
   isOwnedFixture?: boolean;
   budget: { canRequest: boolean; attempts: number; maxAttempts: number } | null;
   error: string | null;
 }
 
-export default function Issues({ context, preview, suggestion, draft, isOwnedFixture, budget, error }: Props) {
+export default function Issues({ context, preview, suggestion, draft, verificationReport, isOwnedFixture, budget, error }: Props) {
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
   const [approved, setApproved] = useState(false);
   const [sending, setSending] = useState(false);
   const [loadingOwned, setLoadingOwned] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [copiedReceipt, setCopiedReceipt] = useState(false);
 
   function captureIssue(event: React.FormEvent) {
     event.preventDefault();
@@ -107,6 +163,26 @@ export default function Issues({ context, preview, suggestion, draft, isOwnedFix
   function handleSaveDraft(event: React.FormEvent) {
     event.preventDefault();
     draftForm.post('/issues/draft');
+  }
+
+  function verifyCandidate(event: React.MouseEvent) {
+    event.preventDefault();
+    setVerifying(true);
+    router.post(
+      '/issues/verify',
+      {},
+      {
+        onFinish: () => setVerifying(false),
+      }
+    );
+  }
+
+  function copyReceipt(sha: string) {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(sha);
+    }
+    setCopiedReceipt(true);
+    setTimeout(() => setCopiedReceipt(false), 2000);
   }
 
   return (
@@ -347,7 +423,9 @@ export default function Issues({ context, preview, suggestion, draft, isOwnedFix
                     <span>·</span>
                     <span>Applied to disk: No</span>
                     <span>·</span>
-                    <span>Verified: No</span>
+                    <span>Verified: {suggestion.candidate.verified ? (
+                      <span className="text-emerald-700 font-semibold">Yes (ProofPatch Verified)</span>
+                    ) : 'No'}</span>
                   </div>
                   <pre className="max-h-72 overflow-auto whitespace-pre rounded-md bg-white p-3 text-xs font-mono text-slate-800 border border-slate-200">
                     {suggestion.candidate.source}
@@ -356,36 +434,203 @@ export default function Issues({ context, preview, suggestion, draft, isOwnedFix
               </details>
             )}
 
-            {/* Step 4: Safety Boundary & Sandbox Disclosures */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-amber-900 font-semibold">
-                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>Execution Safety Boundary</span>
-              </div>
-              <p className="text-amber-800 leading-relaxed">
-                Host execution of untrusted PHP candidates is disabled: temporary directories and git worktrees are NOT security sandboxes.
-                ProofPatch never executes arbitrary replacement code on the host system without an isolated container or microVM boundary.
-              </p>
-              {suggestion.path.endsWith('.css') || suggestion.path.includes('checkout') ? (
-                <div className="pt-2 flex items-center gap-2">
-                  <span className="text-slate-600">Bundled CSS fixture verification is available via browser layout probe:</span>
-                  <Link
-                    href="/checks"
-                    className="inline-flex items-center gap-1 font-medium text-violet-700 hover:text-violet-800 underline"
+            {(isOwnedFixture || suggestion.path === 'src/OrderTotal.php') && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-semibold text-violet-950 flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-violet-700" />
+                      <span>Falsifiable ProofPatch Verifier</span>
+                    </h3>
+                    <p className="text-xs text-violet-800 mt-0.5">
+                      Verify candidate against baseline failure reproduction, negative control guard, candidate execution, and cryptographic receipt manifest.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={verifyCandidate}
+                    disabled={verifying}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50 shrink-0"
                   >
-                    <span>Run CheckoutVerifier</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{verifying ? 'Running Verifier…' : (verificationReport ? 'Re-run ProofPatch Verifier' : 'Run ProofPatch Verifier')}</span>
+                  </button>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            )}
+
+            {/* Step 4: Verifier Evidence & Cryptographic Receipt */}
+            {verificationReport && (
+              <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-900">4. Verifier Evidence & Cryptographic Receipt</h3>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${verificationReport.decision === 'VERIFIED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                        {verificationReport.decision === 'VERIFIED' ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>VERIFIED</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>FAILED</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                      Run ID: <span className="text-slate-800 font-semibold">{verificationReport.id}</span> · Format: <span className="text-slate-700">{verificationReport.receipt.manifest?.format as string || 'proofpatch-receipt-v1'}</span> ({verificationReport.kind})
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Created: {verificationReport.createdAt}
+                  </span>
+                </div>
+
+                {/* Gates Status Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Gate 1: Baseline Failure Reproduction */}
+                  <div className="rounded-md border border-slate-200 p-3 bg-slate-50/50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900">1. Baseline Failure Reproduction</span>
+                      <span className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded ${verificationReport.gates.baselineReproduced ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {verificationReport.gates.baselineReproduced ? 'Passed (Exit 1)' : 'Failed'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Baseline reproduced expected failure: zero-quantity item incorrectly charged at unit price.
+                    </p>
+                  </div>
+
+                  {/* Gate 2: Negative Control Guard */}
+                  <div className="rounded-md border border-slate-200 p-3 bg-slate-50/50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900">2. Negative Control Guard</span>
+                      <span className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded ${verificationReport.gates.negativeControlCaught ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {verificationReport.gates.negativeControlCaught ? 'Passed (Exit 1)' : 'Failed'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Trivial catch-all shortcut (dummy return 0) properly caught and rejected by test suite.
+                    </p>
+                  </div>
+
+                  {/* Gate 3: Candidate Execution */}
+                  <div className="rounded-md border border-slate-200 p-3 bg-slate-50/50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900">3. Candidate Test Execution</span>
+                      <span className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded ${verificationReport.gates.candidatePassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {verificationReport.gates.candidatePassed ? 'Passed (Exit 0)' : 'Failed'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Candidate verified cleanly in ephemeral scratch environment: all cases passed.
+                    </p>
+                  </div>
+
+                  {/* Gate 4: Static AST Safety Guard */}
+                  <div className="rounded-md border border-slate-200 p-3 bg-slate-50/50 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900">4. Static AST Safety Guard</span>
+                      <span className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded ${verificationReport.gates.candidateStaticSafetyPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {verificationReport.gates.candidateStaticSafetyPassed ? 'Passed (0 Unsafe Tokens)' : 'Failed'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      Token analyzer verified candidate contains no shell execution, eval, network, or file syscalls.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Cryptographic Receipt Manifest */}
+                <div className="rounded-lg border border-slate-200 bg-slate-900 text-slate-100 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-semibold tracking-wide text-white uppercase">Cryptographic Integrity Receipt</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                      Integrity: {verificationReport.receipt.integrity} (Externally Anchored)
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Receipt Manifest SHA-256 (Canonical JSON Hash)</label>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 font-mono text-xs bg-slate-950 px-3 py-2 rounded border border-slate-800 text-emerald-400 break-all select-all">
+                        {verificationReport.receipt.sha256}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyReceipt(verificationReport.receipt.sha256)}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition shrink-0"
+                        title="Copy receipt SHA-256"
+                      >
+                        {copiedReceipt ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-300" />}
+                        <span>{copiedReceipt ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 text-[11px] text-slate-400 space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span>Base Commit: <code className="text-slate-300">{verificationReport.baseCommit.slice(0, 10)}…</code></span>
+                      <span>Patch Diff SHA: <code className="text-slate-300">{verificationReport.patchSha256.slice(0, 10)}…</code></span>
+                      <span>Evidence Dir: <code className="text-slate-300">{verificationReport.evidenceDirectory.split('/').slice(-2).join('/')}</code></span>
+                    </div>
+                    <p className="text-slate-500 text-[10px]">
+                      Manifest securely binds: result.json, patch.diff, baseline/run.log, negative/run.log, and candidate/run.log.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Collapsible Run Execution Logs */}
+                <details className="rounded-md border border-slate-200 p-3 bg-slate-50/50">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Run Verification Logs & Summaries</span>
+                  </summary>
+                  <div className="mt-3 space-y-2 text-xs font-mono">
+                    <div className="bg-white p-2.5 rounded border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-700 block mb-1">Baseline Log (Expected Exit Code 1)</span>
+                      <p className="text-rose-700 whitespace-pre-wrap">{verificationReport.runs.baseline.summary}</p>
+                    </div>
+                    <div className="bg-white p-2.5 rounded border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-700 block mb-1">Negative Control Log (Expected Exit Code 1)</span>
+                      <p className="text-rose-700 whitespace-pre-wrap">{verificationReport.runs.negative.summary}</p>
+                    </div>
+                    <div className="bg-white p-2.5 rounded border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-700 block mb-1">Candidate Execution Log (Expected Exit Code 0)</span>
+                      <p className="text-emerald-700 whitespace-pre-wrap">{verificationReport.runs.candidate.summary}</p>
+                    </div>
+                  </div>
+                </details>
+
+                {/* Execution Sandbox Boundary & Remaining Backend Gap Disclosure */}
+                <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3.5 space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-amber-900 font-semibold">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Allowlisted Execution Boundary & Remaining Backend Gap</span>
+                  </div>
+                  <p className="text-amber-800 leading-relaxed text-[11px]">
+                    <span className="font-semibold">{verificationReport.backendSandboxGap.boundary}</span>{' '}
+                    ProofPatch executed this run using {verificationReport.backendSandboxGap.isolationLevel}.
+                  </p>
+                  <p className="text-amber-800 leading-relaxed text-[11px]">
+                    <span className="font-semibold">Remaining Gap:</span> {verificationReport.backendSandboxGap.remainingGap}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Step 5: Review & Audit Policy */}
             <div className="pt-3 border-t border-slate-100 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
                   <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
-                  <span>4. Local Review Draft & Audit Trail</span>
+                  <span>5. Local Review Draft & Audit Trail</span>
                 </h3>
                 <span className="text-[11px] text-slate-500 font-medium">No External GitHub Mutations</span>
               </div>

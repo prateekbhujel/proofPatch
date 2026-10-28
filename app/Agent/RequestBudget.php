@@ -7,8 +7,8 @@ namespace ProofPatch\Agent;
 /** Persistent reservations in integer millionths of a dollar. */
 final readonly class RequestBudget
 {
-    public const DEFAULT_LIMIT_MICROS = 200000;
-    public const DEFAULT_MAX_ATTEMPTS = 5;
+    public const DEFAULT_LIMIT_MICROS = 500000;
+    public const DEFAULT_MAX_ATTEMPTS = 10;
 
     public function __construct(
         private string $directory,

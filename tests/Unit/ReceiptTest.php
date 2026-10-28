@@ -70,4 +70,58 @@ final class ReceiptTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         (new Receipt())->verify($this->directory);
     }
+
+    public function testOwnedBackendReceiptCreationAndVerification(): void
+    {
+        $dir = sys_get_temp_dir().'/proofpatch-owned-receipt-'.bin2hex(random_bytes(8));
+        mkdir($dir, 0700);
+        mkdir($dir.'/baseline', 0700);
+        mkdir($dir.'/negative', 0700);
+        mkdir($dir.'/candidate', 0700);
+
+        file_put_contents($dir.'/patch.diff', "diff --git a/src/OrderTotal.php b/src/OrderTotal.php\n");
+        file_put_contents($dir.'/baseline/run.log', "zero quantity: expected 250, got 750\n");
+        file_put_contents($dir.'/negative/run.log', "multiple items: expected 330, got 0\n");
+        file_put_contents($dir.'/candidate/run.log', "All order total cases passed.\n");
+
+        $report = [
+            'id' => '20261028T120000Z-abcdef123456',
+            'kind' => 'owned_backend',
+            'decision' => 'VERIFIED',
+            'baseCommit' => str_repeat('c', 40),
+            'patchSha256' => hash_file('sha256', $dir.'/patch.diff'),
+            'gates' => [
+                'baselineReproduced' => true,
+                'negativeControlCaught' => true,
+                'candidatePassed' => true,
+                'candidateStaticSafetyPassed' => true,
+                'allowlistIntegrityIntact' => true,
+            ],
+            'runs' => [
+                'baseline' => ['exitCode' => 1, 'logSha256' => hash_file('sha256', $dir.'/baseline/run.log')],
+                'negative' => ['exitCode' => 1, 'logSha256' => hash_file('sha256', $dir.'/negative/run.log')],
+                'candidate' => ['exitCode' => 0, 'logSha256' => hash_file('sha256', $dir.'/candidate/run.log')],
+            ],
+        ];
+
+        file_put_contents($dir.'/result.json', json_encode($report, JSON_THROW_ON_ERROR));
+
+        $receiptHelper = new Receipt();
+        $receipt = $receiptHelper->create($dir);
+        self::assertArrayHasKey('manifest', $receipt);
+        self::assertSame('owned_backend', $receipt['manifest']['kind']);
+        self::assertSame('VERIFIED', $receipt['manifest']['decision']);
+
+        file_put_contents($dir.'/receipt.json', json_encode($receipt, JSON_THROW_ON_ERROR));
+
+        $verified = $receiptHelper->verify($dir, $receipt['sha256']);
+        self::assertSame('VALID', $verified['integrity']);
+        self::assertTrue($verified['externallyAnchored']);
+        self::assertSame('VERIFIED', $verified['decision']);
+
+        // Tampering with negative log must fail
+        file_put_contents($dir.'/negative/run.log', 'tampered log');
+        $this->expectException(\InvalidArgumentException::class);
+        $receiptHelper->verify($dir, $receipt['sha256']);
+    }
 }

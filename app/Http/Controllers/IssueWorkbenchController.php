@@ -50,6 +50,7 @@ final class IssueWorkbenchController
             'preview' => $preview,
             'suggestion' => $request->session()->get('issue_suggestion'),
             'draft' => $request->session()->get('issue_draft'),
+            'verificationReport' => $request->session()->get('issue_verification_report'),
             'isOwnedFixture' => (bool) $request->session()->get('issue_is_owned_fixture'),
             'budget' => $budget,
             'error' => $request->session()->get('error'),
@@ -58,7 +59,7 @@ final class IssueWorkbenchController
 
     public function loadOwnedCase(Request $request): RedirectResponse
     {
-        $request->session()->forget(['issue_context', 'issue_suggestion', 'issue_draft']);
+        $request->session()->forget(['issue_context', 'issue_suggestion', 'issue_draft', 'issue_verification_report']);
         $fixturePath = base_path('tests/Fixtures/owned-review-case');
         $srcFile = $fixturePath.'/src/OrderTotal.php';
         if (!file_exists($srcFile)) {
@@ -107,7 +108,7 @@ final class IssueWorkbenchController
 
     public function capture(Request $request): RedirectResponse
     {
-        $request->session()->forget(['issue_context', 'issue_suggestion', 'issue_draft', 'issue_is_owned_fixture']);
+        $request->session()->forget(['issue_context', 'issue_suggestion', 'issue_draft', 'issue_is_owned_fixture', 'issue_verification_report']);
         try {
             $url = $request->input('issue_url');
             $path = $request->input('path');
@@ -129,7 +130,7 @@ final class IssueWorkbenchController
         $isOwned = (bool) $request->session()->get('issue_is_owned_fixture');
         $digest = $request->input('digest');
         // Consume the preview before the call: a retry requires a fresh review and approval.
-        $request->session()->forget(['issue_context', 'issue_suggestion']);
+        $request->session()->forget(['issue_context', 'issue_suggestion', 'issue_verification_report']);
         // Persist while the session lock is held, even if the worker dies during the provider call.
         $request->session()->save();
         try {
@@ -212,5 +213,62 @@ final class IssueWorkbenchController
         } catch (\Throwable $error) {
             return redirect('/issues')->with('error', $error->getMessage());
         }
+    }
+
+    public function verifyCandidate(Request $request): RedirectResponse
+    {
+        $suggestion = $request->session()->get('issue_suggestion');
+        $isOwned = (bool) $request->session()->get('issue_is_owned_fixture');
+        $context = $request->session()->get('issue_context');
+
+        if (!is_array($suggestion) || !isset($suggestion['candidate']['source'])) {
+            return redirect('/issues')->with('error', 'No candidate proposal available to verify.');
+        }
+
+        if (!$isOwned || ($suggestion['path'] ?? '') !== 'src/OrderTotal.php') {
+            return redirect('/issues')->with('error', 'Automated host verification is currently restricted to the allowlisted owned review case fixture. Worktrees and temporary directories are not security sandboxes for arbitrary untrusted code.');
+        }
+
+        try {
+            $candidateSource = (string) $suggestion['candidate']['source'];
+            $verifier = new \ProofPatch\Verifier\OwnedCaseVerifier(base_path());
+            $report = $verifier->verify($candidateSource, is_array($context) ? $context : null);
+
+            $request->session()->put('issue_verification_report', $report);
+
+            // Update candidate verified status in suggestion
+            $suggestion['candidate']['verified'] = ($report['decision'] === 'VERIFIED');
+            $suggestion['candidate']['verificationRunId'] = $report['id'];
+            $suggestion['candidate']['status'] = $report['decision'] === 'VERIFIED' ? 'verified_allowlisted_candidate' : 'failed_verification';
+            $request->session()->put('issue_suggestion', $suggestion);
+
+            $this->addNotification(
+                $request,
+                $report['decision'] === 'VERIFIED' ? 'success' : 'warning',
+                $report['decision'] === 'VERIFIED' ? 'Candidate Verified with Receipt' : 'Candidate Verification Failed',
+                "OrderTotal bug verification {$report['decision']}: run {$report['id']}, receipt {$report['receipt']['sha256']}.",
+                '/issues'
+            );
+
+            return redirect('/issues');
+        } catch (\Throwable $error) {
+            return redirect('/issues')->with('error', 'Verification error: ' . $error->getMessage());
+        }
+    }
+
+    private function addNotification(Request $request, string $type, string $title, string $message, ?string $link = null): void
+    {
+        $notifications = (array) $request->session()->get('notifications', []);
+        array_unshift($notifications, [
+            'id' => bin2hex(random_bytes(8)),
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+            'link' => $link,
+            'timestamp' => gmdate(DATE_ATOM),
+            'read' => false,
+        ]);
+        $notifications = array_slice($notifications, 0, 20);
+        $request->session()->put('notifications', $notifications);
     }
 }

@@ -12,6 +12,7 @@ Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/preview', [IssueWorkbenchController::class, 'capture']);
 Route::post('/issues/load-owned', [IssueWorkbenchController::class, 'loadOwnedCase']);
 Route::post('/issues/propose', [IssueWorkbenchController::class, 'propose']);
+Route::post('/issues/verify', [IssueWorkbenchController::class, 'verifyCandidate']);
 Route::post('/issues/draft', [IssueWorkbenchController::class, 'saveDraft']);
 Route::match(['get', 'post'], '/repositories', [DashboardController::class, 'repositories']);
 Route::post('/repositories/review', [DashboardController::class, 'reviewPullRequest']);

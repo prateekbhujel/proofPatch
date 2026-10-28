@@ -53,6 +53,19 @@ final class OwnedCaseVerifierTest extends TestCase
         // Syntax error
         self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php function () {')['safe']);
 
+        // Variable functions, dynamic invocations and variable variables
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php $fn = "system"; $fn("id");')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php $fn = "system"; $fn /* comment */ ("id");')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php $$var = "exploit";')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php ${"system"}("id");')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php ("sys"."tem")("id");')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php $obj->$method();')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php Foo::$method();')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php new $className();')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php call_user_func("system", "id");')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php call_user_func_array("system", ["id"]);')['safe']);
+        self::assertFalse(OwnedCaseVerifier::checkCandidateSafety('<?php unserialize("evil");')['safe']);
+
         // Clean arithmetic candidate
         $cleanCandidate = <<<'PHP'
 <?php
@@ -77,21 +90,8 @@ PHP;
         $projectRoot = dirname(__DIR__, 2);
         $verifier = new OwnedCaseVerifier($projectRoot, $this->testRunsDir);
 
-        $passingCandidate = <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-function orderTotal(array $items): int
-{
-    $total = 0;
-    foreach ($items as $item) {
-        $total += $item['unit_price'] * $item['quantity'];
-    }
-
-    return $total;
-}
-PHP;
+        $baseFixture = (string) file_get_contents($projectRoot . '/tests/Fixtures/owned-review-case/src/OrderTotal.php');
+        $passingCandidate = str_replace("max(1, \$item['quantity'])", "\$item['quantity']", $baseFixture);
 
         $report = $verifier->verify($passingCandidate, [
             'repository' => 'synthetic-fixture/order-total',
@@ -118,14 +118,21 @@ PHP;
         // Cryptographic receipt verification
         self::assertArrayHasKey('receipt', $report);
         self::assertSame('VALID', $report['receipt']['integrity']);
-        self::assertTrue($report['receipt']['externallyAnchored']);
+        self::assertFalse($report['receipt']['externallyAnchored']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/', $report['receipt']['sha256']);
 
         // Independent receipt verification directly from disk
         $receiptHelper = new Receipt();
-        $verifiedFromDisk = $receiptHelper->verify($report['evidenceDirectory'], $report['receipt']['sha256']);
+        // Without expected digest: internally valid, not externally anchored
+        $verifiedFromDisk = $receiptHelper->verify($report['evidenceDirectory']);
         self::assertSame('VALID', $verifiedFromDisk['integrity']);
+        self::assertFalse($verifiedFromDisk['externallyAnchored']);
         self::assertSame('VERIFIED', $verifiedFromDisk['decision']);
+
+        // With expected digest: externally anchored
+        $anchoredFromDisk = $receiptHelper->verify($report['evidenceDirectory'], $report['receipt']['sha256']);
+        self::assertSame('VALID', $anchoredFromDisk['integrity']);
+        self::assertTrue($anchoredFromDisk['externallyAnchored']);
 
         // Sandbox boundary disclosures
         self::assertArrayHasKey('backendSandboxGap', $report);
@@ -160,7 +167,7 @@ PHP;
         self::assertStringContainsString('ABORTED: Candidate failed static AST safety check', $candidateLog);
     }
 
-    public function testFailsWhenCandidateFailsLogicChecks(): void
+    public function testUntrustedCandidateWithoutKnownShaIsBlockedFromHostExecution(): void
     {
         $projectRoot = dirname(__DIR__, 2);
         $verifier = new OwnedCaseVerifier($projectRoot, $this->testRunsDir);
@@ -181,6 +188,38 @@ PHP;
         self::assertSame('FAILED', $report['decision']);
         self::assertTrue($report['gates']['candidateStaticSafetyPassed']);
         self::assertFalse($report['gates']['candidatePassed']);
-        self::assertSame(1, $report['runs']['candidate']['exitCode']);
+        self::assertSame(255, $report['runs']['candidate']['exitCode']);
+
+        $candidateLog = file_get_contents($report['evidenceDirectory'] . '/candidate/run.log');
+        self::assertStringContainsString('Host execution of untrusted or arbitrary candidate code is disabled', $candidateLog);
+    }
+
+    public function testVariableFunctionProbeDoesNotExecuteOnHost(): void
+    {
+        $projectRoot = dirname(__DIR__, 2);
+        $verifier = new OwnedCaseVerifier($projectRoot, $this->testRunsDir);
+        $probeFlag = sys_get_temp_dir() . '/proofpatch_probe_flag_' . bin2hex(random_bytes(6));
+
+        $probeCandidate = <<<PHP
+<?php
+declare(strict_types=1);
+function orderTotal(array \$items): int
+{
+    \$fn = 'touch';
+    \$fn('{$probeFlag}');
+    return 250;
+}
+PHP;
+
+        $report = $verifier->verify($probeCandidate);
+
+        self::assertSame('FAILED', $report['decision']);
+        self::assertFalse($report['gates']['candidateStaticSafetyPassed']);
+        self::assertFalse($report['gates']['candidatePassed']);
+        self::assertSame(255, $report['runs']['candidate']['exitCode']);
+        self::assertFileDoesNotExist($probeFlag);
+
+        $candidateLog = file_get_contents($report['evidenceDirectory'] . '/candidate/run.log');
+        self::assertStringContainsString('Candidate failed static AST safety check', $candidateLog);
     }
 }

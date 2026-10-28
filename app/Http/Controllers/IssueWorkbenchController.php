@@ -229,8 +229,15 @@ final class IssueWorkbenchController
             return redirect('/issues')->with('error', 'Automated host verification is currently restricted to the allowlisted owned review case fixture. Worktrees and temporary directories are not security sandboxes for arbitrary untrusted code.');
         }
 
+        $candidateSource = (string) $suggestion['candidate']['source'];
+        $candidateSha = hash('sha256', $candidateSource);
+
+        // Fail closed for model-generated or untrusted candidate code
+        if (!empty($suggestion['model']) || !hash_equals(\ProofPatch\Verifier\OwnedCaseVerifier::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha)) {
+            return redirect('/issues')->with('error', 'Host execution disabled: Model-generated or untrusted candidate code cannot be executed on the host. Worktrees, temporary directories, and token filters are not security sandboxes; an isolated microVM runner is required.');
+        }
+
         try {
-            $candidateSource = (string) $suggestion['candidate']['source'];
             $verifier = new \ProofPatch\Verifier\OwnedCaseVerifier(base_path());
             $report = $verifier->verify($candidateSource, is_array($context) ? $context : null);
 

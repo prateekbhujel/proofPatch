@@ -187,4 +187,96 @@ final class IssueWorkbenchIntegrationTest extends TestCase
         $controller->saveDraft($clearRequest);
         $this->assertNull($session->get('issue_draft'));
     }
+
+    public function testVerifyCandidateAllowsTrustedOfflineFixtureCandidate(): void
+    {
+        $session = app('session')->driver('array');
+        $loadRequest = Request::create('/issues/load-owned', 'POST');
+        $loadRequest->setLaravelSession($session);
+
+        $controller = new IssueWorkbenchController($this->blockingHttp);
+        $controller->loadOwnedCase($loadRequest);
+
+        $context = $session->get('issue_context');
+        $preview = (new IssueSuggestion($this->blockingHttp, RequestBudget::forRuntime()))->preview($context);
+
+        $proposeRequest = Request::create('/issues/propose', 'POST', [
+            'approved' => true,
+            'digest' => $preview['digest'],
+        ]);
+        $proposeRequest->setLaravelSession($session);
+        $controller->propose($proposeRequest);
+
+        $verifyRequest = Request::create('/issues/verify', 'POST');
+        $verifyRequest->setLaravelSession($session);
+
+        $response = $controller->verifyCandidate($verifyRequest);
+        $this->assertTrue($response->isRedirection());
+        $this->assertStringEndsWith('/issues', $response->getTargetUrl());
+
+        $report = $session->get('issue_verification_report');
+        $this->assertIsArray($report);
+        $this->assertSame('VERIFIED', $report['decision']);
+        $this->assertSame('VALID', $report['receipt']['integrity']);
+        $this->assertFalse($report['receipt']['externallyAnchored']);
+
+        $suggestion = $session->get('issue_suggestion');
+        $this->assertTrue($suggestion['candidate']['verified']);
+        $this->assertSame('verified_allowlisted_candidate', $suggestion['candidate']['status']);
+    }
+
+    public function testVerifyCandidateFailsClosedOnModelSuppliedCandidate(): void
+    {
+        $session = app('session')->driver('array');
+        $baseFixture = (string) file_get_contents(base_path('tests/Fixtures/owned-review-case/src/OrderTotal.php'));
+        $trustedSource = str_replace("max(1, \$item['quantity'])", "\$item['quantity']", $baseFixture);
+
+        $session->put('issue_is_owned_fixture', true);
+        $session->put('issue_context', ['path' => 'src/OrderTotal.php']);
+        $session->put('issue_suggestion', [
+            'path' => 'src/OrderTotal.php',
+            'model' => 'meta-models/muse-spark-open-1026',
+            'candidate' => [
+                'source' => $trustedSource,
+            ],
+        ]);
+
+        $verifyRequest = Request::create('/issues/verify', 'POST');
+        $verifyRequest->setLaravelSession($session);
+
+        $controller = new IssueWorkbenchController($this->blockingHttp);
+        $response = $controller->verifyCandidate($verifyRequest);
+
+        $this->assertTrue($response->isRedirection());
+        $this->assertStringEndsWith('/issues', $response->getTargetUrl());
+        $flashError = (string) ($response->getSession()?->get('error') ?? $session->get('error'));
+        $this->assertStringContainsString('Host execution disabled', $flashError);
+        $this->assertNull($session->get('issue_verification_report'));
+    }
+
+    public function testVerifyCandidateFailsClosedOnUntrustedCandidate(): void
+    {
+        $session = app('session')->driver('array');
+        $session->put('issue_is_owned_fixture', true);
+        $session->put('issue_context', ['path' => 'src/OrderTotal.php']);
+        $session->put('issue_suggestion', [
+            'path' => 'src/OrderTotal.php',
+            'model' => null,
+            'candidate' => [
+                'source' => "<?php\ndeclare(strict_types=1);\nfunction orderTotal(array \$items): int { return 999; }\n",
+            ],
+        ]);
+
+        $verifyRequest = Request::create('/issues/verify', 'POST');
+        $verifyRequest->setLaravelSession($session);
+
+        $controller = new IssueWorkbenchController($this->blockingHttp);
+        $response = $controller->verifyCandidate($verifyRequest);
+
+        $this->assertTrue($response->isRedirection());
+        $this->assertStringEndsWith('/issues', $response->getTargetUrl());
+        $flashError = (string) ($response->getSession()?->get('error') ?? $session->get('error'));
+        $this->assertStringContainsString('Host execution disabled', $flashError);
+        $this->assertNull($session->get('issue_verification_report'));
+    }
 }

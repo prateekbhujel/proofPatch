@@ -277,7 +277,6 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const [activeEditorLineKey, setActiveEditorLineKey] = useState<string | null>(null);
   const [editorText, setEditorText] = useState('');
   const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
-  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
 
   const fileFindings = findings.filter((f) => f.path === file.name);
   const fileDrafts = drafts.filter((d) => d.path === file.name);
@@ -330,21 +329,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     closeEditor();
   };
 
-  // CodeRabbit-style: Ask Muse for inline suggestion on this exact line
-  const handleAskMuse = (lineNum: number | null, lineContent: string) => {
-    setIsGeneratingSuggestion(true);
-    setTimeout(() => {
-      let suggestion = `Consider verifying edge cases for \`${file.name}\` line ${lineNum ?? 'diff'}.\n\nEnsure boundary inputs and null checks are handled gracefully.`;
-      if (lineContent.includes('retried') || lineContent.includes('retry')) {
-        suggestion = `Keep the retry limit bounded when the session cookie is missing.\n\nEnsure this retry flag preserves state validation across external OAuth round-trips without triggering HTTP 429 throttling loops.`;
-      } else if (lineContent.includes('total') || lineContent.includes('price')) {
-        suggestion = `Verify zero-quantity calculation edge case. Items with quantity 0 should not contribute to the unit sum.`;
-      } else if (lineContent.includes('utf8') || lineContent.includes('bytes')) {
-        suggestion = `Ensure multi-byte UTF-8 sequence buffer bounds are validated before reading into pending state.`;
-      }
-      setEditorText(suggestion);
-      setIsGeneratingSuggestion(false);
-    }, 450);
+  // Insert structured review template for this file and line
+  const handleInsertTemplate = (lineNum: number | null) => {
+    const template = `### Review Note (${file.name}:${lineNum ?? 'diff'})\n\n- **Verification concern**: \n- **Edge case / Boundary**: \n- **Suggested change**: \n`;
+    setEditorText(template);
   };
 
   const insertMarkdown = (before: string, after: string = '') => {
@@ -974,15 +962,15 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
         {/* Bottom Action Bar */}
         <div className="px-3 py-2.5 bg-[#f6f8fa] border-t border-[#d0d7de] flex flex-wrap items-center justify-between gap-2">
-          {/* CodeRabbit-Style Muse Action */}
+          {/* Review Template Action */}
           <button
             type="button"
-            disabled={isGeneratingSuggestion}
-            onClick={() => handleAskMuse(lineNum, lineContent)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition disabled:opacity-50"
+            onClick={() => handleInsertTemplate(lineNum)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition"
+            title="Insert a structured review comment template"
           >
-            <Sparkles className="w-3.5 h-3.5 text-violet-700" />
-            <span>{isGeneratingSuggestion ? 'Analyzing line...' : 'Ask Muse for Suggestion'}</span>
+            <FileText className="w-3.5 h-3.5 text-slate-600" />
+            <span>Insert Review Template</span>
           </button>
 
           {/* Cancel and Save Draft Buttons */}

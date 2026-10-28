@@ -133,13 +133,20 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
         // Check cryptographic receipt
         self::assertArrayHasKey('receipt', $report);
         self::assertSame('VALID', $report['receipt']['integrity']);
-        self::assertTrue($report['receipt']['externallyAnchored']);
+        self::assertFalse($report['receipt']['externallyAnchored']);
         self::assertMatchesRegularExpression('/\A[a-f0-9]{64}\z/', $report['receipt']['sha256']);
 
         // Verify receipt from disk independently
-        $diskVerified = (new Receipt())->verify($report['evidenceDirectory'], $report['receipt']['sha256']);
+        // Locally generated manifest without external expected digest is not externally anchored
+        $diskVerified = (new Receipt())->verify($report['evidenceDirectory']);
         self::assertSame('VALID', $diskVerified['integrity']);
+        self::assertFalse($diskVerified['externallyAnchored']);
         self::assertSame('VERIFIED', $diskVerified['decision']);
+
+        // When verified against an independently provided expected digest, it is externally anchored
+        $anchoredVerified = (new Receipt())->verify($report['evidenceDirectory'], $report['receipt']['sha256']);
+        self::assertSame('VALID', $anchoredVerified['integrity']);
+        self::assertTrue($anchoredVerified['externallyAnchored']);
 
         // Suggestion updated in session
         $updatedSuggestion = $session->get('issue_suggestion');

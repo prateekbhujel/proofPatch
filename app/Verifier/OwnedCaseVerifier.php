@@ -21,13 +21,16 @@ final readonly class OwnedCaseVerifier
 {
     public const KNOWN_BASE_SHA256 = '54bc37fb2b005badcf309c5a7091ba6a2e704fc54c8eff9e9c7afee7e4054859';
     public const KNOWN_TEST_SHA256 = 'b8079fb1e7731fc763f0b009a11c2786d01b52cce08f7431768a64e8a5ef2cbf';
+    public const KNOWN_TRUSTED_CANDIDATE_SHA256 = 'd102376bea8e1bdb745cf0f4026540574254e741a590be455a94dceb1a69f8fb';
 
     private const FORBIDDEN_FUNCTIONS = [
         'exec', 'shell_exec', 'system', 'passthru', 'proc_open', 'popen', 'pcntl_exec',
         'eval', 'assert', 'fopen', 'file_get_contents', 'file_put_contents', 'unlink',
         'rmdir', 'mkdir', 'copy', 'rename', 'chmod', 'chown', 'touch', 'curl_init',
         'curl_exec', 'socket_create', 'fsockopen', 'pfsockopen', 'stream_socket_client',
-        'dl', 'create_function', 'posix_kill',
+        'dl', 'create_function', 'posix_kill', 'call_user_func', 'call_user_func_array',
+        'forward_static_call', 'forward_static_call_array', 'reflectionfunction',
+        'reflectionclass', 'reflectionmethod', 'getenv', 'putenv', 'unserialize',
     ];
 
     public function __construct(
@@ -41,7 +44,8 @@ final readonly class OwnedCaseVerifier
 
     /**
      * Statically inspects PHP source code to verify that it does not contain
-     * dangerous tokens, backticks, includes, evals, or system calls.
+     * dangerous tokens, backticks, includes, evals, variable functions, dynamic calls,
+     * or system calls.
      */
     public static function checkCandidateSafety(string $source): array
     {
@@ -54,13 +58,40 @@ final readonly class OwnedCaseVerifier
             ];
         }
 
-        foreach ($tokens as $token) {
+        $count = count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+
             if (is_string($token)) {
                 if ($token === '`') {
                     return [
                         'safe' => false,
                         'reason' => 'Candidate contains disallowed backtick shell execution operator.',
                     ];
+                }
+                if ($token === '$') {
+                    $next = self::nextNonWhitespace($tokens, $i);
+                    if ($next !== null && is_array($next) && $next[0] === T_VARIABLE) {
+                        return [
+                            'safe' => false,
+                            'reason' => 'Candidate contains disallowed variable variable.',
+                        ];
+                    }
+                    if ($next === '{') {
+                        return [
+                            'safe' => false,
+                            'reason' => 'Candidate contains disallowed dynamic variable syntax.',
+                        ];
+                    }
+                }
+                if ($token === ')' || $token === '}') {
+                    $next = self::nextNonWhitespace($tokens, $i);
+                    if ($next === '(') {
+                        return [
+                            'safe' => false,
+                            'reason' => 'Candidate contains disallowed dynamic expression invocation.',
+                        ];
+                    }
                 }
                 continue;
             }
@@ -81,6 +112,37 @@ final readonly class OwnedCaseVerifier
                 ];
             }
 
+            if ($id === T_VARIABLE) {
+                $next = self::nextNonWhitespace($tokens, $i);
+                if ($next === '(') {
+                    return [
+                        'safe' => false,
+                        'reason' => 'Candidate contains disallowed variable function or dynamic invocation.',
+                    ];
+                }
+            }
+
+            $isObjectOp = ($id === T_OBJECT_OPERATOR) || (defined('T_NULLSAFE_OBJECT_OPERATOR') && $id === T_NULLSAFE_OBJECT_OPERATOR);
+            if ($isObjectOp || $id === T_DOUBLE_COLON) {
+                $next = self::nextNonWhitespace($tokens, $i);
+                if ($next !== null && is_array($next) && $next[0] === T_VARIABLE) {
+                    return [
+                        'safe' => false,
+                        'reason' => 'Candidate contains disallowed dynamic property or method access.',
+                    ];
+                }
+            }
+
+            if ($id === T_NEW) {
+                $next = self::nextNonWhitespace($tokens, $i);
+                if ($next !== null && is_array($next) && $next[0] === T_VARIABLE) {
+                    return [
+                        'safe' => false,
+                        'reason' => 'Candidate contains disallowed dynamic class instantiation.',
+                    ];
+                }
+            }
+
             if ($id === T_STRING) {
                 $lower = strtolower($text);
                 if (in_array($lower, self::FORBIDDEN_FUNCTIONS, true)) {
@@ -93,6 +155,18 @@ final readonly class OwnedCaseVerifier
         }
 
         return ['safe' => true, 'reason' => null];
+    }
+
+    private static function nextNonWhitespace(array $tokens, int $currentIndex): array|string|null
+    {
+        for ($j = $currentIndex + 1; $j < count($tokens); $j++) {
+            $tok = $tokens[$j];
+            if (is_array($tok) && in_array($tok[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            return $tok;
+        }
+        return null;
     }
 
     public function verify(string $candidateSource, ?array $context = null): array
@@ -149,18 +223,31 @@ final readonly class OwnedCaseVerifier
         $negativeLogSha = hash('sha256', $negativeRun['log']);
         $negativeControlCaught = $negativeRun['exitCode'] === 1 && str_contains($negativeRun['log'], 'multiple items: expected 330, got 0');
 
-        // 5. Phase 3: Candidate execution (only if static safety passed)
-        if ($candidateStaticSafetyPassed) {
-            $candidateRun = $this->runCandidateTest($candidateSource, $testSource);
-            file_put_contents($evidence . '/candidate/run.log', $candidateRun['log']);
-            $candidateLogSha = hash('sha256', $candidateRun['log']);
-            $candidatePassed = $candidateRun['exitCode'] === 0 && str_contains($candidateRun['log'], 'All order total cases passed.');
-        } else {
+        // 5. Phase 3: Candidate execution
+        // Strict Security Constraint:
+        // Temporary directories and token filters are NOT sandboxes.
+        // Arbitrary untrusted or model-generated candidate code must NOT be executed on the host.
+        // Only the known, checked-in trusted fixture candidate may be executed.
+        $candidateSha = hash('sha256', $candidateSource);
+        $isTrustedFixtureCandidate = hash_equals(self::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha);
+
+        if (!$candidateStaticSafetyPassed) {
             $log = "ABORTED: Candidate failed static AST safety check: " . ($safety['reason'] ?? 'Disallowed construct');
             file_put_contents($evidence . '/candidate/run.log', $log . "\n");
             $candidateLogSha = hash('sha256', $log . "\n");
             $candidateRun = ['exitCode' => 255, 'log' => $log];
             $candidatePassed = false;
+        } elseif (!$isTrustedFixtureCandidate) {
+            $log = "ABORTED: Host execution of untrusted or arbitrary candidate code is disabled.\nWorktrees, temporary directories, and token filters are not security sandboxes.\nFull execution of unverified or model-generated candidate code requires an external containerized microVM boundary.\nOnly the known checked-in test fixture candidate may be executed on the host.";
+            file_put_contents($evidence . '/candidate/run.log', $log . "\n");
+            $candidateLogSha = hash('sha256', $log . "\n");
+            $candidateRun = ['exitCode' => 255, 'log' => $log];
+            $candidatePassed = false;
+        } else {
+            $candidateRun = $this->runCandidateTest($candidateSource, $testSource);
+            file_put_contents($evidence . '/candidate/run.log', $candidateRun['log']);
+            $candidateLogSha = hash('sha256', $candidateRun['log']);
+            $candidatePassed = $candidateRun['exitCode'] === 0 && str_contains($candidateRun['log'], 'All order total cases passed.');
         }
 
         $gates = [
@@ -184,7 +271,7 @@ final readonly class OwnedCaseVerifier
             'provenance' => 'Local checked-in test fixture (tests/Fixtures/owned-review-case)',
             'targetFile' => 'src/OrderTotal.php',
             'baseSha256' => $actualBaseSha,
-            'candidateSha256' => hash('sha256', $candidateSource),
+            'candidateSha256' => $candidateSha,
             'patchSha256' => $patchSha256,
             'gates' => $gates,
             'runs' => [
@@ -201,7 +288,13 @@ final readonly class OwnedCaseVerifier
                 'candidate' => [
                     'exitCode' => $candidateRun['exitCode'],
                     'logSha256' => $candidateLogSha,
-                    'summary' => $candidatePassed ? 'Exit code 0; all order total cases passed.' : 'Candidate failed test execution.',
+                    'summary' => $candidatePassed
+                        ? 'Exit code 0; all order total cases passed.'
+                        : (!$candidateStaticSafetyPassed
+                            ? 'Candidate failed static AST safety check: ' . ($safety['reason'] ?? 'Disallowed construct')
+                            : (!$isTrustedFixtureCandidate
+                                ? 'Host execution disabled: untrusted candidate code blocked without microVM isolation.'
+                                : 'Candidate failed test execution.')),
                 ],
             ],
             'evidenceDirectory' => $evidence,
@@ -228,7 +321,7 @@ final readonly class OwnedCaseVerifier
         $receiptJson = json_encode($receipt, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT) . "\n";
         file_put_contents($evidence . '/receipt.json', $receiptJson);
 
-        $verifiedReceipt = $receiptHelper->verify($evidence, $receipt['sha256']);
+        $verifiedReceipt = $receiptHelper->verify($evidence);
         $report['receipt'] = [
             'id' => $receipt['manifest']['runId'],
             'sha256' => $receipt['sha256'],

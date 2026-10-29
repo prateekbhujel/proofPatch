@@ -60,7 +60,7 @@ export default function Docs() {
 
   return (
     <AppLayout activeNav="docs">
-      <Head title="Documentation · ProofPatch" />
+      <Head title="Documentation · ProofPatcher" />
 
       <div className="space-y-6 max-w-7xl mx-auto">
         {/* Docs Header */}
@@ -69,7 +69,7 @@ export default function Docs() {
             <span className="p-1 rounded bg-violet-100 text-violet-700">
               <BookOpen className="w-4 h-4" />
             </span>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">ProofPatch Documentation</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">ProofPatcher Documentation</h1>
           </div>
           <p className="mt-1 text-xs text-slate-500">
             Continuous reference guide for autonomous co-maintainer review, falsifiable verification gates, and cryptographic receipts.
@@ -124,7 +124,7 @@ export default function Docs() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">1. Overview & Vision</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  ProofPatch is an autonomous AI co-maintainer that transforms raw bug reports into verified, cryptographically signed pull request candidates.
+                    ProofPatcher helps inspect pull requests and check a bundled repair example. General patch verification is still in development.
                 </p>
               </div>
 
@@ -133,7 +133,7 @@ export default function Docs() {
                   Most AI coding tools generate plausible code without verifiable proof. Maintainers are flooded with AI-authored pull requests that look correct but break edge cases or introduce security regressions.
                 </p>
                 <p>
-                  <strong>ProofPatch changes this dynamic by enforcing falsifiable evidence:</strong> before any proposal is considered verified, ProofPatch must independently reproduce the baseline failure, prove its test suite catches trivial negative controls, execute candidate repairs in an isolated runtime, and sign a portable cryptographic receipt.
+                  <strong>ProofPatcher changes this dynamic by enforcing falsifiable evidence:</strong> before any proposal is considered verified, ProofPatcher must independently reproduce the baseline failure, prove its test suite catches trivial negative controls, execute candidate repairs under strict safety boundaries, and generate a portable cryptographic integrity manifest.
                 </p>
               </div>
 
@@ -147,8 +147,8 @@ export default function Docs() {
                   <p className="text-[11px] text-slate-500">Fine-tuned single-file proposals via Baseten Muse Spark Open.</p>
                 </div>
                 <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 space-y-1">
-                  <span className="font-semibold text-slate-900 block">3. Signed Receipt</span>
-                  <p className="text-[11px] text-slate-500">Canonical SHA-256 manifests anchoring all test logs and diffs.</p>
+                  <span className="font-semibold text-slate-900 block">3. Integrity Manifest</span>
+                  <p className="text-[11px] text-slate-500">Canonical SHA-256 manifests recording verified test logs, diffs, and gate outcomes.</p>
                 </div>
               </div>
             </section>
@@ -173,7 +173,7 @@ export default function Docs() {
                   <div>
                     <h3 className="text-xs font-semibold text-slate-900">Ticket Intake & Target File Binding</h3>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      Supply a public GitHub issue URL and target file path (or click "Load Owned Synthetic Case"). ProofPatch verifies public visibility and computes cryptographic SHA-256 hashes of the untouched source.
+                      Supply a public GitHub issue URL and target file path (or click "Load Owned Synthetic Case"). ProofPatcher verifies public visibility and computes cryptographic SHA-256 hashes of the untouched source.
                     </p>
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export default function Docs() {
                   <div>
                     <h3 className="text-xs font-semibold text-slate-900">Muse Proposal & In-Memory Candidate</h3>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      Muse Spark Open returns a concise single-file find-and-replace pair. ProofPatch applies this in memory only to produce an in-memory preview without modifying files on disk.
+                      Muse Spark Open returns a concise single-file find-and-replace pair. ProofPatcher applies this in memory only to produce an in-memory preview without modifying files on disk.
                     </p>
                   </div>
                 </div>
@@ -209,7 +209,7 @@ export default function Docs() {
                   <div>
                     <h3 className="text-xs font-semibold text-slate-900">Falsifiable Automated Verification</h3>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      ProofPatch executes the 5-gate verifier: static AST safety check, baseline reproduction (Exit 1), negative control guard (Exit 1), candidate test execution (Exit 0), and receipt generation.
+                      ProofPatcher executes the 5-gate verifier: static AST safety check, baseline reproduction (Exit 1), negative control guard (Exit 1), candidate test execution (Exit 0), and receipt generation.
                     </p>
                   </div>
                 </div>
@@ -246,7 +246,7 @@ export default function Docs() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">3. Falsifiable Verification Architecture</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Why passing tests alone is insufficient: the ProofPatch 5-gate proof structure.
+                  Why passing tests alone is insufficient: the ProofPatcher 5-gate proof structure.
                 </p>
               </div>
 
@@ -255,7 +255,7 @@ export default function Docs() {
                   In traditional automated test runners, a candidate is considered working if the test suite returns exit code 0. However, in AI repair, this frequently leads to <em>false positives</em>: tests that were never failing in the first place, or mock suites that trivially pass because assertions were bypassed.
                 </p>
                 <p>
-                  ProofPatch requires every verification run to pass five distinct gates before granting a <code className="bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded font-mono font-semibold">VERIFIED</code> decision:
+                  ProofPatcher requires every verification run to pass five distinct gates before granting a <code className="bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded font-mono font-semibold">VERIFIED</code> decision:
                 </p>
               </div>
 
@@ -263,7 +263,7 @@ export default function Docs() {
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50 space-y-1">
                   <span className="font-semibold text-slate-900">Gate 1: Static AST Safety Guard</span>
                   <p className="text-slate-600 text-[11px]">
-                    Statically parses PHP tokens using <code className="font-mono">token_get_all(..., TOKEN_PARSE)</code>. Disallows <code className="font-mono">exec</code>, <code className="font-mono">system</code>, <code className="font-mono">eval</code>, backticks, dynamic includes, and socket/filesystem syscalls before any code can run.
+                    Statically parses PHP tokens using <code className="font-mono">token_get_all(..., TOKEN_PARSE)</code>. Disallows <code className="font-mono">exec</code>, <code className="font-mono">system</code>, <code className="font-mono">eval</code>, backticks, variable functions, dynamic invocations, and socket/filesystem functions before any code can run.
                   </p>
                 </div>
 
@@ -301,17 +301,17 @@ export default function Docs() {
             <section id="receipts" className="bg-white rounded-xl border border-slate-200 p-6 space-y-5 shadow-xs scroll-mt-24">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-800 uppercase tracking-wide mb-2">
-                  Tamper-Proof Audit
+                  Cryptographic Verification
                 </div>
-                <h2 className="text-lg font-bold text-slate-900">4. Cryptographic Receipts</h2>
+                <h2 className="text-lg font-bold text-slate-900">4. Evidence Receipts & Manifests</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Portable, tamper-proof proof manifests anchored in SHA-256 canonical JSON.
+                  Portable integrity manifests anchored in canonical JSON digests and verifiable evidence files.
                 </p>
               </div>
 
               <div className="space-y-3 text-xs text-slate-700 leading-relaxed">
                 <p>
-                  Every completed run in ProofPatch outputs a <code className="font-mono text-slate-800">receipt.json</code> file. This receipt acts as an immutable proof of work that anyone can verify independently without trusting the model or the local web server.
+                  Every completed run in ProofPatcher outputs a <code className="font-mono text-slate-800">receipt.json</code> file. This receipt acts as a verifiable manifest of observed run evidence that anyone can verify independently without trusting the model or the local web server.
                 </p>
               </div>
 
@@ -358,7 +358,7 @@ export default function Docs() {
                     Core Safety Principle: Worktrees Are NOT Security Sandboxes
                   </span>
                   <p className="text-amber-800 text-[11px] leading-relaxed">
-                    ProofPatch never runs arbitrary untrusted PHP candidate code directly on the host machine. Git worktrees and temporary directories isolate file checkouts, but they do not isolate syscalls or prevent malicious payloads from reaching host resources.
+                    ProofPatcher never runs arbitrary untrusted PHP candidate code directly on the host machine. Git worktrees and temporary directories isolate file checkouts, but they do not isolate syscalls or prevent malicious payloads from reaching host resources.
                   </p>
                 </div>
 
@@ -366,14 +366,14 @@ export default function Docs() {
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 space-y-1">
                     <span className="font-semibold text-slate-900 block">Current Allowlisted Boundary</span>
                     <p className="text-[11px] text-slate-600">
-                      Candidate execution is restricted to known allowlisted fixtures with static AST token analysis, blocking all syscalls, shell access, and network sockets.
+                      Host execution is strictly restricted to known checked-in test fixtures with static AST token analysis, blocking variable functions, shell commands, and dynamic invocations. Host execution of untrusted or model-generated code is disabled.
                     </p>
                   </div>
 
                   <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 space-y-1">
                     <span className="font-semibold text-slate-900 block">Future General Backend Boundary</span>
                     <p className="text-[11px] text-slate-600">
-                      Full execution of arbitrary untrusted repository code requires containerized microVM sandboxes (e.g. Modal Sandbox or Firecracker). ProofPatch reports this boundary truthfully.
+                      Full execution of arbitrary untrusted repository code requires containerized microVM sandboxes (e.g. Modal Sandbox or Firecracker). ProofPatcher reports this boundary truthfully.
                     </p>
                   </div>
                 </div>
@@ -388,7 +388,7 @@ export default function Docs() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">6. Runtime & Configuration</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Local SQLite storage, GitHub App Connection, and sponsor grant management.
+                  Local SQLite storage, GitHub App Connection, and runtime provider configuration.
                 </p>
               </div>
 
@@ -396,7 +396,7 @@ export default function Docs() {
                 <div className="space-y-1">
                   <h3 className="font-semibold text-slate-900">Local SQLite Storage</h3>
                   <p className="text-slate-600">
-                    ProofPatch stores metadata, captured PR snapshots, and review drafts in a local SQLite database (<code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">database/database.sqlite</code>). Private code is never uploaded to external servers.
+                    ProofPatcher stores task data locally. If you request a model suggestion, the selected material is sent to the configured model provider.
                   </p>
                 </div>
 
@@ -410,7 +410,7 @@ export default function Docs() {
                 <div className="space-y-1">
                   <h3 className="font-semibold text-slate-900">Baseten Muse Spark Open & Budget Guard</h3>
                   <p className="text-slate-600">
-                    Model calls are strictly bounded by a local runtime ledger (<code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">~/.local/share/proofpatch/runtime/runtime-ledger.json</code>). ProofPatch enforces a strict credit limit ($0.50) and max attempt ceiling to guarantee zero unintended charges.
+                    Local request limits help manage usage. They are estimates, not provider billing limits.
                   </p>
                 </div>
               </div>

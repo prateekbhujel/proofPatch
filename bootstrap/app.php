@@ -9,6 +9,7 @@ use ProofPatch\Console\Commands\RecordPullRequestSnapshotCommand;
 use ProofPatch\Console\Commands\TriagePullRequestCommand;
 use ProofPatch\Console\Commands\VerifyPatchCommand;
 use ProofPatch\Http\Middleware\HandleInertiaRequests;
+use ProofPatch\Http\Middleware\AuthorizeGithubTasks;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,6 +19,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(static function (\Illuminate\Foundation\Configuration\Middleware $middleware): void {
         $middleware->web(append: [
+            AuthorizeGithubTasks::class,
             HandleInertiaRequests::class,
         ]);
     })

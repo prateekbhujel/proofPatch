@@ -18,11 +18,17 @@ final class ReviewJobController
         }
 
         $directory = getenv('PROOFPATCH_SNAPSHOT_DIR') ?: (function_exists('base_path') ? base_path('artifacts/pull-requests') : dirname(__DIR__, 3).'/artifacts/pull-requests');
+        $store = new PullRequestSnapshot($directory);
         try {
-            (new PullRequestSnapshot($directory))->verify($review->snapshot_id, $review->snapshot_sha256);
+            $store->verify($review->snapshot_id, $review->snapshot_sha256);
+            $saved = $store->load($review->snapshot_id);
         } catch (\Throwable) {
             return response()->json(['message' => 'Saved snapshot is unavailable or does not match the review record.'], 409)
                 ->header('Cache-Control', 'no-store');
+        }
+
+        if (!PullRequestSnapshot::isExplicitlyPublic($saved)) {
+            return response()->json(['message' => 'Review not found.'], 404)->header('Cache-Control', 'no-store');
         }
 
         return response()->json([

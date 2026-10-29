@@ -559,7 +559,7 @@ export default function Repositories({
                       <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs text-slate-500 space-y-1">
                         <p className="font-medium text-slate-700">No repositories granted to this installation.</p>
                         <p className="text-[11px]">
-                          Configure repository permissions on GitHub to grant ProofPatch access to selected owned repositories.
+                          Configure repository permissions on GitHub to grant ProofPatcher access to selected owned repositories.
                         </p>
                       </div>
                     ) : (
@@ -1283,7 +1283,7 @@ export default function Repositories({
                   <div className="space-y-0.5">
                     <p className="font-semibold text-slate-900">Advisory Review Only</p>
                     <p className="text-slate-600 text-[11px] leading-relaxed">
-                      All repository diffs, commit metadata, and filenames are treated strictly as untrusted data. ProofPatch does not post comments, submit GitHub reviews, or execute external repository test suites. Human verification is required.
+                      All repository diffs, commit metadata, and filenames are treated strictly as untrusted data. ProofPatcher does not post comments, submit GitHub reviews, or execute external repository test suites. Human verification is required.
                     </p>
                   </div>
                 </div>
@@ -1390,29 +1390,14 @@ export default function Repositories({
                     {/* Explicit Consent Form & Honest Budget Status */}
                     <form onSubmit={handleReviewSubmit} className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
                       {isPrivate && (
-                        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-2">
+                        <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-1.5">
                           <div className="flex items-center gap-2 font-semibold text-amber-900">
                             <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-                            <span>Private Repository Security Boundary</span>
+                            <span>Private Repository Review Unsupported</span>
                           </div>
                           <p className="text-[11px] leading-relaxed text-amber-900">
-                            This pull request originates from private repository <strong>{pull?.repository}</strong>.
-                            Transmitting proprietary source code to third-party model inference requires your separate, explicit authorization.
+                            Private repository capture and model review is explicitly unsupported. Proprietary source code from <strong>{pull?.repository}</strong> will not be transmitted to external providers. Only public repositories and authorized test repositories may be reviewed.
                           </p>
-                          <label className="flex items-start gap-2.5 cursor-pointer font-medium pt-1 text-amber-950">
-                            <input
-                              type="checkbox"
-                              checked={privateConsentApproved}
-                              onChange={(e) => {
-                                setPrivateConsentApproved(e.target.checked);
-                                setReviewFormData('private_consent', e.target.checked);
-                              }}
-                              className="mt-0.5 rounded border-amber-300 text-amber-800 focus:ring-amber-700"
-                            />
-                            <span className="text-[11px] leading-relaxed">
-                              I explicitly authorize transmitting this private repository diff to Baseten Muse (meta-models/muse-spark-open-1026).
-                            </span>
-                          </label>
                         </div>
                       )}
 
@@ -1444,10 +1429,10 @@ export default function Repositories({
 
                         <button
                           type="submit"
-                          disabled={!reviewApproved || (isPrivate && !privateConsentApproved) || !budget?.canRequest || reviewProcessing}
+                          disabled={!reviewApproved || isPrivate || !budget?.canRequest || reviewProcessing}
                           className="px-4 py-2 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed transition"
                         >
-                          {!budget?.canRequest ? 'Request Review (Budget Exhausted)' : reviewProcessing ? 'Requesting Review...' : 'Request Code Review'}
+                          {isPrivate ? 'Review Unsupported (Private Repo)' : !budget?.canRequest ? 'Request Review (Budget Exhausted)' : reviewProcessing ? 'Requesting Review...' : 'Request Code Review'}
                         </button>
                       </div>
                     </form>
@@ -1501,7 +1486,7 @@ export default function Repositories({
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold text-slate-900">Public Patch Preview Required</h3>
                       <p className="text-xs text-slate-500 max-w-md mx-auto">
-                        ProofPatch needs to capture and verify the public patch diff locally before preparing the review payload.
+                        ProofPatcher needs to capture and verify the public patch diff locally before preparing the review payload.
                       </p>
                     </div>
                     {snapshot && (
@@ -1577,7 +1562,7 @@ export default function Repositories({
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
                     <p className="font-semibold text-slate-800">GitHub Publishing Not Implemented</p>
                     <p className="text-[11px] leading-relaxed">
-                      ProofPatch operates in local-only read and advisory review mode. It does not submit comments, approvals, or change requests to GitHub.
+                      ProofPatcher operates in local-only read and advisory review mode. It does not submit comments, approvals, or change requests to GitHub.
                     </p>
                   </div>
 

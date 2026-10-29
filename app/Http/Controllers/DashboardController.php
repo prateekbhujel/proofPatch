@@ -23,6 +23,8 @@ use ProofPatch\GitHub\PullRequestSnapshot;
 use ProofPatch\GitHub\PublicPatchPreview;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
+use ProofPatch\Support\NotificationHelper;
+use ProofPatch\Support\SessionHelper;
 use ProofPatch\Verifier\CheckoutVerifier;
 use Symfony\Component\HttpClient\HttpClient;
 
@@ -91,11 +93,16 @@ final class DashboardController
         }
 
         $runFiles = glob($this->runsDir.'/*/result.json') ?: [];
-        $totalRuns = count($runFiles);
+        $totalRuns = 0;
         $verifiedRuns = 0;
         foreach ($runFiles as $rf) {
             try {
                 $run = (new RunEvidence())->read(dirname($rf));
+                // Existing private GitHub evidence has no account ownership.
+                if (!$this->isPublicCheckRun($run['report'])) {
+                    continue;
+                }
+                $totalRuns++;
                 if ($run['receipt'] !== null && $run['report']['decision'] === 'VERIFIED') {
                     $verifiedRuns++;
                 }
@@ -336,6 +343,9 @@ final class DashboardController
                         throw new \InvalidArgumentException('Select a run with a reproduced baseline first.');
                     }
                     $sourceReport = json_decode((string) file_get_contents($dir.'/result.json'), true, 64, JSON_THROW_ON_ERROR);
+                    if (!$this->isPublicCheckRun($sourceReport)) {
+                        throw new \InvalidArgumentException('This run is unavailable.');
+                    }
                     if (($sourceReport['proposal']['file'] ?? null) !== $request->input('fixture')) {
                         throw new \InvalidArgumentException('Run the selected fixture first so the model sees its own baseline.');
                     }
@@ -387,6 +397,9 @@ final class DashboardController
             }
             try {
                 $run = (new RunEvidence())->read(dirname($file));
+                if (!$this->isPublicCheckRun($run['report'])) {
+                    continue;
+                }
                 $runPath = dirname($file);
                 $hasVisual = is_file($runPath.'/baseline/checkout.png') && is_file($runPath.'/candidate/checkout.png');
                 $history[$id] = array_merge($run['report'], [
@@ -702,6 +715,9 @@ final class DashboardController
                 $reposStatus = [];
                 $repos = $client->listSelectedRepositories($token, $reposStatus);
 
+                $this->forgetSession($request, ...array_merge(IssueWorkbenchController::CASE_SESSION_KEYS,
+                    ['selected_github_repo', 'github_repo_issues', 'github_repo_pulls', 'notifications']));
+
                 $authData = [
                     'token' => $token,
                     'user' => $user,
@@ -768,9 +784,11 @@ final class DashboardController
             'github_auth',
             'github_device_flow',
             'selected_github_repo',
+            'github_repo_issues',
             'github_repo_pulls',
             'github_repo_pulls_status'
         );
+        $this->forgetSession($request, ...array_merge(IssueWorkbenchController::CASE_SESSION_KEYS, ['notifications']));
         $this->addNotification($request, 'info', 'GitHub Disconnected', 'Disconnected from GitHub device session.');
 
         return redirect('/repositories')->with('github_status', 'Disconnected from GitHub.');
@@ -961,42 +979,12 @@ final class DashboardController
 
     private function addNotification(?Request $request, string $type, string $title, string $message, ?string $link = null): void
     {
-        $notifications = $this->getSession($request, 'notifications', []);
-        if (!is_array($notifications)) {
-            $notifications = [];
-        }
-        array_unshift($notifications, [
-            'id' => bin2hex(random_bytes(8)),
-            'type' => $type,
-            'title' => $title,
-            'message' => $message,
-            'link' => $link,
-            'timestamp' => gmdate(DATE_ATOM),
-            'read' => false,
-        ]);
-        $notifications = array_slice($notifications, 0, 20);
-        $this->putSession($request, 'notifications', $notifications);
+        NotificationHelper::add($request, $type, $title, $message, $link);
     }
 
     private function isExplicitlyPublicSnapshot(array $savedSnapshot): bool
     {
-        $pull = $savedSnapshot['snapshot']['pullRequest'] ?? null;
-        if (!is_array($pull)) {
-            return false;
-        }
-
-        // Must be explicitly isPrivate === false
-        if (($pull['isPrivate'] ?? null) !== false) {
-            return false;
-        }
-
-        // Must be explicitly visibility === 'public'
-        $visibility = (string) ($pull['visibility'] ?? 'public');
-        if ($visibility !== 'public') {
-            return false;
-        }
-
-        return true;
+        return PullRequestSnapshot::isExplicitlyPublic($savedSnapshot);
     }
 
     private function isAuthorizedForSnapshot(Request $request, array $savedSnapshot): bool
@@ -1010,6 +998,15 @@ final class DashboardController
     private function budget(): RequestBudget
     {
         return RequestBudget::forRuntime();
+    }
+
+    /** Backend evidence may contain private repository names and is not yet bound to a user. */
+    private function isPublicCheckRun(array $report): bool
+    {
+        if (($report['kind'] ?? null) === 'owned_backend' || array_key_exists('context', $report)) {
+            return ($report['isSynthetic'] ?? false) === true;
+        }
+        return true; // Local checkout verifier; not sourced from a GitHub task.
     }
 
     private function approvalStore(): SingleUseReviewApproval
@@ -1041,6 +1038,15 @@ final class DashboardController
         if (!$validId || $folder === null) {
             return response('Image unavailable.', 404, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
         }
+        $reportPath = $this->runsDir.'/'.$runId.'/result.json';
+        try {
+            $report = json_decode((string) file_get_contents($reportPath), true, 64, JSON_THROW_ON_ERROR);
+            if (!is_array($report) || !$this->isPublicCheckRun($report)) {
+                throw new \RuntimeException('Image unavailable.');
+            }
+        } catch (\Throwable) {
+            return response('Image unavailable.', 404, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
+        }
         $path = realpath($this->runsDir.'/'.$runId.'/'.$folder.'/checkout.png');
         $base = realpath($this->runsDir);
         if ($path === false || $base === false || !str_starts_with($path, $base) || !is_file($path)) {
@@ -1055,32 +1061,16 @@ final class DashboardController
 
     private function getSession(?Request $request, string $key, mixed $default = null): mixed
     {
-        if ($request !== null && $request->hasSession()) {
-            $val = $request->session()->get($key);
-            if ($val !== null) {
-                return $val;
-            }
-        }
-        return $_SESSION[$key] ?? $default;
+        return SessionHelper::get($request, $key, $default);
     }
 
     private function putSession(?Request $request, string $key, mixed $value): void
     {
-        if ($request !== null && $request->hasSession()) {
-            $request->session()->put($key, $value);
-            $request->session()->save();
-        }
-        $_SESSION[$key] = $value;
+        SessionHelper::put($request, $key, $value);
     }
 
     private function forgetSession(?Request $request, string ...$keys): void
     {
-        if ($request !== null && $request->hasSession()) {
-            $request->session()->forget($keys);
-            $request->session()->save();
-        }
-        foreach ($keys as $k) {
-            unset($_SESSION[$k]);
-        }
+        SessionHelper::forget($request, ...$keys);
     }
 }

@@ -60,6 +60,26 @@ final readonly class PullRequestSnapshot
         return ['snapshot' => $document['snapshot'], 'sha256' => $document['sha256']];
     }
 
+    public static function isExplicitlyPublic(array $savedSnapshot): bool
+    {
+        $pull = $savedSnapshot['snapshot']['pullRequest'] ?? null;
+        if (!is_array($pull)) {
+            return false;
+        }
+
+        // Must explicitly have isPrivate === false
+        if (!array_key_exists('isPrivate', $pull) || $pull['isPrivate'] !== false) {
+            return false;
+        }
+
+        // If visibility key exists, it must be 'public'
+        if (array_key_exists('visibility', $pull) && $pull['visibility'] !== 'public') {
+            return false;
+        }
+
+        return true;
+    }
+
     private function verifiedDocument(string $id, ?string $expectedDigest): array
     {
         if (!preg_match('/\A\d{8}T\d{6}Z-[a-f0-9]{12}\z/', $id) || is_link($this->directory)) {

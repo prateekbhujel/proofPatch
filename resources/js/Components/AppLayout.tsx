@@ -119,7 +119,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   P
                 </span>
                 <span className="font-bold text-slate-900 tracking-tight text-sm">
-                  ProofPatch
+                  ProofPatcher
                 </span>
               </Link>
             </div>
@@ -258,7 +258,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
       <footer className="mt-auto border-t border-slate-200 bg-white py-3.5">
         <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div className="flex items-center gap-2 text-slate-600">
-            <span>© 2026 ProofPatch</span>
+            <span>© 2026 ProofPatcher</span>
             <span className="text-slate-300">·</span>
             <a
               href="https://github.com/prateekbhujel"

@@ -26,10 +26,15 @@ final readonly class IssueSuggestion
     public function preview(array $context): array
     {
         PublicIssueContext::validateContext($context);
+        $modelContext = array_filter(
+            $context,
+            static fn(string $k): bool => !in_array($k, ['testSource', 'testSha256'], true),
+            ARRAY_FILTER_USE_KEY
+        );
         $body = ['model' => self::MODEL, 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
             'temperature' => 1, 'top_p' => 1, 'stream' => false, 'messages' => [
                 ['role' => 'system', 'content' => self::SYSTEM],
-                ['role' => 'user', 'content' => CanonicalJson::encode($context)],
+                ['role' => 'user', 'content' => CanonicalJson::encode($modelContext)],
             ]];
         $payload = ['destination' => self::ENDPOINT, 'body' => $body];
         $inputBytes = strlen(CanonicalJson::encode($body));

@@ -5,18 +5,10 @@ import {
   GitPullRequest,
   ArrowRight,
   CheckCircle2,
-  Settings,
-  Shield,
-  Layers,
   Search,
   ChevronLeft,
   ChevronRight,
-  FolderGit2,
   CheckSquare,
-  FileCode2,
-  Sparkles,
-  ExternalLink,
-  Receipt as ReceiptIcon,
 } from 'lucide-react';
 
 interface PullItem {
@@ -78,216 +70,36 @@ export default function Overview({
     return filteredPulls.slice(start, start + pageSize);
   }, [filteredPulls, safeCurrentPage, pageSize]);
 
-  // Heatmap generation: 22 weeks = 154 days
-  const weeksCount = 22;
-  const daysCount = weeksCount * 7;
-  const heatmapData = useMemo(() => {
-    const data = [];
-    const now = new Date();
-    for (let i = daysCount - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dayOfWeek = d.getDay(); // 0 is Sun, 6 is Sat
-      // Balanced distribution: higher activity in recent 14 days and periodic test suites
-      let count = 0;
-      if (i === 0) count = 8;
-      else if (i === 1) count = 5;
-      else if (i < 7) count = (i % 3 === 0) ? 4 : (i % 2 === 0 ? 3 : 1);
-      else if (i < 28) count = (i % 4 === 0) ? 3 : (i % 7 === 1 ? 2 : 0);
-      else if (i < 60) count = (i % 5 === 0) ? 2 : (i % 9 === 0 ? 3 : 0);
-      else if (i % 11 === 0) count = 2;
-      else if (i % 14 === 3) count = 1;
-
-      data.push({
-        date: d.toISOString().slice(0, 10),
-        count,
-        dayOfWeek,
-      });
-    }
-    return data;
-  }, [daysCount]);
-
-  // Months labels for the 22 weeks
-  const monthLabels = [
-    { label: 'Jun', col: 1 },
-    { label: 'Jul', col: 5 },
-    { label: 'Aug', col: 10 },
-    { label: 'Sep', col: 15 },
-    { label: 'Oct', col: 19 },
-  ];
-
   return (
     <AppLayout activeNav="overview">
-      <Head title="ProofPatch - Maintainer Workbench" />
+      <Head title="ProofPatcher - Maintainer Workbench" />
 
       <div className="space-y-5 max-w-7xl mx-auto">
-        {/* Compact Hero Banner with Micro-Animations */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-                <span className="text-[11px] font-semibold text-emerald-800 tracking-wide uppercase">
-                  Engine Online · Cryptographic Receipts Active
-                </span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-                Code Review & Verification Engine
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-2xl">
-                Autonomous AI co-maintainer powered by Muse Spark Open with falsifiable baseline checks and cryptographic receipts.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5 shrink-0">
-              <Link
-                href="/issues"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 transition shadow-xs"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Issues Workbench</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-              <Link
-                href="/checks"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
-                <span>Run Checks</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Metric Stats Cards (Compact Row) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-100 mt-4">
-            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
-              <span className="text-[11px] font-medium text-slate-500 block">Captured PRs</span>
-              <span className="text-lg font-bold text-slate-900 mt-0.5 block">{totalSnapshots}</span>
-            </div>
-            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
-              <span className="text-[11px] font-medium text-slate-500 block">Verification Runs</span>
-              <span className="text-lg font-bold text-slate-900 mt-0.5 block">{totalRuns}</span>
-            </div>
-            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
-              <span className="text-[11px] font-medium text-slate-500 block flex items-center justify-between">
-                <span>Verified Receipts</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              </span>
-              <span className="text-lg font-bold text-emerald-700 mt-0.5 block">{verifiedRuns}</span>
-            </div>
-            <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200/80">
-              <span className="text-[11px] font-medium text-slate-500 block">Gate Pass Rate</span>
-              <span className="text-lg font-bold text-violet-700 mt-0.5 block">100%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Verification & Activity Heatmap (GitHub-Style Balanced Matrix) */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">Verification & Review Activity</h2>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Last 22 Weeks
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Automated gate execution, negative-control caught runs, and signed receipts.
-              </p>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">Overview</h1>
+              <p className="mt-1 text-sm text-slate-500">Review pull requests and work on issues in one place.</p>
             </div>
-
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 self-start sm:self-auto">
-              <span>Less</span>
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-slate-100 border border-slate-200/60" />
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-200" />
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-400" />
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-600" />
-              <span className="w-2.5 h-2.5 rounded-[2px] bg-emerald-800" />
-              <span>More</span>
-            </div>
+            <Link href="/issues" className="inline-flex w-fit items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-800">
+              Open issues <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-
-          {/* GitHub-Fidelity Activity Heatmap with Month Headers & Day Labels */}
-          <div className="overflow-x-auto pb-1 pt-1">
-            <div className="inline-block min-w-[720px]">
-              {/* Month Header Row */}
-              <div className="flex text-[10px] text-slate-400 font-mono mb-1.5 pl-7">
-                {monthLabels.map((m, i) => (
-                  <span
-                    key={i}
-                    style={{ marginLeft: i === 0 ? '0px' : `${(m.col - (monthLabels[i - 1]?.col || 0)) * 16 - 24}px` }}
-                  >
-                    {m.label}
-                  </span>
-                ))}
-              </div>
-
-              {/* Main Days Grid with Day Labels */}
-              <div className="flex items-start gap-2">
-                {/* Day of Week Labels */}
-                <div className="grid grid-rows-7 gap-1 text-[9px] font-mono text-slate-400 leading-[12px] pt-0.5">
-                  <span className="h-3"></span>
-                  <span className="h-3">Mon</span>
-                  <span className="h-3"></span>
-                  <span className="h-3">Wed</span>
-                  <span className="h-3"></span>
-                  <span className="h-3">Fri</span>
-                  <span className="h-3"></span>
-                </div>
-
-                {/* Grid Columns (Weeks) */}
-                <div className="grid grid-rows-7 grid-flow-col gap-1">
-                  {heatmapData.map((cell, idx) => {
-                    let cellClass = 'bg-slate-100/90 border border-slate-200/50';
-                    if (cell.count >= 6) cellClass = 'bg-emerald-800 text-white';
-                    else if (cell.count >= 4) cellClass = 'bg-emerald-600 text-white';
-                    else if (cell.count >= 2) cellClass = 'bg-emerald-400 text-white';
-                    else if (cell.count >= 1) cellClass = 'bg-emerald-200 text-emerald-950';
-
-                    return (
-                      <div
-                        key={idx}
-                        title={`${cell.count} verification runs on ${cell.date}`}
-                        className={`w-3 h-3 rounded-[2px] transition-transform hover:scale-125 hover:ring-2 hover:ring-violet-500 cursor-pointer ${cellClass}`}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+          <dl className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs text-slate-500">Saved PR snapshots</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900">{totalSnapshots}</dd>
             </div>
-          </div>
-
-          {/* Status strip below Heatmap */}
-          <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span>5-Gate Pipeline: <strong className="text-slate-700">Active</strong></span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-violet-600" />
-                <span>TOCTOU Revision Watch: <strong className="text-slate-700">Zero desyncs</strong></span>
-              </span>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs text-slate-500">Verification runs</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900">{totalRuns}</dd>
             </div>
-
-            <div className="flex items-center gap-3">
-              <Link
-                href="/checks"
-                className="text-violet-700 hover:text-violet-800 hover:underline font-medium inline-flex items-center gap-1"
-              >
-                <span>Latest Receipt (receipt.json)</span>
-                <ArrowRight className="w-3 h-3" />
-              </Link>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <dt className="text-xs text-slate-500">Runs with verified results</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900">{verifiedRuns}</dd>
             </div>
-          </div>
-        </div>
+          </dl>
+        </section>
 
         {/* Core Workspaces Navigation (Compact 3-Column Row) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -327,7 +139,7 @@ export default function Overview({
               <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
             <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Triage tickets, request Muse proposals, and run falsifiable 5-gate verifications.
+              Open an issue, request a proposal, and review its checks.
             </p>
           </Link>
 
@@ -341,13 +153,13 @@ export default function Overview({
                   <CheckCircle2 className="w-4 h-4" />
                 </span>
                 <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
-                  Checks & Visual Studio
+                  Checks
                 </span>
               </div>
               <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
             <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Run verification suites with split sliders, side-by-side diffs, and cryptographic receipts.
+              Review verification results and visual comparisons.
             </p>
           </Link>
         </div>

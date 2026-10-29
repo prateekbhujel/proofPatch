@@ -1,7 +1,59 @@
 import React, { useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
-import { ArrowRight, Sparkles, Shield, AlertTriangle, CheckCircle2, MessageSquare, FileCode, Check, Copy, XCircle, Terminal } from 'lucide-react';
+import { ArrowRight, Sparkles, Shield, AlertTriangle, CheckCircle2, MessageSquare, FileCode, Check, Copy, XCircle, Terminal, GitPullRequest, ExternalLink, Lock, Kanban, Clock, Layers, FolderGit2, RefreshCw } from 'lucide-react';
+
+interface GitHubRepo {
+  fullName: string;
+  defaultBranch?: string;
+  isPrivate: boolean;
+  installedRepo?: boolean;
+}
+
+interface GitHubIssueItem {
+  number: number;
+  title: string;
+  body: string;
+  user: string;
+  htmlUrl: string;
+  createdAt: string;
+  labels: string[];
+  isPrivate: boolean;
+}
+
+interface GitHubPullItem {
+  number: number;
+  state: string;
+  isMerged?: boolean;
+  title: string;
+  head: string;
+  base: string;
+  headSha: string;
+  baseSha: string;
+  user: string;
+  isPrivate: boolean;
+}
+
+interface GitHubConnectionData {
+  isConfigured: boolean;
+  clientId: string | null;
+  isConnected: boolean;
+  user: {
+    login: string;
+    name?: string;
+    avatarUrl?: string;
+  } | null;
+  repositories: GitHubRepo[];
+  selectedRepo: string | null;
+  repoIssues: GitHubIssueItem[];
+  repoPulls: GitHubPullItem[];
+  deviceFlow: {
+    userCode: string;
+    verificationUri: string;
+    expiresAt: number;
+    interval: number;
+  } | null;
+}
 
 interface IssueContext {
   isSynthetic?: boolean;
@@ -22,6 +74,7 @@ interface Preview {
   body: Record<string, unknown>;
   digest: string;
   estimatedMicros: number;
+  approvalToken?: string;
 }
 
 interface CandidatePreview {
@@ -106,6 +159,28 @@ interface VerificationReport {
   backendSandboxGap: BackendSandboxGap;
 }
 
+interface WorkbenchTaskData {
+  id: number;
+  key: string;
+  repository: string;
+  issueNumber: number;
+  issueUrl: string | null;
+  title: string;
+  path: string;
+  status: 'queued' | 'in_progress' | 'needs_review' | 'completed' | 'failed' | 'publishing' | 'outcome_unknown';
+  provenance: string | null;
+  isDedicated: boolean;
+  isSynthetic: boolean;
+  isOfflineExample: boolean;
+  isSimulated: boolean;
+  verificationDecision: string | null;
+  model?: string | null;
+  publishedPrNumber: number | null;
+  publishedPrUrl: string | null;
+  publishedBranch: string | null;
+  updatedAt: string;
+}
+
 interface Props {
   context: IssueContext | null;
   preview: Preview | null;
@@ -113,24 +188,88 @@ interface Props {
   draft?: Draft | null;
   verificationReport?: VerificationReport | null;
   isOwnedFixture?: boolean;
+  isDedicatedTestRepo?: boolean;
+  publishedPr?: {
+    status: string;
+    prNumber: number;
+    prUrl: string;
+    branch: string;
+    commitSha: string;
+    draft: boolean;
+    repository: string;
+    publishedAt: string;
+    receiptSha256: string;
+  } | null;
+  hasPublicationToken?: boolean;
+  publisherDisconnected?: boolean;
   budget: { canRequest: boolean; attempts: number; maxAttempts: number } | null;
   error: string | null;
+  tasks?: WorkbenchTaskData[];
+  githubConnection?: GitHubConnectionData | null;
 }
 
-export default function Issues({ context, preview, suggestion, draft, verificationReport, isOwnedFixture, budget, error }: Props) {
+export default function Issues({
+  context,
+  preview,
+  suggestion,
+  draft,
+  verificationReport,
+  isOwnedFixture,
+  isDedicatedTestRepo,
+  publishedPr,
+  hasPublicationToken,
+  publisherDisconnected = true,
+  budget,
+  error,
+  tasks = [],
+  githubConnection = null,
+}: Props) {
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
-  const [approved, setApproved] = useState(false);
   const [sending, setSending] = useState(false);
   const [loadingOwned, setLoadingOwned] = useState(false);
+  const [loadingDedicated, setLoadingDedicated] = useState(false);
+  const [publishingPr, setPublishingPr] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [copiedReceipt, setCopiedReceipt] = useState(false);
   const [copiedCandidateSha, setCopiedCandidateSha] = useState(false);
   const [showPayloadDetails, setShowPayloadDetails] = useState(false);
+  const [loadingRepo, setLoadingRepo] = useState(false);
+  const [loadingIssueNum, setLoadingIssueNum] = useState<number | null>(null);
+  const [issuePathMap, setIssuePathMap] = useState<Record<number, string>>({});
+
+  function handleSelectRepo(repoName: string) {
+    if (!repoName) return;
+    setLoadingRepo(true);
+    router.post(
+      '/issues/select-repository',
+      { repository: repoName },
+      {
+        preserveScroll: true,
+        onFinish: () => setLoadingRepo(false),
+      }
+    );
+  }
+
+  function handleLoadIssue(issue: GitHubIssueItem) {
+    if (!githubConnection?.selectedRepo) return;
+    setLoadingIssueNum(issue.number);
+    const path = issuePathMap[issue.number] || 'src/OrderTotal.php';
+    router.post(
+      '/issues/load-issue',
+      {
+        repository: githubConnection.selectedRepo,
+        issue_number: issue.number,
+        path: path,
+      },
+      {
+        onFinish: () => setLoadingIssueNum(null),
+      }
+    );
+  }
 
   function captureIssue(event: React.FormEvent) {
     event.preventDefault();
-    setApproved(false);
     capture.post('/issues/preview');
   }
 
@@ -146,17 +285,45 @@ export default function Issues({ context, preview, suggestion, draft, verificati
     );
   }
 
+  function loadDedicated(event: React.MouseEvent) {
+    event.preventDefault();
+    setLoadingDedicated(true);
+    router.post(
+      '/issues/load-dedicated',
+      {},
+      {
+        onFinish: () => setLoadingDedicated(false),
+      }
+    );
+  }
+
+  function publishDraftPr(event: React.MouseEvent) {
+    event.preventDefault();
+    setPublishingPr(true);
+    router.post(
+      '/issues/publish-pr',
+      {},
+      {
+        onFinish: () => setPublishingPr(false),
+      }
+    );
+  }
+
   function requestSuggestion(event: React.FormEvent) {
     event.preventDefault();
-    if (!preview || !approved || !budget?.canRequest || sending) return;
+    const canSubmit = !sending && Boolean(preview) && (Boolean(budget?.canRequest) || isDedicatedTestRepo || isOwnedFixture);
+    if (!canSubmit) return;
     router.post(
       '/issues/propose',
-      { digest: preview.digest, approved: true },
+      {
+        digest: preview!.digest,
+        approved: true,
+        approval_token: preview!.approvalToken,
+      },
       {
         onStart: () => setSending(true),
         onFinish: () => {
           setSending(false);
-          setApproved(false);
         },
       }
     );
@@ -195,9 +362,102 @@ export default function Issues({ context, preview, suggestion, draft, verificati
     setTimeout(() => setCopiedCandidateSha(false), 2000);
   }
 
+  // Derive truthful Maintainer Task Board state from persisted server props
+  const taskState: 'none' | 'queued' | 'in_progress' | 'needs_review' | 'completed' = (() => {
+    if (!context) return 'none';
+    if (publishedPr) return 'completed';
+    if (verificationReport && verificationReport.decision === 'VERIFIED') return 'needs_review';
+    if (suggestion) return 'in_progress';
+    return 'queued';
+  })();
+
+  const queuedTasks = tasks.filter((t) => t.status === 'queued');
+  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress' || t.status === 'publishing');
+  const needsReviewTasks = tasks.filter((t) => t.status === 'needs_review');
+  const completedTasks = tasks.filter((t) => t.status === 'completed');
+  const failedTasks = tasks.filter((t) => t.status === 'failed' || t.status === 'outcome_unknown');
+
+  const renderTaskCard = (task: WorkbenchTaskData) => {
+    const isActive = Boolean(
+      context &&
+      context.repository === task.repository &&
+      context.issueNumber === task.issueNumber
+    );
+
+    return (
+      <div
+        key={task.id}
+        className={`rounded-md border p-2.5 space-y-1.5 shadow-2xs transition ${
+          isActive
+            ? 'border-indigo-400 bg-indigo-50/40 ring-1 ring-indigo-400'
+            : 'border-slate-200 bg-white hover:border-slate-300'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-[10px] font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-[120px]">
+            #{task.issueNumber} {task.repository.split('/')[1] || task.repository}
+          </span>
+          {isActive ? (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">
+              Active
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => router.post('/issues/switch-task', { task_id: task.id })}
+              className="text-[10px] font-medium text-slate-600 hover:text-slate-900 underline"
+            >
+              Select
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs font-semibold text-slate-900 line-clamp-2" title={task.title}>
+          {task.title}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+          <span className="text-[9px] font-mono text-slate-500 bg-slate-50 px-1 py-0.5 rounded border border-slate-200 truncate max-w-[140px]">
+            {task.path}
+          </span>
+          {task.isDedicated && (
+            <span className="text-[9px] font-semibold text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+              Dedicated
+            </span>
+          )}
+          {task.model && (
+            <span className="text-[9px] font-medium text-violet-800 bg-violet-50 px-1 py-0.5 rounded border border-violet-200">
+              {task.model}
+            </span>
+          )}
+          {task.isOfflineExample && (
+            <span className="text-[9px] font-medium text-slate-600 bg-slate-100 px-1 py-0.5 rounded border border-slate-200">
+              Offline Reference Example
+            </span>
+          )}
+          {task.isSimulated && task.status === 'needs_review' && (
+            <span className="text-[9px] font-semibold text-amber-800 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">
+              Simulated (Not Publishable)
+            </span>
+          )}
+          {!task.isSimulated && task.verificationDecision === 'VERIFIED' && (
+            <span className="text-[9px] font-semibold text-emerald-800 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+              VERIFIED
+            </span>
+          )}
+          {task.publishedPrNumber ? (
+            <span className="text-[9px] font-semibold text-violet-800 bg-violet-50 px-1 py-0.5 rounded border border-violet-200">
+              PR #{task.publishedPrNumber}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <AppLayout activeNav="issues">
-      <Head title="Issues Workbench · ProofPatch" />
+      <Head title="Issues Workbench · ProofPatcher" />
       <div className="mx-auto max-w-4xl space-y-5">
         {/* Compact Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-4">
@@ -221,66 +481,485 @@ export default function Issues({ context, preview, suggestion, draft, verificati
           </div>
         )}
 
-        {/* 1. Ticket Intake & Target File */}
+        {/* Maintainer Task Board */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-slate-100 pb-2">
+            <div>
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Kanban className="w-3.5 h-3.5 text-slate-600" />
+                Maintainer Task Board
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Truthful workflow state backed strictly by persisted server execution results. No fake drag/drop.
+              </p>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+              <span>Screenshots: Unimplemented pending grant verification (Text-only inference active)</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {/* Column 1: Queued */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-500" />
+                  Queued
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700">
+                  {tasks.length > 0 ? queuedTasks.length : (taskState === 'queued' ? '1' : '0')}
+                </span>
+              </div>
+              {tasks.length > 0 ? (
+                queuedTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {queuedTasks.map(renderTaskCard)}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 italic p-2 text-center">No queued tickets</div>
+                )
+              ) : taskState === 'queued' && context ? (
+                <div className="rounded-md border border-blue-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      #{context.issueNumber}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500 truncate max-w-[100px]">{context.path}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 line-clamp-2">{context.title}</p>
+                  <p className="text-[11px] text-slate-500">Awaiting maintainer approval to assign to Muse.</p>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-2 text-center">No queued tickets</div>
+              )}
+            </div>
+
+            {/* Column 2: In Progress */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-violet-800 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-violet-600" />
+                  In Progress
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-violet-100 text-violet-800">
+                  {tasks.length > 0 ? inProgressTasks.length : (taskState === 'in_progress' ? '1' : '0')}
+                </span>
+              </div>
+              {tasks.length > 0 ? (
+                inProgressTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {inProgressTasks.map(renderTaskCard)}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 italic p-2 text-center">No active proposals</div>
+                )
+              ) : taskState === 'in_progress' && context && suggestion ? (
+                <div className="rounded-md border border-violet-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-violet-800 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200">
+                      #{context.issueNumber}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-600">{suggestion.model || 'Muse Reference'}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 line-clamp-2">{context.title}</p>
+                  <p className="text-[11px] text-slate-500">Proposal generated; awaiting 5-gate verifier execution.</p>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-2 text-center">No active proposals</div>
+              )}
+            </div>
+
+            {/* Column 3: Needs Review */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                  <Shield className="w-3 h-3 text-amber-600" />
+                  Needs Review
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800">
+                  {tasks.length > 0 ? needsReviewTasks.length : (taskState === 'needs_review' ? '1' : '0')}
+                </span>
+              </div>
+              {tasks.length > 0 ? (
+                needsReviewTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {needsReviewTasks.map(renderTaskCard)}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 italic p-2 text-center">No pending reviews</div>
+                )
+              ) : taskState === 'needs_review' && context && verificationReport ? (
+                <div className="rounded-md border border-amber-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      5/5 Gates Passed
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">Receipt SHA</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 line-clamp-2">{context.title}</p>
+                  <p className="text-[11px] text-slate-500">Verified; ready for maintainer draft PR review.</p>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-2 text-center">No pending reviews</div>
+              )}
+            </div>
+
+            {/* Column 4: Completed */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  Completed
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
+                  {tasks.length > 0 ? completedTasks.length : (taskState === 'completed' ? '1' : '0')}
+                </span>
+              </div>
+              {tasks.length > 0 ? (
+                completedTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {completedTasks.map(renderTaskCard)}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 italic p-2 text-center">No completed tasks</div>
+                )
+              ) : taskState === 'completed' && context && publishedPr ? (
+                <div className="rounded-md border border-emerald-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      Draft PR #{publishedPr.prNumber}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500 truncate max-w-[80px]">{publishedPr.branch}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 line-clamp-2">{context.title}</p>
+                  <p className="text-[11px] text-slate-500">Published in disconnected mode with evidence.</p>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-2 text-center">No completed tasks</div>
+              )}
+            </div>
+          </div>
+
+          {/* Failed Tasks Drawer if any */}
+          {failedTasks.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                  <XCircle className="w-3 h-3 text-rose-600" />
+                  Failed Verification Tasks ({failedTasks.length})
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {failedTasks.map((task) => (
+                  <div key={task.id} className="rounded-md border border-rose-200 bg-rose-50/40 p-2.5 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-semibold text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded border border-rose-200 truncate max-w-[120px]">
+                        #{task.issueNumber} {task.repository.split('/')[1] || task.repository}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => router.post('/issues/switch-task', { task_id: task.id })}
+                        className="text-[10px] font-medium text-slate-600 hover:text-slate-900 underline"
+                      >
+                        Select
+                      </button>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-900 line-clamp-2">{task.title}</p>
+                    <div className="flex items-center gap-1 text-[9px] font-medium text-rose-700">
+                      <span>Failed: {task.verificationDecision || 'FAILED'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 1. Ticket Intake & Repository Browser */}
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
             <div>
               <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">1. Ticket Intake</h2>
-              <span className="text-[11px] text-slate-500">Load synthetic fixture or enter public issue</span>
+              <span className="text-[11px] text-slate-500">
+                {githubConnection?.isConnected
+                  ? 'Select an authorized repository to browse issues, or use dedicated test cases'
+                  : 'Connect GitHub or load dedicated test cases to verify the workflow'}
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={loadOwned}
-              disabled={loadingOwned}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition disabled:opacity-50"
-            >
-              <FileCode className="w-3.5 h-3.5 text-violet-600" />
-              <span>{loadingOwned ? 'Loading…' : 'Load Owned Synthetic Case'}</span>
-            </button>
-          </div>
-
-          <form onSubmit={captureIssue} className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="issue-url" className="block text-xs font-medium text-slate-700">
-                  Public GitHub Issue URL
-                </label>
-                <input
-                  id="issue-url"
-                  type="url"
-                  required
-                  placeholder="https://github.com/owner/repo/issues/123"
-                  value={capture.data.issue_url}
-                  onChange={(e) => capture.setData('issue_url', e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent shadow-2xs"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="source-path" className="block text-xs font-medium text-slate-700">
-                  Target File Path
-                </label>
-                <input
-                  id="source-path"
-                  required
-                  placeholder="public/fixtures/checkout.html or src/OrderTotal.php"
-                  value={capture.data.path}
-                  onChange={(e) => capture.setData('path', e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent shadow-2xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end pt-1">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                type="submit"
-                disabled={capture.processing}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
+                type="button"
+                onClick={loadDedicated}
+                disabled={loadingDedicated}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition disabled:opacity-50"
+                title="Load the configured test issue"
               >
-                <span>{capture.processing ? 'Capturing…' : 'Preview Target'}</span>
+                <GitPullRequest className="w-3.5 h-3.5 text-emerald-700" />
+                <span>{loadingDedicated ? 'Loading…' : 'Load Dedicated Test Issue (#1)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={loadOwned}
+                disabled={loadingOwned}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition disabled:opacity-50"
+              >
+                <FileCode className="w-3.5 h-3.5 text-slate-600" />
+                <span>{loadingOwned ? 'Loading…' : 'Load Synthetic Fixture'}</span>
               </button>
             </div>
-          </form>
+          </div>
+
+          {githubConnection?.isConnected ? (
+            <div className="space-y-4">
+              {/* Connected Account & Repository Selector */}
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  {githubConnection.user?.avatarUrl ? (
+                    <img
+                      src={githubConnection.user.avatarUrl}
+                      alt={githubConnection.user.login}
+                      className="w-7 h-7 rounded-full border border-slate-300"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs">
+                      {githubConnection.user?.login?.slice(0, 2).toUpperCase() || 'GH'}
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs font-semibold text-slate-900 block leading-tight">
+                      @{githubConnection.user?.login}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {githubConnection.repositories.length} authorized {githubConnection.repositories.length === 1 ? 'repository' : 'repositories'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Repository Dropdown */}
+                <div className="flex items-center gap-2 flex-1 sm:max-w-md">
+                  <label htmlFor="repo-select" className="text-xs font-medium text-slate-700 shrink-0">
+                    Repo:
+                  </label>
+                  <select
+                    id="repo-select"
+                    value={githubConnection.selectedRepo || ''}
+                    onChange={(e) => handleSelectRepo(e.target.value)}
+                    disabled={loadingRepo}
+                    className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-600 shadow-2xs"
+                  >
+                    <option value="">-- Choose a repository --</option>
+                    {githubConnection.repositories.map((repo) => (
+                      <option key={repo.fullName} value={repo.fullName}>
+                        {repo.fullName} {repo.isPrivate ? '(Private)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {githubConnection.selectedRepo && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectRepo(githubConnection.selectedRepo!)}
+                      disabled={loadingRepo}
+                      title="Reload issues and pull requests"
+                      className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingRepo ? 'animate-spin' : ''}`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Issues / Pull Requests list */}
+              {githubConnection.selectedRepo ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">
+                        Issues in <code className="text-violet-700 font-mono">{githubConnection.selectedRepo}</code>
+                      </span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                        {githubConnection.repoIssues?.length || 0} open
+                      </span>
+                    </div>
+                    {githubConnection.repoPulls && githubConnection.repoPulls.length > 0 && (
+                      <span className="text-[11px] text-slate-500">
+                        {githubConnection.repoPulls.length} active PR{githubConnection.repoPulls.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+
+                  {githubConnection.repoIssues && githubConnection.repoIssues.length > 0 ? (
+                    <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                      {githubConnection.repoIssues.map((issue) => {
+                        const targetPath = issuePathMap[issue.number] ?? 'src/OrderTotal.php';
+                        const isLoadingThis = loadingIssueNum === issue.number;
+                        return (
+                          <div
+                            key={issue.number}
+                            className="rounded-lg border border-slate-200 bg-white p-3 space-y-2 shadow-2xs hover:border-slate-300 transition"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-bold text-slate-900">
+                                    #{issue.number}
+                                  </span>
+                                  <a
+                                    href={issue.htmlUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-semibold text-slate-900 hover:text-violet-700 hover:underline flex items-center gap-1"
+                                  >
+                                    <span>{issue.title}</span>
+                                    <ExternalLink className="w-3 h-3 text-slate-400 inline" />
+                                  </a>
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                  <span>Opened by @{issue.user}</span>
+                                  {issue.labels && issue.labels.length > 0 && (
+                                    <>
+                                      <span>·</span>
+                                      <div className="flex items-center gap-1">
+                                        {issue.labels.map((l) => (
+                                          <span
+                                            key={l}
+                                            className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                                          >
+                                            {l}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-1">
+                                  <label htmlFor={`target-path-${issue.number}`} className="sr-only">
+                                    Target file path
+                                  </label>
+                                  <input
+                                    id={`target-path-${issue.number}`}
+                                    type="text"
+                                    value={targetPath}
+                                    onChange={(e) =>
+                                      setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
+                                    }
+                                    placeholder="src/OrderTotal.php"
+                                    className="w-36 rounded border border-slate-300 px-2 py-1 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
+                                    title="Target source file to repair"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleLoadIssue(issue)}
+                                  disabled={isLoadingThis}
+                                  className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
+                                >
+                                  <span>{isLoadingThis ? 'Loading…' : 'Open in Workbench'}</span>
+                                </button>
+                              </div>
+                            </div>
+                            {issue.body && (
+                              <p className="text-[11px] text-slate-600 line-clamp-2 font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
+                                {issue.body}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500 space-y-1">
+                      <p className="font-medium text-slate-700">No open issues found in this repository.</p>
+                      <p className="text-[11px]">
+                        Create an issue on GitHub or select another repository from the dropdown above.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500 space-y-1">
+                  <FolderGit2 className="w-6 h-6 mx-auto text-slate-400 mb-1" />
+                  <p className="font-semibold text-slate-700">Choose a repository to start</p>
+                  <p className="text-[11px]">
+                    Select any authorized repository above to load its open issues directly into the workbench.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900">Connect GitHub to load your repositories</span>
+                  <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded">
+                    Direct integration
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Connect your account to pick repositories and load issues with one click, without copying and pasting URLs.
+                </p>
+              </div>
+              <Link
+                href="/settings"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition shrink-0"
+              >
+                <span>Connect GitHub</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
+
+          {/* Collapsible Manual URL or Custom Target Input */}
+          <details className="rounded-lg border border-slate-200 p-3 bg-slate-50/40 text-xs">
+            <summary className="cursor-pointer font-semibold text-slate-700 hover:text-slate-900">
+              Manual Issue URL or Custom Target File
+            </summary>
+            <form onSubmit={captureIssue} className="space-y-3 pt-3 mt-2 border-t border-slate-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="issue-url" className="block text-xs font-medium text-slate-700">
+                    Public GitHub Issue URL
+                  </label>
+                  <input
+                    id="issue-url"
+                    type="url"
+                    required
+                    placeholder="https://github.com/owner/repo/issues/123"
+                    value={capture.data.issue_url}
+                    onChange={(e) => capture.setData('issue_url', e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="source-path" className="block text-xs font-medium text-slate-700">
+                    Target File Path
+                  </label>
+                  <input
+                    id="source-path"
+                    required
+                    placeholder="public/fixtures/checkout.html or src/OrderTotal.php"
+                    value={capture.data.path}
+                    onChange={(e) => capture.setData('path', e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 focus:border-transparent shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={capture.processing}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
+                >
+                  <span>{capture.processing ? 'Capturing…' : 'Preview Target'}</span>
+                </button>
+              </div>
+            </form>
+          </details>
         </section>
 
         {/* 2. Muse Task Triage & Proposal Review */}
@@ -348,33 +1027,38 @@ export default function Issues({ context, preview, suggestion, draft, verificati
 
             {!suggestion && (
               <form onSubmit={requestSuggestion} className="space-y-3 pt-2 border-t border-slate-100">
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={approved}
-                    onChange={(e) => setApproved(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-600"
-                  />
-                  <span>I reviewed the exact JSON payload and approve sending to Muse Spark Open.</span>
-                </label>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={!approved || !budget?.canRequest || sending}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{sending ? 'Requesting Muse…' : 'Ask Muse'}</span>
-                  </button>
-                  <span className="text-[11px] text-slate-500">
-                    Estimated reservation: ${(preview.estimatedMicros / 1000000).toFixed(4)}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={sending || (!budget?.canRequest && !isDedicatedTestRepo && !isOwnedFixture)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        {sending
+                          ? 'Assigning to Muse…'
+                          : budget?.canRequest
+                          ? 'Assign to Muse'
+                          : 'Load Offline Reference Repair'}
+                      </span>
+                    </button>
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {budget?.canRequest
+                        ? `Estimated reservation: $${(preview.estimatedMicros / 1000000).toFixed(4)}`
+                        : 'Offline reference repair ($0.00)'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Sends sanitized issue context and target source for patch generation
                   </span>
                 </div>
 
                 {!budget?.canRequest && (
                   <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded border border-amber-200">
-                    Local model request allowance is exhausted. No request will be sent.
+                    {isDedicatedTestRepo || isOwnedFixture
+                      ? 'Local model request allowance is exhausted. You can load and verify the authentic offline reference example for this owned case.'
+                      : 'Local model request allowance is exhausted. No external request will be sent.'}
                   </p>
                 )}
               </form>
@@ -448,16 +1132,16 @@ export default function Issues({ context, preview, suggestion, draft, verificati
             )}
 
             {/* Verifier Action CTA */}
-            {(isOwnedFixture || suggestion.path === 'src/OrderTotal.php') && (
+            {(isOwnedFixture || isDedicatedTestRepo) && (
               <div className="rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50/80 to-purple-50/50 p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h3 className="text-xs font-bold text-violet-950 flex items-center gap-1.5">
                       <Shield className="w-4 h-4 text-violet-700" />
-                      <span>Falsifiable ProofPatch Verifier</span>
+                      <span>Falsifiable ProofPatcher Verifier</span>
                     </h3>
                     <p className="text-[11px] text-violet-800 mt-0.5">
-                      Runs AST safety checks, baseline failure reproduction, negative control guard, and signs cryptographic receipt.
+                      Runs isolated AST token checks, baseline failure reproduction, negative control guard, and candidate tests (replicated bounded test cases).
                     </p>
                   </div>
                   <button
@@ -467,7 +1151,7 @@ export default function Issues({ context, preview, suggestion, draft, verificati
                     className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50 shrink-0"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
-                    <span>{verifying ? 'Running 5-Gate Verifier…' : (verificationReport ? 'Re-run Verifier' : 'Run ProofPatch Verifier')}</span>
+                    <span>{verifying ? 'Running 5-Gate Verifier…' : (verificationReport ? 'Re-run Verifier' : 'Run ProofPatcher Verifier')}</span>
                   </button>
                 </div>
 
@@ -476,24 +1160,24 @@ export default function Issues({ context, preview, suggestion, draft, verificati
                   <div className="rounded-lg bg-white/90 border border-violet-200 p-3 space-y-2 text-xs font-mono">
                     <div className="flex items-center gap-2 text-violet-900 font-semibold text-[11px]">
                       <span className="w-2 h-2 rounded-full bg-violet-600 animate-ping" />
-                      <span>Executing Falsifiable Verification Pipeline…</span>
+                      <span>Executing Verification Pipeline…</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 pt-1">
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Static AST Guard</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                        <span>Inspecting AST & tokens</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Baseline Exit Code 1</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                        <span>Evaluating baseline run</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Negative Control Catch</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                        <span>Testing negative control</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Candidate Exit Code 0</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                        <span>Evaluating candidate test</span>
                       </div>
                     </div>
                   </div>
@@ -531,42 +1215,82 @@ export default function Issues({ context, preview, suggestion, draft, verificati
                   </span>
                 </div>
 
-                {/* 4-Gate Status Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 5-Gate Status Grid - Dynamically rendered from actual verification report */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                   <div className="rounded-lg border border-slate-200 p-2.5 bg-slate-50/50">
                     <span className="text-[10px] font-semibold text-slate-500 uppercase block">1. Baseline</span>
-                    <span className="text-xs font-bold text-emerald-700 block mt-0.5">Passed (Exit 1)</span>
-                    <span className="text-[10px] text-slate-500">Bug reproduced</span>
+                    <span className={`text-xs font-bold block mt-0.5 ${verificationReport.gates.baselineReproduced ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {verificationReport.gates.baselineReproduced ? 'Passed (Exit 1)' : `Failed (Exit ${verificationReport.runs.baseline?.exitCode ?? '?'})`}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {verificationReport.gates.baselineReproduced ? 'Bug reproduced' : 'Reproduction failed'}
+                    </span>
                   </div>
 
                   <div className="rounded-lg border border-slate-200 p-2.5 bg-slate-50/50">
                     <span className="text-[10px] font-semibold text-slate-500 uppercase block">2. Neg Control</span>
-                    <span className="text-xs font-bold text-emerald-700 block mt-0.5">Passed (Exit 1)</span>
-                    <span className="text-[10px] text-slate-500">Shortcut caught</span>
+                    <span className={`text-xs font-bold block mt-0.5 ${verificationReport.gates.negativeControlCaught ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {verificationReport.gates.negativeControlCaught ? 'Caught (Exit 1)' : `Failed (Exit ${verificationReport.runs.negative?.exitCode ?? '?'})`}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {verificationReport.gates.negativeControlCaught ? 'Shortcut caught (expected exit 1)' : 'Negative control missed or failed'}
+                    </span>
                   </div>
 
                   <div className="rounded-lg border border-slate-200 p-2.5 bg-slate-50/50">
                     <span className="text-[10px] font-semibold text-slate-500 uppercase block">3. Candidate</span>
-                    <span className="text-xs font-bold text-emerald-700 block mt-0.5">Passed (Exit 0)</span>
-                    <span className="text-[10px] text-slate-500">All tests pass</span>
+                    <span className={`text-xs font-bold block mt-0.5 ${verificationReport.gates.candidatePassed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {verificationReport.gates.candidatePassed ? 'Passed (Exit 0)' : `Failed (Exit ${verificationReport.runs.candidate?.exitCode ?? '?'})`}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {verificationReport.gates.candidatePassed ? 'All tests pass' : (verificationReport.runs.candidate?.exitCode === 255 ? 'Host execution blocked' : 'Test failed')}
+                    </span>
                   </div>
 
                   <div className="rounded-lg border border-slate-200 p-2.5 bg-slate-50/50">
                     <span className="text-[10px] font-semibold text-slate-500 uppercase block">4. AST Safety</span>
-                    <span className="text-xs font-bold text-emerald-700 block mt-0.5">0 Violations</span>
-                    <span className="text-[10px] text-slate-500">Zero syscalls</span>
+                    <span className={`text-xs font-bold block mt-0.5 ${verificationReport.gates.candidateStaticSafetyPassed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {verificationReport.gates.candidateStaticSafetyPassed ? '0 Violations' : 'Disallowed Token'}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {verificationReport.gates.candidateStaticSafetyPassed ? 'Static token guard' : 'AST safety rejection'}
+                    </span>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 p-2.5 bg-slate-50/50 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase block">5. Fixture Allowlist</span>
+                    <span className={`text-xs font-bold block mt-0.5 ${verificationReport.gates.allowlistIntegrityIntact ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {verificationReport.gates.allowlistIntegrityIntact ? 'Passed (Intact)' : 'Tampered / Mismatch'}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {verificationReport.gates.allowlistIntegrityIntact ? 'Fixture hash matched' : 'Allowlist SHA altered'}
+                    </span>
                   </div>
                 </div>
 
                 {/* Modern Cryptographic Receipt Card */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 text-slate-100 p-4 space-y-2.5 shadow-xs">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className={`rounded-xl border p-4 space-y-2.5 shadow-xs ${
+                  verificationReport.decision === 'VERIFIED'
+                    ? 'border-slate-800 bg-slate-900 text-slate-100'
+                    : 'border-slate-300 bg-slate-800 text-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between border-b border-slate-700 pb-2">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                      <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Cryptographic Integrity Receipt</span>
+                      <Shield className={`w-3.5 h-3.5 ${verificationReport.decision === 'VERIFIED' ? 'text-emerald-400' : 'text-amber-400'}`} />
+                      <span>Cryptographic Integrity Manifest</span>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-                      VALID · {verificationReport.receipt.externallyAnchored ? 'Externally Anchored' : 'Locally Generated Manifest'}
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                      verificationReport.decision === 'VERIFIED'
+                        ? (verificationReport.receipt?.integrity === 'VALID'
+                            ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800'
+                            : 'text-amber-400 bg-amber-950/80 border-amber-800')
+                        : 'text-rose-300 bg-rose-950/80 border-rose-800'
+                    }`}>
+                      {verificationReport.decision === 'VERIFIED'
+                        ? (verificationReport.receipt?.integrity === 'VALID'
+                            ? `VALID · ${verificationReport.receipt?.externallyAnchored ? 'Externally Anchored' : 'Unanchored Local Manifest'}`
+                            : `MANIFEST ${verificationReport.receipt?.integrity ?? 'MISSING'}`)
+                        : `DECISION: ${verificationReport.decision} · MANIFEST ${verificationReport.receipt?.integrity ?? 'NONE'}`}
                     </span>
                   </div>
 
@@ -574,11 +1298,11 @@ export default function Issues({ context, preview, suggestion, draft, verificati
                     <span className="block text-[10px] text-slate-400 mb-1">Receipt Manifest Digest (SHA-256)</span>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 font-mono text-xs bg-slate-950 px-3 py-1.5 rounded border border-slate-800 text-emerald-400 truncate">
-                        {verificationReport.receipt.sha256}
+                        {verificationReport.receipt?.sha256 ?? 'Unavailable'}
                       </code>
                       <button
                         type="button"
-                        onClick={() => copyReceipt(verificationReport.receipt.sha256)}
+                        onClick={() => verificationReport.receipt?.sha256 && copyReceipt(verificationReport.receipt.sha256)}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition shrink-0"
                         title="Copy receipt SHA-256"
                       >
@@ -603,19 +1327,103 @@ export default function Issues({ context, preview, suggestion, draft, verificati
                   </summary>
                   <div className="mt-2.5 space-y-2 text-xs font-mono">
                     <div className="bg-white p-2.5 rounded border border-slate-200">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Baseline Log (Exit 1)</span>
-                      <p className="text-rose-700 text-[11px] whitespace-pre-wrap">{verificationReport.runs.baseline.summary}</p>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                        Baseline Log (Exit {verificationReport.runs.baseline?.exitCode ?? '?'})
+                      </span>
+                      <p className={`text-[11px] whitespace-pre-wrap ${verificationReport.gates.baselineReproduced ? 'text-rose-700' : 'text-slate-600'}`}>
+                        {verificationReport.runs.baseline?.summary}
+                      </p>
                     </div>
                     <div className="bg-white p-2.5 rounded border border-slate-200">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Negative Control Log (Exit 1)</span>
-                      <p className="text-rose-700 text-[11px] whitespace-pre-wrap">{verificationReport.runs.negative.summary}</p>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                        Negative Control Log (Exit {verificationReport.runs.negative?.exitCode ?? '?'})
+                      </span>
+                      <p className={`text-[11px] whitespace-pre-wrap ${verificationReport.gates.negativeControlCaught ? 'text-rose-700' : 'text-slate-600'}`}>
+                        {verificationReport.runs.negative?.summary}
+                      </p>
                     </div>
                     <div className="bg-white p-2.5 rounded border border-slate-200">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Candidate Log (Exit 0)</span>
-                      <p className="text-emerald-700 text-[11px] whitespace-pre-wrap">{verificationReport.runs.candidate.summary}</p>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                        Candidate Log (Exit {verificationReport.runs.candidate?.exitCode ?? '?'})
+                      </span>
+                      <p className={`text-[11px] whitespace-pre-wrap ${verificationReport.gates.candidatePassed ? 'text-emerald-700' : 'text-rose-700 font-semibold'}`}>
+                        {verificationReport.runs.candidate?.summary}
+                      </p>
                     </div>
                   </div>
                 </details>
+
+                {/* Pull Request Publication Section */}
+                {verificationReport.decision === 'VERIFIED' && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div className="flex items-center gap-2">
+                        <GitPullRequest className="w-4 h-4 text-violet-600" />
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                          Dedicated Test Repo Publication
+                        </h4>
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase px-2 py-0.5 rounded bg-slate-100">
+                        configured repository
+                      </span>
+                    </div>
+
+                    {publishedPr ? (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            Draft Pull Request Prepared (#{publishedPr.prNumber})
+                          </span>
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                            Draft Only · No Auto-Merge
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          Branch <code className="font-mono text-emerald-900">{publishedPr.branch}</code> bound to verified receipt <code className="font-mono text-emerald-900">{publishedPr.receiptSha256.slice(0, 12)}…</code>
+                        </p>
+                        <div className="pt-1">
+                          <a
+                            href={publishedPr.prUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-900 hover:underline"
+                          >
+                            <span>View Draft PR on GitHub</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-600">
+                          The proposal passed all 5 verification gates. Prepare a draft pull request in the dedicated test repository (<code className="font-mono text-slate-800">configured repository</code>) with cryptographic audit evidence attached.
+                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                          <span className="text-[10px] text-slate-500 italic">
+                            Strict allowlist: Only dedicated test repo is authorized. No automatic merge.
+                          </span>
+                          {publisherDisconnected ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-amber-800 bg-amber-50 border border-amber-200">
+                              <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>PR Creation Held in Review Safety Mode</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={publishDraftPr}
+                              disabled={publishingPr}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
+                            >
+                              <GitPullRequest className="w-3.5 h-3.5" />
+                              <span>{publishingPr ? 'Preparing Draft PR…' : 'Create Draft PR in Dedicated Test Repo'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <p className="text-[11px] text-slate-500">
                   Allowlisted bounded run. Autonomous untrusted code execution requires containerized microVMs. See <Link href="/docs" className="text-violet-700 hover:underline">Documentation</Link>.

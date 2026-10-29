@@ -12,8 +12,11 @@
 /.worktrees/
 /database/*.sqlite*
 /bootstrap/cache/*.php
+/storage/app/
 /storage/framework/cache/data/*
 /storage/framework/sessions/*
 !/storage/framework/sessions/.gitignore
 /storage/framework/views/*.php
 *.log
+__pycache__/
+*.pyc

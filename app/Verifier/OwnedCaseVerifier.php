@@ -21,6 +21,7 @@ final readonly class OwnedCaseVerifier
 {
     public const KNOWN_BASE_SHA256 = '54bc37fb2b005badcf309c5a7091ba6a2e704fc54c8eff9e9c7afee7e4054859';
     public const KNOWN_TEST_SHA256 = 'b8079fb1e7731fc763f0b009a11c2786d01b52cce08f7431768a64e8a5ef2cbf';
+    public const KNOWN_TEST_SHA256_DEDICATED = '263eb70cbf346221858b9c64ba97384105d3804089a653d63d016664e8c1320e';
     public const KNOWN_TRUSTED_CANDIDATE_SHA256 = 'd102376bea8e1bdb745cf0f4026540574254e741a590be455a94dceb1a69f8fb';
 
     private const FORBIDDEN_FUNCTIONS = [
@@ -31,11 +32,23 @@ final readonly class OwnedCaseVerifier
         'dl', 'create_function', 'posix_kill', 'call_user_func', 'call_user_func_array',
         'forward_static_call', 'forward_static_call_array', 'reflectionfunction',
         'reflectionclass', 'reflectionmethod', 'getenv', 'putenv', 'unserialize',
+        'readfile', 'file', 'scandir', 'glob', 'parse_ini_file', 'show_source',
+        'highlight_file', 'symlink', 'link', 'dio_read', 'dio_write', 'readlink',
+        'is_dir', 'is_executable', 'is_file', 'is_link', 'is_readable', 'is_writable',
+        'fwrite', 'fputs', 'printf', 'vprintf', 'fprintf', 'vfprintf', 'print_r',
+        'var_dump', 'var_export', 'debug_zval_dump', 'debug_print_backtrace', 'fpassthru',
+        'ob_start', 'ob_flush', 'ob_clean', 'ob_end_flush', 'ob_end_clean', 'ob_get_contents',
+        'ob_get_clean', 'ob_get_flush', 'ob_implicit_flush',
+        'register_shutdown_function', 'register_tick_function', 'set_error_handler',
+        'set_exception_handler', 'error_reporting', 'restore_error_handler', 'restore_exception_handler',
+        'fastcgi_finish_request',
     ];
 
     public function __construct(
         private string $project,
-        private ?string $runsRoot = null
+        private ?string $runsRoot = null,
+        private ?\ProofPatch\GitHub\ServerHeldPublicationApproval $approvalStore = null,
+        private ?IsolatedRunnerInterface $isolatedRunner = null
     ) {
         if (realpath($project) !== $project) {
             throw new \InvalidArgumentException('Expected a resolved project directory.');
@@ -58,11 +71,23 @@ final readonly class OwnedCaseVerifier
             ];
         }
 
+        $depth = 0;
+        $inDeclare = false;
+        $inSignature = false;
         $count = count($tokens);
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
 
             if (is_string($token)) {
+                if ($token === '{') {
+                    $depth++;
+                    $inSignature = false;
+                } elseif ($token === '}') {
+                    $depth = max(0, $depth - 1);
+                } elseif ($token === ';') {
+                    $inDeclare = false;
+                }
+
                 if ($token === '`') {
                     return [
                         'safe' => false,
@@ -97,6 +122,58 @@ final readonly class OwnedCaseVerifier
             }
 
             [$id, $text] = $token;
+
+            if ($id === T_EXIT) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Candidate contains disallowed exit or die language construct.',
+                ];
+            }
+
+            if ($id === T_ECHO || $id === T_PRINT) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Candidate contains disallowed output construct (echo/print). Pure calculation library files must not produce side-effect output.',
+                ];
+            }
+
+            if ($id === T_INLINE_HTML) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Candidate contains disallowed inline HTML / raw output text. Pure PHP library files must not produce side-effect output.',
+                ];
+            }
+
+            if ($id === T_CLOSE_TAG) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Candidate contains disallowed closing PHP tag (?>). Pure PHP library files must omit closing tags.',
+                ];
+            }
+
+            if ($id === T_HALT_COMPILER) {
+                return [
+                    'safe' => false,
+                    'reason' => 'Candidate contains disallowed __halt_compiler construct.',
+                ];
+            }
+
+            if ($id === T_DECLARE) {
+                $inDeclare = true;
+            }
+
+            if ($id === T_FUNCTION || $id === T_CLASS) {
+                $inSignature = true;
+            }
+
+            if ($depth === 0 && !$inDeclare && !$inSignature) {
+                if (!in_array($id, [T_OPEN_TAG, T_USE, T_COMMENT, T_DOC_COMMENT, T_WHITESPACE], true)) {
+                    return [
+                        'safe' => false,
+                        'reason' => 'Candidate contains disallowed top-level executable statement outside function or class declaration: ' . token_name($id),
+                    ];
+                }
+            }
 
             if ($id === T_EVAL) {
                 return [
@@ -143,13 +220,31 @@ final readonly class OwnedCaseVerifier
                 }
             }
 
-            if ($id === T_STRING) {
-                $lower = strtolower($text);
-                if (in_array($lower, self::FORBIDDEN_FUNCTIONS, true)) {
+            $isNameToken = ($id === T_STRING)
+                || (defined('T_NAME_QUALIFIED') && $id === T_NAME_QUALIFIED)
+                || (defined('T_NAME_FULLY_QUALIFIED') && $id === T_NAME_FULLY_QUALIFIED)
+                || (defined('T_NAME_RELATIVE') && $id === T_NAME_RELATIVE);
+
+            if ($isNameToken) {
+                $canonicalName = strtolower(ltrim($text, '\\'));
+                if (in_array($canonicalName, self::FORBIDDEN_FUNCTIONS, true)) {
                     return [
                         'safe' => false,
                         'reason' => "Candidate contains disallowed function call: {$text}().",
                     ];
+                }
+            }
+
+            if ($id === T_NS_SEPARATOR) {
+                $next = self::nextNonWhitespace($tokens, $i);
+                if ($next !== null && is_array($next)) {
+                    $nextName = strtolower(ltrim($next[1], '\\'));
+                    if (in_array($nextName, self::FORBIDDEN_FUNCTIONS, true)) {
+                        return [
+                            'safe' => false,
+                            'reason' => "Candidate contains disallowed function call: \\{$next[1]}().",
+                        ];
+                    }
                 }
             }
         }
@@ -180,13 +275,17 @@ final readonly class OwnedCaseVerifier
         }
 
         $baseSource = (string) file_get_contents($baseFile);
-        $testSource = (string) file_get_contents($testFile);
+        if ($context !== null && isset($context['testSource']) && is_string($context['testSource'])) {
+            $testSource = $context['testSource'];
+        } else {
+            $testSource = (string) file_get_contents($testFile);
+        }
 
         $actualBaseSha = hash('sha256', $baseSource);
         $actualTestSha = hash('sha256', $testSource);
 
         $allowlistIntact = hash_equals(self::KNOWN_BASE_SHA256, $actualBaseSha)
-            && hash_equals(self::KNOWN_TEST_SHA256, $actualTestSha);
+            && (hash_equals(self::KNOWN_TEST_SHA256, $actualTestSha) || hash_equals(self::KNOWN_TEST_SHA256_DEDICATED, $actualTestSha));
 
         if (!$allowlistIntact) {
             throw new \RuntimeException('Owned review case fixture integrity check failed.');
@@ -205,49 +304,125 @@ final readonly class OwnedCaseVerifier
         // 1. Static AST Safety check
         $safety = self::checkCandidateSafety($candidateSource);
         $candidateStaticSafetyPassed = $safety['safe'];
+        $candidateSha = hash('sha256', $candidateSource);
+        $isTrustedFixtureCandidate = hash_equals(self::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha);
 
         // 2. Generate git-compatible patch diff
         $patchDiff = $this->generateDiff($baseSource, $candidateSource);
         file_put_contents($evidence . '/patch.diff', $patchDiff);
         $patchSha256 = hash('sha256', $patchDiff);
 
+        $negativeControlSource = "<?php\n\ndeclare(strict_types=1);\n\nfunction orderTotal(array \$items): int\n{\n    return 0;\n}\n";
+
+        // Determine if isolated microVM runner is available
+        $isolatedAvailable = $this->isolatedRunner !== null && $this->isolatedRunner->isAvailable()['available'];
+        $usedIsolatedRunner = false;
+        $isGenuineProvider = false;
+
         // 3. Phase 1: Baseline reproduction
-        $baselineRun = $this->runBaselineTest($fixtureDir);
-        file_put_contents($evidence . '/baseline/run.log', $baselineRun['log']);
-        $baselineLogSha = hash('sha256', $baselineRun['log']);
-        $baselineReproduced = $baselineRun['exitCode'] === 1 && str_contains($baselineRun['log'], 'zero quantity: expected 250, got 750');
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+            $baseIso = $this->isolatedRunner->runIsolated($baseSource, $testSource, 'src/OrderTotal.php');
+            $baselineLog = $baseIso['output'];
+            $baselineExitCode = ($baseIso['exitCode'] === 254) ? 1 : $baseIso['exitCode'];
+            $baselineSandboxId = $baseIso['sandboxId'];
+            $baselineRun = [
+                'exitCode' => $baselineExitCode,
+                'log' => $baselineLog,
+                'sandboxId' => $baselineSandboxId,
+            ];
+        } else {
+            $baselineRun = $this->runBaselineTest($baseSource, $testSource);
+            $baselineLog = $baselineRun['log'];
+            $baselineExitCode = $baselineRun['exitCode'];
+            $baselineSandboxId = null;
+        }
+        file_put_contents($evidence . '/baseline/run.log', $baselineLog . "\n");
+        $baselineLogSha = hash('sha256', $baselineLog . "\n");
+        $baselineReproduced = $baselineExitCode === 1 && (
+            str_contains($baselineLog, 'zero quantity: expected 250, got 750')
+            || str_contains($baselineLog, 'zero quantity: expected 0, got 100')
+            || str_contains($baselineLog, 'zero: expected 0, got 100')
+            || str_contains($baselineLog, 'mixed quantities: expected 100, got 200')
+        );
 
         // 4. Phase 2: Negative control guard
-        $negativeRun = $this->runNegativeControlTest($testSource);
-        file_put_contents($evidence . '/negative/run.log', $negativeRun['log']);
-        $negativeLogSha = hash('sha256', $negativeRun['log']);
-        $negativeControlCaught = $negativeRun['exitCode'] === 1 && str_contains($negativeRun['log'], 'multiple items: expected 330, got 0');
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+            $negIso = $this->isolatedRunner->runIsolated($negativeControlSource, $testSource, 'src/OrderTotal.php');
+            $negativeLog = $negIso['output'];
+            $negativeExitCode = ($negIso['exitCode'] === 254) ? 1 : $negIso['exitCode'];
+            $negativeSandboxId = $negIso['sandboxId'];
+            $negativeRun = [
+                'exitCode' => $negativeExitCode,
+                'log' => $negativeLog,
+                'sandboxId' => $negativeSandboxId,
+            ];
+        } else {
+            $negativeRun = $this->runNegativeControlTest($testSource);
+            $negativeLog = $negativeRun['log'];
+            $negativeExitCode = $negativeRun['exitCode'];
+            $negativeSandboxId = null;
+        }
+        file_put_contents($evidence . '/negative/run.log', $negativeLog . "\n");
+        $negativeLogSha = hash('sha256', $negativeLog . "\n");
+        $negativeControlCaught = $negativeExitCode === 1 && (
+            str_contains($negativeLog, 'multiple items: expected 330, got 0')
+            || str_contains($negativeLog, 'mixed quantities: expected 100, got 0')
+            || str_contains($negativeLog, 'single item: expected 200, got 0')
+        );
 
         // 5. Phase 3: Candidate execution
         // Strict Security Constraint:
         // Temporary directories and token filters are NOT sandboxes.
-        // Arbitrary untrusted or model-generated candidate code must NOT be executed on the host.
-        // Only the known, checked-in trusted fixture candidate may be executed.
-        $candidateSha = hash('sha256', $candidateSource);
-        $isTrustedFixtureCandidate = hash_equals(self::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha);
-
+        // Full execution of model-generated or untrusted candidate code requires an isolated microVM runner.
+        // When isolated microVM runner is unavailable, only the allowlisted checked-in fixture candidate may run on host.
         if (!$candidateStaticSafetyPassed) {
             $log = "ABORTED: Candidate failed static AST safety check: " . ($safety['reason'] ?? 'Disallowed construct');
             file_put_contents($evidence . '/candidate/run.log', $log . "\n");
             $candidateLogSha = hash('sha256', $log . "\n");
-            $candidateRun = ['exitCode' => 255, 'log' => $log];
+            $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
             $candidatePassed = false;
-        } elseif (!$isTrustedFixtureCandidate) {
-            $log = "ABORTED: Host execution of untrusted or arbitrary candidate code is disabled.\nWorktrees, temporary directories, and token filters are not security sandboxes.\nFull execution of unverified or model-generated candidate code requires an external containerized microVM boundary.\nOnly the known checked-in test fixture candidate may be executed on the host.";
+        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable) {
+            // The current harness and candidate share PHP globals. Sandbox isolation
+            // protects the host, but does not protect the test oracle from a candidate.
+            $log = 'ABORTED: Untrusted candidates cannot be verified until the test oracle is isolated from the candidate.';
             file_put_contents($evidence . '/candidate/run.log', $log . "\n");
             $candidateLogSha = hash('sha256', $log . "\n");
-            $candidateRun = ['exitCode' => 255, 'log' => $log];
+            $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
             $candidatePassed = false;
-        } else {
+        } elseif ($isolatedAvailable) {
+            // Execute inside isolated microVM sandbox with blocked network
+            $isoResult = $this->isolatedRunner->runIsolated($candidateSource, $testSource, 'src/OrderTotal.php');
+            file_put_contents($evidence . '/candidate/run.log', $isoResult['output'] . "\n");
+            $candidateLogSha = hash('sha256', $isoResult['output'] . "\n");
+            $candidateRun = [
+                'exitCode' => $isoResult['exitCode'],
+                'log' => $isoResult['output'],
+                'durationMs' => $isoResult['durationMs'],
+                'sandboxId' => $isoResult['sandboxId'],
+            ];
+            $candidatePassed = $isoResult['exitCode'] === 0
+                && ($isoResult['oracleVerified'] ?? false) === true
+                && !($isoResult['truncated'] ?? false)
+                && !($isoResult['timedOut'] ?? false)
+                && str_contains($isoResult['output'], 'All order total cases passed.');
+            $usedIsolatedRunner = true;
+            $isGenuineProvider = (bool) ($isoResult['genuineProviderEvidence'] ?? false);
+        } elseif ($isTrustedFixtureCandidate) {
+            // Safe host execution strictly for the allowlisted checked-in fixture repair
             $candidateRun = $this->runCandidateTest($candidateSource, $testSource);
             file_put_contents($evidence . '/candidate/run.log', $candidateRun['log']);
             $candidateLogSha = hash('sha256', $candidateRun['log']);
             $candidatePassed = $candidateRun['exitCode'] === 0 && str_contains($candidateRun['log'], 'All order total cases passed.');
+            $usedIsolatedRunner = false;
+            $isGenuineProvider = false;
+        } else {
+            $log = "ABORTED: Host execution of untrusted or arbitrary candidate code is disabled.\nWorktrees, temporary directories, and token filters are not security sandboxes.\nFull execution of unverified or model-generated candidate code requires an external containerized microVM boundary.\nOnly the known checked-in test fixture candidate may be executed on the host.";
+            file_put_contents($evidence . '/candidate/run.log', $log . "\n");
+            $candidateLogSha = hash('sha256', $log . "\n");
+            $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
+            $candidatePassed = false;
+            $usedIsolatedRunner = false;
+            $isGenuineProvider = false;
         }
 
         $gates = [
@@ -259,35 +434,53 @@ final readonly class OwnedCaseVerifier
         ];
 
         $decision = (!in_array(false, $gates, true)) ? 'VERIFIED' : 'FAILED';
-        $baseCommit = $this->resolveBaseCommit();
+        $baseCommit = $this->resolveBaseCommit($context);
+
+        $isDedicated = $context !== null && ($context['repository'] ?? '') === \ProofPatch\GitHub\DedicatedTestRepo::name();
+        $isSynthetic = !$isDedicated && (bool) ($context['isSynthetic'] ?? true);
+        $provenance = $isDedicated
+            ? 'Dedicated test repository'
+            : (string) ($context['provenance'] ?? 'Local checked-in test fixture (tests/Fixtures/owned-review-case)');
+
+        $isSimulated = !$usedIsolatedRunner || !$isGenuineProvider;
 
         $report = [
             'id' => $id,
             'kind' => 'owned_backend',
             'createdAt' => gmdate(DATE_ATOM),
             'decision' => $decision,
+            'isSimulated' => $isSimulated,
             'baseCommit' => $baseCommit,
-            'isSynthetic' => true,
-            'provenance' => 'Local checked-in test fixture (tests/Fixtures/owned-review-case)',
+            'isSynthetic' => $isSynthetic,
+            'provenance' => $provenance,
             'targetFile' => 'src/OrderTotal.php',
             'baseSha256' => $actualBaseSha,
             'candidateSha256' => $candidateSha,
+            'testSha256' => $actualTestSha,
             'patchSha256' => $patchSha256,
             'gates' => $gates,
             'runs' => [
                 'baseline' => [
                     'exitCode' => $baselineRun['exitCode'],
                     'logSha256' => $baselineLogSha,
-                    'summary' => 'Expected exit code 1; zero-quantity item incorrectly billed at unit price.',
+                    'sandboxId' => $baselineRun['sandboxId'] ?? null,
+                    'summary' => $baselineReproduced
+                        ? 'Baseline reproduction passed: Exit code 1; zero-quantity bug reproduced.'
+                        : "Baseline reproduction failed: Exit code {$baselineRun['exitCode']}; expected failure output not observed.",
                 ],
                 'negative' => [
                     'exitCode' => $negativeRun['exitCode'],
                     'logSha256' => $negativeLogSha,
-                    'summary' => 'Expected exit code 1; rejected trivial return 0 shortcut.',
+                    'sandboxId' => $negativeRun['sandboxId'] ?? null,
+                    'summary' => $negativeControlCaught
+                        ? 'Negative control guard passed: Exit code 1; rejected trivial return 0 shortcut.'
+                        : "Negative control guard failed: Exit code {$negativeRun['exitCode']}; trivial return 0 was not caught as expected.",
                 ],
                 'candidate' => [
                     'exitCode' => $candidateRun['exitCode'],
                     'logSha256' => $candidateLogSha,
+                    'sandboxId' => $candidateRun['sandboxId'] ?? null,
+                    'isolated' => (bool) ($candidateRun['isolated'] ?? $usedIsolatedRunner),
                     'summary' => $candidatePassed
                         ? 'Exit code 0; all order total cases passed.'
                         : (!$candidateStaticSafetyPassed
@@ -299,10 +492,16 @@ final readonly class OwnedCaseVerifier
             ],
             'evidenceDirectory' => $evidence,
             'backendSandboxGap' => [
-                'status' => 'allowlisted_bounded_demonstration',
-                'boundary' => 'Local temporary directories and git worktrees are NOT security sandboxes.',
-                'isolationLevel' => 'Static AST Token Guard + Ephemeral Scratch Directory (No shell/network/filesystem syscalls)',
-                'remainingGap' => 'Arbitrary untrusted repository code execution requires an external containerized microVM boundary (e.g. Modal Sandbox). Modal CLI is uninstalled; ProofPatch reports this boundary truthfully.',
+                'status' => $isSimulated ? 'allowlisted_bounded_demonstration' : 'genuine_isolated_execution',
+                'boundary' => $isSimulated
+                    ? 'Local temporary directories and git worktrees are NOT security sandboxes.'
+                    : 'Containerized microVM boundary with kernel-enforced network and filesystem limits (Modal Sandbox).',
+                'isolationLevel' => $isSimulated
+                    ? 'Static Token & AST Guard + Ephemeral Private Directory (Host execution restricted strictly to checked-in allowlisted fixtures; no OS-level sandbox or syscall filter enforced)'
+                    : 'MicroVM Container Sandbox (untrusted candidate execution isolated from host)',
+                'remainingGap' => $isSimulated
+                    ? 'Arbitrary untrusted repository code execution requires an external containerized microVM boundary with kernel-enforced network and filesystem limits (e.g. Modal Sandbox). Modal CLI is uninstalled; ProofPatch reports this boundary truthfully.'
+                    : 'None; candidate executed inside dedicated isolated microVM with network and filesystem limits.',
             ],
         ];
 
@@ -330,17 +529,54 @@ final readonly class OwnedCaseVerifier
             'manifest' => $receipt['manifest'],
         ];
 
+        if ($this->approvalStore !== null && $decision === 'VERIFIED') {
+            $repo = $context['repository'] ?? 'local-fixture/order-total';
+            $issueNum = (int) ($context['issueNumber'] ?? 1);
+            // Publication authorization requires genuine isolated microVM execution:
+            // Host-only execution cannot be represented as an isolated run or authorized for publication.
+            $isSimulated = !$usedIsolatedRunner || !$isGenuineProvider;
+            $report['publicationAuthorizationToken'] = $this->approvalStore->issue(
+                $id,
+                $evidence,
+                $receipt['sha256'],
+                $baseCommit,
+                $repo,
+                $issueNum,
+                'src/OrderTotal.php',
+                $actualBaseSha,
+                $candidateSha,
+                $actualTestSha,
+                $isSimulated
+            );
+        }
+
         return $report;
     }
 
-    private function runBaselineTest(string $fixtureDir): array
+    private function runBaselineTest(string $baseSource, string $testSource): array
     {
-        $proc = LocalProcess::create(['php', 'tests/order_total.php'], $fixtureDir, timeout: 10);
-        $proc->run();
-        return [
-            'exitCode' => (int) $proc->getExitCode(),
-            'log' => trim($proc->getOutput() . "\n" . $proc->getErrorOutput()) . "\n",
-        ];
+        $tmp = sys_get_temp_dir() . '/proofpatch-base-' . bin2hex(random_bytes(8));
+        mkdir($tmp, 0700);
+        mkdir($tmp . '/src', 0700);
+        mkdir($tmp . '/tests', 0700);
+
+        file_put_contents($tmp . '/src/OrderTotal.php', $baseSource);
+        file_put_contents($tmp . '/tests/order_total.php', $testSource);
+
+        try {
+            $proc = LocalProcess::create(['php', 'tests/order_total.php'], $tmp, timeout: 10);
+            $proc->run();
+            return [
+                'exitCode' => (int) $proc->getExitCode(),
+                'log' => trim($proc->getOutput() . "\n" . $proc->getErrorOutput()) . "\n",
+            ];
+        } finally {
+            @unlink($tmp . '/src/OrderTotal.php');
+            @unlink($tmp . '/tests/order_total.php');
+            @rmdir($tmp . '/src');
+            @rmdir($tmp . '/tests');
+            @rmdir($tmp);
+        }
     }
 
     private function runNegativeControlTest(string $testSource): array
@@ -418,8 +654,18 @@ final readonly class OwnedCaseVerifier
         }
     }
 
-    private function resolveBaseCommit(): string
+    private function resolveBaseCommit(?array $context = null): string
     {
+        // 1. If context explicitly binds a base commit (e.g. dedicated test repo), use it!
+        if ($context !== null && isset($context['commit']) && preg_match('/\A[a-f0-9]{40}\z/', (string) $context['commit'])) {
+            return (string) $context['commit'];
+        }
+
+        // 2. If dedicated test repo is targeted, enforce its authorized base commit
+        if ($context !== null && ($context['repository'] ?? '') === \ProofPatch\GitHub\DedicatedTestRepo::name()) {
+            return \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit();
+        }
+
         try {
             $proc = LocalProcess::create(['git', '-C', $this->project, 'rev-parse', 'HEAD']);
             $proc->run();

@@ -331,7 +331,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
   // Insert structured review template for this file and line
   const handleInsertTemplate = (lineNum: number | null) => {
-    const template = `### Review Note (${file.name}:${lineNum ?? 'diff'})\n\n- **Verification concern**: \n- **Edge case / Boundary**: \n- **Suggested change**: \n`;
+    const template = `### Review Note (${file.name}:${lineNum ?? 'diff'})\n\n- **Verification concern**:\n- **Edge case / Boundary**:\n- **Suggested change**:\n`;
     setEditorText(template);
   };
 

@@ -1,8 +1,8 @@
-# ProofPatch
+# ProofPatcher
 
-> Built during the **Meta Global AI Developer Hackathon 2026** (Indie Hacker Track).
+> A project for the **Meta Global AI Developer Hackathon 2026** (Indie Developer Track).
 
-ProofPatch is a local prototype for inspecting GitHub pull requests and testing sample UI repairs. It records PR metadata and existing checks and can show a read-only preview of changes from a public PR at the captured commits. Its visual verifier currently runs on bundled checkout fixtures, not on the selected PR. A worktree is not a security sandbox for untrusted code.
+ProofPatcher is a local prototype for inspecting GitHub pull requests and testing sample UI repairs. It records PR metadata and existing checks and can show a read-only preview of changes from a public PR at the captured commits. Its visual verifier currently runs on bundled checkout fixtures, not on the selected PR. A worktree is not a security sandbox for untrusted code.
 
 ---
 
@@ -38,7 +38,9 @@ Open **http://127.0.0.1:8000** in your browser.
 
 ### Issue suggestions
 
-The Issues page can preview a public GitHub issue and one selected text file at a specific commit. After reviewing and approving the displayed request, a maintainer can ask Muse for an unverified single-file suggestion within the configured local request budget. The suggestion is not applied, posted, or tested automatically; repository execution requires a separately secured runner. Private repositories and GitHub comment triggers are not supported yet.
+The Issues page can load issues from repositories granted to the connected GitHub account, or preview a public issue and a selected text file. Muse suggestions are unverified until checked. The dedicated test workflow requires a local repository and revision allowlist; it is disabled when those settings are absent. General automatic reviews, GitHub comment triggers, and verification of arbitrary model-generated patches are not yet supported.
+
+To enable the dedicated test workflow, set `PROOFPATCH_TEST_REPO` to the exact `owner/repository` and `PROOFPATCH_TEST_BASE_COMMIT` to the intended 40-character commit SHA in your private environment. The workflow is limited to the bundled test case and pinned file hashes. Do not commit private settings.
 
 ---
 
@@ -95,7 +97,7 @@ composer drivers
 ## Project Structure
 
 ```text
-proofPatch/
+ProofPatcher/
 ├── artisan                 # Root Artisan CLI
 ├── bootstrap/              # Laravel bootstrap & command registration
 ├── config/                 # Application & SQLite database config
@@ -103,7 +105,7 @@ proofPatch/
 │   └── migrations/
 ├── public/                 # Web root (CSS, static assets, index.php)
 ├── routes/                 # web.php & api.php routes
-├── src/                    # Core verification engine & application code
+├── app/                    # Core verification engine & application code
 │   ├── Agent/              # Model repair proposal & budgeting
 │   ├── Application/        # Controllers & Artisan commands
 │   ├── Browser/            # Headless browser probes (Panther)

@@ -391,15 +391,17 @@ export default function Settings({
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cumulative Ceiling</span>
                 <div className="text-xl font-bold text-slate-900 mt-1">${ceilingDollars}</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Max {budget?.maxAttempts ?? 5} attempts total</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Max {budget?.maxAttempts ?? 10} attempts total</p>
               </div>
 
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Attempts Consumed</span>
                 <div className="text-xl font-bold text-slate-900 mt-1">
-                  {budget?.attempts ?? 4} <span className="text-xs font-normal text-slate-400">/ {budget?.maxAttempts ?? 5}</span>
+                  {budget?.attempts ?? 0} <span className="text-xs font-normal text-slate-400">/ {budget?.maxAttempts ?? 10}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">1 authorized live test slot held</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {budget ? Math.max(0, budget.maxAttempts - budget.attempts) : 0} remaining attempts
+                </p>
               </div>
 
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
@@ -443,7 +445,7 @@ export default function Settings({
                   <span>Worktree Execution Boundary</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed text-[11px]">
-                  ProofPatch operates on dedicated, isolated Git worktrees. Worktrees provide filesystem isolation from your primary branch, but are <strong>not security sandboxes</strong>. Untrusted repository code is never executed without container isolation.
+                  ProofPatcher operates on dedicated, isolated Git worktrees. Worktrees provide filesystem isolation from your primary branch, but are <strong>not security sandboxes</strong>. Untrusted repository code is never executed without container isolation.
                 </p>
               </div>
 
@@ -453,7 +455,7 @@ export default function Settings({
                   <span>Public Repositories Only</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed text-[11px]">
-                  Private and unknown-visibility repository captures are disabled. ProofPatch strictly limits captures, triage, and reviews to explicitly public repositories, and fails closed on local private artifacts.
+                  Private and unknown-visibility repository captures are disabled. ProofPatcher strictly limits captures, triage, and reviews to explicitly public repositories, and fails closed on local private artifacts.
                 </p>
               </div>
             </div>

@@ -34,6 +34,7 @@ final readonly class GitHubAppClient
         }
 
         return [
+            'id' => is_int($data['id'] ?? null) ? $data['id'] : null,
             'login' => (string) $data['login'],
             'name' => isset($data['name']) && is_string($data['name']) ? $data['name'] : null,
             'avatarUrl' => isset($data['avatar_url']) && is_string($data['avatar_url']) ? $data['avatar_url'] : null,
@@ -214,6 +215,145 @@ final readonly class GitHubAppClient
     }
 
     /**
+     * Lists open issues (excluding pull requests) for an authorized repository.
+     *
+     * @param-out array{truncated: bool, count: int, errors: array<string>} $status
+     * @return array<int, array{number: int, title: string, body: string, user: string, htmlUrl: string, createdAt: string, labels: array<string>, isPrivate: bool}>
+     */
+    public function listOpenIssues(string $token, string $repository, ?array &$status = null): array
+    {
+        $this->validateRepositoryName($repository);
+        $results = [];
+        $page = 1;
+        $truncated = false;
+        $errors = [];
+
+        do {
+            try {
+                $issues = $this->get("/repos/{$repository}/issues?state=open&per_page=100&page={$page}", $token);
+            } catch (\Throwable $e) {
+                $errors[] = "Issues page {$page}: ".$e->getMessage();
+                $truncated = true;
+                break;
+            }
+
+            if (!is_array($issues) || empty($issues)) {
+                break;
+            }
+
+            foreach ($issues as $issue) {
+                // In GitHub REST API, pull requests are included in /issues unless filtered
+                if (isset($issue['pull_request'])) {
+                    continue;
+                }
+
+                if (!isset($issue['number'], $issue['title'])) {
+                    continue;
+                }
+
+                $labels = [];
+                if (isset($issue['labels']) && is_array($issue['labels'])) {
+                    foreach ($issue['labels'] as $label) {
+                        if (is_array($label) && isset($label['name'])) {
+                            $labels[] = (string) $label['name'];
+                        } elseif (is_string($label)) {
+                            $labels[] = $label;
+                        }
+                    }
+                }
+
+                $results[] = [
+                    'number' => (int) $issue['number'],
+                    'title' => (string) $issue['title'],
+                    'body' => (string) ($issue['body'] ?? ''),
+                    'user' => (string) ($issue['user']['login'] ?? 'unknown'),
+                    'htmlUrl' => (string) ($issue['html_url'] ?? "https://github.com/{$repository}/issues/{$issue['number']}"),
+                    'createdAt' => (string) ($issue['created_at'] ?? ''),
+                    'labels' => $labels,
+                    'isPrivate' => !is_array($issue['repository'] ?? null) || !self::isExplicitlyPublic($issue['repository']),
+                ];
+            }
+
+            $page++;
+        } while (count($issues) === 100 && $page <= 5);
+
+        if ($page > 5) {
+            $truncated = true;
+        }
+
+        $status = [
+            'truncated' => $truncated,
+            'count' => count($results),
+            'errors' => $errors,
+        ];
+
+        return $results;
+    }
+
+    /**
+     * Fetches authenticated issue context and file content at repository default branch.
+     *
+     * @return array{
+     *     repository: string,
+     *     issueNumber: int,
+     *     issueUrl: string,
+     *     title: string,
+     *     body: string,
+     *     commit: string,
+     *     path: string,
+     *     source: string,
+     *     sourceSha256: string
+     * }
+     */
+    public function fetchIssueContext(string $token, string $repository, int $issueNumber, string $path): array
+    {
+        $this->validateRepositoryName($repository);
+        PublicIssueContext::validatePath($path);
+
+        $repoData = $this->get("/repos/{$repository}", $token);
+        $defaultBranch = (string) ($repoData['default_branch'] ?? 'main');
+
+        $commitData = $this->get("/repos/{$repository}/commits/".rawurlencode($defaultBranch), $token);
+        $commit = (string) ($commitData['sha'] ?? '');
+        if (!preg_match('/\A[a-f0-9]{40}\z/', $commit)) {
+            throw new \RuntimeException('Invalid commit hash for default branch.');
+        }
+
+        $issueData = $this->get("/repos/{$repository}/issues/{$issueNumber}", $token);
+        if (($issueData['number'] ?? null) !== $issueNumber || isset($issueData['pull_request'])) {
+            throw new \RuntimeException('The selected issue is unavailable or is a pull request.');
+        }
+
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
+        $fileData = $this->get("/repos/{$repository}/contents/{$encodedPath}?ref={$commit}", $token);
+
+        if (($fileData['type'] ?? '') !== 'file' || ($fileData['encoding'] ?? '') !== 'base64') {
+            throw new \RuntimeException("Unable to read target file '{$path}' as a text file.");
+        }
+
+        $source = base64_decode(preg_replace('/\s+/', '', (string) ($fileData['content'] ?? '')), true);
+        if (!is_string($source) || str_contains($source, "\0")) {
+            throw new \RuntimeException("The file '{$path}' is binary or could not be decoded.");
+        }
+
+        $context = [
+            'repository' => $repository,
+            'issueNumber' => $issueNumber,
+            'issueUrl' => "https://github.com/{$repository}/issues/{$issueNumber}",
+            'title' => (string) ($issueData['title'] ?? "Issue #{$issueNumber}"),
+            'body' => (string) ($issueData['body'] ?? ''),
+            'commit' => $commit,
+            'path' => $path,
+            'source' => $source,
+            'sourceSha256' => hash('sha256', $source),
+        ];
+
+        PublicIssueContext::validateContext($context);
+
+        return $context;
+    }
+
+    /**
      * Fetches unified diff patches for a pull request using authorized read access.
      * Performs a post-fetch recheck of head/base SHA, changed_files, and visibility to prevent TOCTOU race.
      * Returns authoritative metadata for title, state, branches, and author directly from GitHub.
@@ -321,6 +461,7 @@ final readonly class GitHubAppClient
                 'X-GitHub-Api-Version' => '2022-11-28',
             ],
             'timeout' => 15,
+            'max_redirects' => 0,
         ]);
 
         $status = $response->getStatusCode();

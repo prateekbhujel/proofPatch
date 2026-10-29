@@ -97,8 +97,10 @@ final readonly class PublicIssueContext
             }
         } else {
             $expectedKeys = ['body', 'commit', 'issueNumber', 'issueUrl', 'path', 'repository', 'source', 'sourceSha256', 'title'];
+            $dedicatedKeys = ['body', 'commit', 'issueNumber', 'issueUrl', 'path', 'repository', 'source', 'sourceSha256', 'testSha256', 'testSource', 'title'];
             sort($expectedKeys);
-            if ($keys !== $expectedKeys
+            sort($dedicatedKeys);
+            if (($keys !== $expectedKeys && $keys !== $dedicatedKeys)
                 || !is_string($context['repository']) || !preg_match('~\A[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}\z~', $context['repository'])
                 || !is_int($context['issueNumber']) || $context['issueNumber'] < 1 || $context['issueNumber'] > 999999999
                 || $context['issueUrl'] !== 'https://github.com/'.$context['repository'].'/issues/'.$context['issueNumber']
@@ -111,6 +113,13 @@ final readonly class PublicIssueContext
                 || str_contains($context['source'], "\0") || !preg_match('//u', $context['source'])
                 || !preg_match('//u', $context['title'].$context['body'])) {
                 throw new \InvalidArgumentException('The issue context is invalid.');
+            }
+            if (isset($context['testSource'])) {
+                if (!is_string($context['testSource']) || !is_string($context['testSha256'] ?? null)
+                    || !hash_equals(hash('sha256', $context['testSource']), $context['testSha256'])
+                    || str_contains($context['testSource'], "\0") || !preg_match('//u', $context['testSource'])) {
+                    throw new \InvalidArgumentException('The issue context test harness is invalid.');
+                }
             }
         }
         self::validatePath($context['path']);

@@ -125,6 +125,12 @@ final class IssueWorkbenchIntegrationTest extends TestCase
         $this->assertNotNull($props['preview']);
         $this->assertNotEmpty($props['preview']['digest']);
         $this->assertGreaterThan(0, $props['preview']['estimatedMicros']);
+        $this->assertFalse($props['modelKeyAvailable']);
+
+        putenv('BASETEN_API_KEY=not-a-real-key-123456');
+        $propsWithKey = $controller->show($showRequest)->toResponse($showRequest)->getOriginalContent()->getData()['page']['props'];
+        $this->assertTrue($propsWithKey['modelKeyAvailable']);
+        $this->assertStringNotContainsString('not-a-real-key-123456', json_encode($propsWithKey, JSON_THROW_ON_ERROR));
     }
 
     public function testProposeGeneratesOfflineReferenceCandidateWithoutFabricatingModelOrUsage(): void

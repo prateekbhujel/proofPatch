@@ -13,6 +13,7 @@ use ProofPatch\Agent\IssueSuggestion;
 use ProofPatch\Agent\RequestBudget;
 use ProofPatch\GitHub\PublicIssueContext;
 use ProofPatch\Models\WorkbenchTask;
+use ProofPatch\Models\LocalTaskCard;
 use ProofPatch\Support\NotificationHelper;
 use ProofPatch\Support\SessionHelper;
 use ProofPatch\Support\TaskWorkflowHelper;
@@ -144,6 +145,18 @@ final class IssueWorkbenchController
         }
 
         $tasks = [];
+        $localTasks = [];
+        $access = $request->attributes->get('proofpatch_github_access');
+        if (is_array($access) && is_int($access['userId'] ?? null) && $access['userId'] > 0
+            && is_array($access['repositories'] ?? null) && $access['repositories'] !== []) {
+            $localTasks = LocalTaskCard::where('github_user_id', $access['userId'])
+                ->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(repository)'), array_keys($access['repositories']))
+                ->orderByDesc('updated_at')
+                ->get()
+                ->map(fn (LocalTaskCard $card) => $card->toBoardArray())
+                ->values()
+                ->all();
+        }
         try {
             $query = WorkbenchTask::orderByDesc('updated_at');
             $access = $request->attributes->get('proofpatch_github_access');
@@ -213,6 +226,7 @@ final class IssueWorkbenchController
             'budget' => $budget,
             'error' => $request->session()->get('error'),
             'tasks' => $tasks,
+            'localTasks' => $localTasks,
             'githubConnection' => $githubConnection,
             'modelContextAllowed' => $modelContextAllowed,
             'modelKeyAvailable' => $modelKeyAvailable,

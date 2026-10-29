@@ -144,4 +144,16 @@ final class LocalTaskCardTest extends TestCase
         }
         self::assertSame(0, LocalTaskCard::count());
     }
+
+    public function testMigrationRollbackOnlyRemovesLocalCardsInIsolatedDatabase(): void
+    {
+        $migration = require dirname(__DIR__, 2).'/database/migrations/2026_10_30_000001_create_local_task_cards.php';
+        self::assertTrue(\Illuminate\Support\Facades\Schema::hasTable('workbench_tasks'));
+        self::assertTrue(\Illuminate\Support\Facades\Schema::hasTable('local_task_cards'));
+        $migration->down();
+        self::assertFalse(\Illuminate\Support\Facades\Schema::hasTable('local_task_cards'));
+        self::assertTrue(\Illuminate\Support\Facades\Schema::hasTable('workbench_tasks'));
+        $migration->up();
+        self::assertTrue(\Illuminate\Support\Facades\Schema::hasTable('local_task_cards'));
+    }
 }

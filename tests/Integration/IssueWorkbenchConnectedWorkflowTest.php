@@ -345,6 +345,65 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
         self::assertNull($session->get('issue_context'));
     }
 
+    public function testMissingSourcePathDoesNotGuessOrDiscardExistingTask(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $session->put('issue_task_id', 123);
+        $session->put('issue_context', ['title' => 'Existing task']);
+        $request = Request::create('/issues/load-issue', 'POST', [
+            'repository' => 'owner/repo', 'issue_number' => 42, 'path' => '',
+        ]);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController($this->blockingHttp))->loadIssue($request);
+
+        self::assertStringContainsString('Choose the source file', (string) $session->get('error'));
+        self::assertSame(123, $session->get('issue_task_id'));
+        self::assertSame(['title' => 'Existing task'], $session->get('issue_context'));
+    }
+
+    public function testRepositoryListFailureDoesNotLookLikeAnEmptyRepository(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $session->put('selected_github_repo', 'owner/previous');
+        $session->put('github_repo_issues', [['number' => 1, 'title' => 'Previous']]);
+        $http = new MockHttpClient([
+            new MockResponse('{}', ['http_code' => 403]),
+            new MockResponse('[]'),
+        ]);
+        $request = Request::create('/issues/select-repository', 'POST', ['repository' => 'owner/repo']);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController($http))->selectRepository($request);
+
+        self::assertStringContainsString('GitHub did not return a complete', (string) $session->get('error'));
+        self::assertSame('owner/previous', $session->get('selected_github_repo'));
+        self::assertSame([['number' => 1, 'title' => 'Previous']], $session->get('github_repo_issues'));
+    }
+
+    public function testTruncatedRepositoryListIsMarkedAsPartial(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $pages = array_map(
+            static fn () => new MockResponse(json_encode(array_fill(0, 100, ['number' => 1, 'title' => 'Issue']))),
+            range(1, 5),
+        );
+        $pages[] = new MockResponse('[]');
+        $request = Request::create('/issues/select-repository', 'POST', ['repository' => 'owner/repo']);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController(new MockHttpClient($pages)))->selectRepository($request);
+
+        self::assertSame('owner/repo', $session->get('selected_github_repo'));
+        self::assertTrue($session->get('github_repo_list_incomplete'));
+    }
+
     public function testSelectRepositoryAndLoadIssueRequireAuthentication(): void
     {
         $session = app('session')->driver('array');

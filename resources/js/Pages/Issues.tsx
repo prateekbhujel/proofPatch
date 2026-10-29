@@ -47,6 +47,7 @@ interface GitHubConnectionData {
   selectedRepo: string | null;
   repoIssues: GitHubIssueItem[];
   repoPulls: GitHubPullItem[];
+  repoListIncomplete: boolean;
   deviceFlow: {
     userCode: string;
     verificationUri: string;
@@ -242,6 +243,7 @@ export default function Issues({
 
   function handleSelectRepo(repoName: string) {
     if (!repoName) return;
+    if (repoName !== githubConnection?.selectedRepo) setIssuePathMap({});
     setLoadingRepo(true);
     router.post(
       '/issues/select-repository',
@@ -255,8 +257,9 @@ export default function Issues({
 
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
+    const path = issuePathMap[issue.number]?.trim() || '';
+    if (!path) return;
     setLoadingIssueNum(issue.number);
-    const path = issuePathMap[issue.number] || 'src/OrderTotal.php';
     router.post(
       '/issues/load-issue',
       {
@@ -780,7 +783,7 @@ export default function Issues({
                         Issues in <code className="text-violet-700 font-mono">{githubConnection.selectedRepo}</code>
                       </span>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                        {githubConnection.repoIssues?.length || 0} open
+                        {githubConnection.repoIssues?.length || 0} {githubConnection.repoListIncomplete ? 'loaded' : 'open'}
                       </span>
                     </div>
                     {githubConnection.repoPulls && githubConnection.repoPulls.length > 0 && (
@@ -790,10 +793,14 @@ export default function Issues({
                     )}
                   </div>
 
+                  {githubConnection.repoListIncomplete && (
+                    <p className="text-xs text-amber-700" role="status">This list may be incomplete.</p>
+                  )}
+
                   {githubConnection.repoIssues && githubConnection.repoIssues.length > 0 ? (
                     <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
                       {githubConnection.repoIssues.map((issue) => {
-                        const targetPath = issuePathMap[issue.number] ?? 'src/OrderTotal.php';
+                        const targetPath = issuePathMap[issue.number] ?? '';
                         const isLoadingThis = loadingIssueNum === issue.number;
                         return (
                           <div
@@ -848,7 +855,7 @@ export default function Issues({
                                     onChange={(e) =>
                                       setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
                                     }
-                                    placeholder="src/OrderTotal.php"
+                                    placeholder="Source file path"
                                     className="w-36 rounded border border-slate-300 px-2 py-1 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
                                     title="Target source file to repair"
                                   />
@@ -856,7 +863,7 @@ export default function Issues({
                                 <button
                                   type="button"
                                   onClick={() => handleLoadIssue(issue)}
-                                  disabled={isLoadingThis}
+                                  disabled={isLoadingThis || !targetPath.trim()}
                                   className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
                                 >
                                   <span>{isLoadingThis ? 'Loading…' : 'Open in Workbench'}</span>
@@ -874,7 +881,7 @@ export default function Issues({
                     </div>
                   ) : (
                     <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500 space-y-1">
-                      <p className="font-medium text-slate-700">No open issues found in this repository.</p>
+                      <p className="font-medium text-slate-700">{githubConnection.repoListIncomplete ? 'No open issues found in the loaded pages.' : 'No open issues found in this repository.'}</p>
                       <p className="text-[11px]">
                         Create an issue on GitHub or select another repository from the dropdown above.
                       </p>

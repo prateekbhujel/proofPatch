@@ -173,6 +173,7 @@ final class IssueWorkbenchController
         $selectedRepo = $connected ? $request->session()->get('selected_github_repo') : null;
         $repoIssues = $connected ? ($request->session()->get('github_repo_issues') ?? []) : [];
         $repoPulls = $connected ? ($request->session()->get('github_repo_pulls') ?? []) : [];
+        $repoListIncomplete = $connected && (bool) $request->session()->get('github_repo_list_incomplete', false);
         $clientIdConfigured = (bool) (getenv('PROOFPATCH_GITHUB_CLIENT_ID') || getenv('GITHUB_APP_CLIENT_ID'));
 
         $githubConnection = [
@@ -184,6 +185,7 @@ final class IssueWorkbenchController
             'selectedRepo' => $selectedRepo,
             'repoIssues' => $repoIssues,
             'repoPulls' => $repoPulls,
+            'repoListIncomplete' => $repoListIncomplete,
             'deviceFlow' => is_array($deviceFlow) ? [
                 'userCode' => (string) ($deviceFlow['userCode'] ?? ''),
                 'verificationUri' => (string) ($deviceFlow['verificationUri'] ?? ''),
@@ -288,13 +290,18 @@ final class IssueWorkbenchController
 
         try {
             $client = new \ProofPatch\GitHub\GitHubAppClient($this->getHttpClient());
-            $status = [];
-            $issues = $client->listOpenIssues($token, $repoName, $status);
-            $pulls = $client->listOpenPullRequests($token, $repoName);
+            $issueStatus = [];
+            $pullStatus = [];
+            $issues = $client->listOpenIssues($token, $repoName, $issueStatus);
+            $pulls = $client->listOpenPullRequests($token, $repoName, $pullStatus);
+            if (!empty($issueStatus['errors']) || !empty($pullStatus['errors'])) {
+                throw new \RuntimeException('GitHub did not return a complete issue and pull request list. Try again.');
+            }
 
             $request->session()->put('selected_github_repo', $repoName);
             $request->session()->put('github_repo_issues', $issues);
             $request->session()->put('github_repo_pulls', $pulls);
+            $request->session()->put('github_repo_list_incomplete', (bool) ($issueStatus['truncated'] || $pullStatus['truncated']));
 
             $this->addNotification($request, 'info', 'Repository Loaded', "Found " . count($issues) . " issues and " . count($pulls) . " pull requests for {$repoName}.");
 
@@ -319,10 +326,16 @@ final class IssueWorkbenchController
             return redirect('/issues')->with('error', 'Select a valid issue to load.');
         }
 
+        $isDedicated = $repoName === \ProofPatch\GitHub\DedicatedTestRepo::name()
+            && $issueNumber === \ProofPatch\GitHub\DedicatedTestRepoFetcher::ISSUE_NUMBER;
+        if (!$isDedicated && $path === '') {
+            return redirect('/issues')->with('error', 'Choose the source file to review.');
+        }
+
         $request->session()->forget(self::CASE_SESSION_KEYS);
 
         try {
-            if ($repoName === \ProofPatch\GitHub\DedicatedTestRepo::name() && $issueNumber === \ProofPatch\GitHub\DedicatedTestRepoFetcher::ISSUE_NUMBER) {
+            if ($isDedicated) {
                 $fetcher = new \ProofPatch\GitHub\DedicatedTestRepoFetcher($this->getHttpClient());
                 $context = $fetcher->fetchAndVerify($token);
                 $access = $request->attributes->get('proofpatch_github_access');
@@ -330,10 +343,6 @@ final class IssueWorkbenchController
                 $this->hydrateTaskSession($request, $task);
                 $this->addNotification($request, 'success', 'Dedicated Issue Loaded', "Loaded {$repoName}#{$issueNumber} into the workbench.");
                 return redirect('/issues');
-            }
-
-            if ($path === '') {
-                $path = 'src/OrderTotal.php';
             }
 
             $client = new \ProofPatch\GitHub\GitHubAppClient($this->getHttpClient());

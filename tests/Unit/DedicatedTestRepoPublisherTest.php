@@ -174,7 +174,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
     {
         // An attacker creates an evidence directory with all matching SHA-256 hashes
         $evidence = $this->createValidEvidenceDirectory('forged-run-attack');
-        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, null, disconnected: false);
+        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, new MockHttpClient(), disconnected: false);
 
         $context = [
             'repository' => \ProofPatch\GitHub\DedicatedTestRepo::name(),
@@ -232,7 +232,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
     public function testRejectsInvalidOrForgedServerAuthorizationToken(): void
     {
         $evidence = $this->createValidEvidenceDirectory('forged-token-attack');
-        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, null, disconnected: false);
+        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, new MockHttpClient(), disconnected: false);
 
         $context = [
             'repository' => \ProofPatch\GitHub\DedicatedTestRepo::name(),
@@ -245,7 +245,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Publication authorization token is invalid, expired, or was already consumed.');
 
-        $publisher->publishDraftPr($context, $evidence['runDir'], $evidence['candidateSource'], authorizationToken: $fakeToken);
+        $publisher->publishDraftPr($context, $evidence['runDir'], $evidence['candidateSource'], authorizationToken: $fakeToken, githubToken: 'test-github-token');
     }
 
     public function testRejectsSimulatedRunsEvenWithServerToken(): void
@@ -272,7 +272,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             isSimulated: true // Marked simulated!
         );
 
-        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, null, disconnected: false);
+        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, new MockHttpClient(), disconnected: false);
 
         $context = [
             'repository' => \ProofPatch\GitHub\DedicatedTestRepo::name(),
@@ -283,7 +283,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cannot publish proposal: Verification was executed using a mock/simulated runner, not genuine provider microVM isolation.');
 
-        $publisher->publishDraftPr($context, $evidence['runDir'], $evidence['candidateSource'], authorizationToken: $token);
+        $publisher->publishDraftPr($context, $evidence['runDir'], $evidence['candidateSource'], authorizationToken: $token, githubToken: 'test-github-token');
     }
 
     public function testDisconnectedModeBlocksRemoteConnectionsByDefault(): void
@@ -572,7 +572,7 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             isSimulated: false
         );
 
-        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, null, disconnected: false);
+        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, new MockHttpClient(), disconnected: false);
 
         $context = [
             'repository' => \ProofPatch\GitHub\DedicatedTestRepo::name(),
@@ -587,7 +587,8 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             $context,
             $evidence['runDir'],
             $evidence['candidateSource'],
-            authorizationToken: $token
+            authorizationToken: $token,
+            githubToken: 'test-github-token'
         );
     }
 

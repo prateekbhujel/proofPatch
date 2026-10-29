@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+// The test app needs its own disposable encryption key, never a developer's key.
+$testAppKey = 'base64:' . base64_encode(random_bytes(32));
+putenv('APP_KEY=' . $testAppKey);
+$_ENV['APP_KEY'] = $testAppKey;
+$_SERVER['APP_KEY'] = $testAppKey;
+
 // Tests always use a synthetic repository; never inherit a developer's private target.
 unset($_ENV['PROOFPATCH_TEST_REPO'], $_SERVER['PROOFPATCH_TEST_REPO']);
 unset($_ENV['PROOFPATCH_TEST_BASE_COMMIT'], $_SERVER['PROOFPATCH_TEST_BASE_COMMIT']);

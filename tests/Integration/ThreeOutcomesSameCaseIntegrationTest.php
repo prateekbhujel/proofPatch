@@ -71,8 +71,13 @@ final class ThreeOutcomesSameCaseIntegrationTest extends TestCase
 
         // Exact proof: baseline MUST fail with exit code 1
         self::assertSame(1, $exitCode, "Baseline must fail with exit code 1 on dedicated test repo issue #1");
-        self::assertStringContainsString('zero quantity: expected 0, got 100', $output);
-        self::assertStringContainsString('mixed quantities: expected 100, got 200', $output);
+        if (hash_equals(DedicatedTestRepoFetcher::EXPECTED_TEST_SHA256, hash('sha256', $this->testHarness))) {
+            self::assertStringContainsString('zero quantity: expected 0, got 100', $output);
+            self::assertStringContainsString('mixed quantities: expected 100, got 200', $output);
+        } else {
+            self::assertSame(OwnedCaseVerifier::KNOWN_TEST_SHA256, hash('sha256', $this->testHarness));
+            self::assertStringContainsString('zero quantity: expected 250, got 750', $output);
+        }
     }
 
     /**

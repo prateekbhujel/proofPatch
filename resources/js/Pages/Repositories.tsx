@@ -279,7 +279,6 @@ export default function Repositories({
   const [reviewApproved, setReviewApproved] = useState(false);
   const [privateConsentApproved, setPrivateConsentApproved] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<'comment' | 'approve' | 'request_changes'>('comment');
-  const [maintainerMode, setMaintainerMode] = useState<'review_first' | 'automatic_review'>('review_first');
   const [gitHubSectionOpen, setGitHubSectionOpen] = useState(
     Boolean(githubConnection?.isConnected || githubConnection?.deviceFlow || !pull)
   );
@@ -812,31 +811,6 @@ export default function Repositories({
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 self-start md:self-center">
-                  <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setMaintainerMode('review_first')}
-                      className={`px-2.5 py-1 text-xs rounded-md transition font-medium ${
-                        maintainerMode === 'review_first'
-                          ? 'bg-white text-violet-900 shadow-2xs font-semibold'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Review First
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMaintainerMode('automatic_review')}
-                      className={`px-2.5 py-1 text-xs rounded-md transition font-medium ${
-                        maintainerMode === 'automatic_review'
-                          ? 'bg-white text-violet-900 shadow-2xs font-semibold'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Automatic Review
-                    </button>
-                  </div>
-
                   <a
                     href={pull.url}
                     target="_blank"

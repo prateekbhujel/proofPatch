@@ -44,8 +44,16 @@ final class DedicatedTestRepoPublisherPreconditionsTest extends TestCase
         }
     }
 
-    private function createValidEvidenceDirectory(string $candidateSource): array
+    private function trustedCandidate(): string
     {
+        $baseFile = dirname(__DIR__, 2) . '/tests/Fixtures/owned-review-case/src/OrderTotal.php';
+        $baseSource = (string) file_get_contents($baseFile);
+        return (string) str_replace("max(1, \$item['quantity'])", "\$item['quantity']", $baseSource);
+    }
+
+    private function createValidEvidenceDirectory(?string $candidateSource = null): array
+    {
+        $candidateSource = $candidateSource ?? $this->trustedCandidate();
         $projectRoot = dirname(__DIR__, 2);
         $runner = new \ProofPatch\Verifier\ModalIsolatedRunner(
             pythonPath: null,
@@ -119,7 +127,7 @@ final class DedicatedTestRepoPublisherPreconditionsTest extends TestCase
      */
     public function testDisconnectedPublisherThrowsBeforeConsumingApprovalToken(): void
     {
-        $candidate = "<?php\ndeclare(strict_types=1);\nfunction orderTotal(array \$items): int {\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n    return \$total;\n}\n";
+        $candidate = $this->trustedCandidate();
         $evidence = $this->createValidEvidenceDirectory($candidate);
         $token = $evidence['token'];
         self::assertNotNull($token);
@@ -161,7 +169,7 @@ final class DedicatedTestRepoPublisherPreconditionsTest extends TestCase
      */
     public function testStaleRemoteHeadThrowsWithoutMutating(): void
     {
-        $candidate = "<?php\ndeclare(strict_types=1);\nfunction orderTotal(array \$items): int {\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n    return \$total;\n}\n";
+        $candidate = $this->trustedCandidate();
         $evidence = $this->createValidEvidenceDirectory($candidate);
         $token = $evidence['token'];
         self::assertNotNull($token);
@@ -206,7 +214,7 @@ final class DedicatedTestRepoPublisherPreconditionsTest extends TestCase
      */
     public function testMismatchedCandidateShaThrowsWithoutMutating(): void
     {
-        $candidate = "<?php\ndeclare(strict_types=1);\nfunction orderTotal(array \$items): int {\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n    return \$total;\n}\n";
+        $candidate = $this->trustedCandidate();
         $evidence = $this->createValidEvidenceDirectory($candidate);
         $token = $evidence['token'];
         self::assertNotNull($token);

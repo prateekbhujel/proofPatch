@@ -2,6 +2,7 @@
 """
 Modal Isolated Sandbox Runner for ProofPatch.
 Executes PHP candidate and harness tests in an isolated Modal microVM sandbox via gVisor.
+Execution is currently limited to pinned fixture programs and test harnesses.
 
 Security boundaries & guarantees:
 - Standalone static script (syntax-checked, no dynamic code generation).
@@ -19,6 +20,8 @@ Security boundaries & guarantees:
 
 import argparse
 import base64
+import binascii
+import hashlib
 import json
 import os
 import re
@@ -30,12 +33,39 @@ DEFAULT_TIMEOUT_SECONDS = 30
 MAX_TIMEOUT_SECONDS = 60
 DEFAULT_IMAGE = "php@sha256:d716009046f4acac161ed7a14921111398228c2311696f132686be8613cb19ab"
 
+# The current PHP harness shares a process with the candidate. Until that
+# boundary is redesigned, only these known fixture programs may run here.
+PINNED_SOURCE_HASHES = frozenset({
+    "54bc37fb2b005badcf309c5a7091ba6a2e704fc54c8eff9e9c7afee7e4054859",  # baseline
+    "a9f07c3bb365ebce212f88c1b676661a56d9c5f8c6a3df4a4007177410e9b4db",  # negative control
+    "d102376bea8e1bdb745cf0f4026540574254e741a590be455a94dceb1a69f8fb",  # fixture repair
+})
+PINNED_HARNESS_HASHES = frozenset({
+    "b8079fb1e7731fc763f0b009a11c2786d01b52cce08f7431768a64e8a5ef2cbf",
+    "263eb70cbf346221858b9c64ba97384105d3804089a653d63d016664e8c1320e",
+})
+
 
 def validate_relative_path(path: str) -> None:
     if path.startswith("/") or ".." in path or "\\" in path:
         raise ValueError(f"Path traversal or absolute paths are strictly prohibited: '{path}'")
     if not re.match(r"^[a-zA-Z0-9_./-]+$", path):
         raise ValueError(f"Invalid characters in relative file path: '{path}'")
+
+
+def validate_pinned_spec(source_b64: str, harness_b64: str, target: str, harness: str, image: str) -> None:
+    """Fail before provider initialization when the fixture boundary is not met."""
+    if target != "src/OrderTotal.php" or harness != "tests/order_total.php" or image != DEFAULT_IMAGE:
+        raise ValueError("Only the pinned fixture paths and runtime image are supported.")
+    try:
+        source = base64.b64decode(source_b64, validate=True)
+        test = base64.b64decode(harness_b64, validate=True)
+    except (ValueError, TypeError, binascii.Error) as exc:
+        raise ValueError("Invalid fixture encoding.") from exc
+    if hashlib.sha256(source).hexdigest() not in PINNED_SOURCE_HASHES:
+        raise ValueError("Untrusted candidates are blocked until the test oracle is isolated.")
+    if hashlib.sha256(test).hexdigest() not in PINNED_HARNESS_HASHES:
+        raise ValueError("Unrecognized test harness is blocked.")
 
 
 def main() -> int:
@@ -63,6 +93,10 @@ def main() -> int:
     image_tag = spec.get("image", DEFAULT_IMAGE)
     oracle_token = spec.get("oracle_token") or secrets.token_hex(32)
 
+    if not isinstance(oracle_token, str) or not re.fullmatch(r"[a-f0-9]{64}", oracle_token):
+        sys.stderr.write("Invalid oracle token.\n")
+        return 2
+
     if not source_b64 or not test_harness_b64:
         sys.stderr.write("Spec must contain non-empty 'source_b64' and 'test_harness_b64'.\n")
         return 2
@@ -70,6 +104,7 @@ def main() -> int:
     try:
         validate_relative_path(relative_path)
         validate_relative_path(harness_path)
+        validate_pinned_spec(source_b64, test_harness_b64, relative_path, harness_path, image_tag)
     except ValueError as ve:
         sys.stderr.write(f"Validation error: {ve}\n")
         return 2

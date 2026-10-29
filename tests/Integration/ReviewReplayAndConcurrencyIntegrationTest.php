@@ -9,17 +9,20 @@ use PHPUnit\Framework\TestCase;
 use ProofPatch\Agent\SingleUseReviewApproval;
 use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\GitHub\PullRequestSnapshot;
+use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 
 final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 {
+    use InteractsWithIsolatedDatabase;
+
     private string $tempDir;
     private string $approvalsDir;
     private string $snapshotsDir;
 
     protected function setUp(): void
     {
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $this->setupIsolatedDatabase();
+        $this->bootstrapAndMigrateIsolatedDatabase();
 
         $this->tempDir = sys_get_temp_dir().'/proofpatch_replay_test_'.bin2hex(random_bytes(6));
         $this->approvalsDir = $this->tempDir.'/approvals';
@@ -38,6 +41,8 @@ final class ReviewReplayAndConcurrencyIntegrationTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->teardownIsolatedDatabase();
+
         putenv('PROOFPATCH_APPROVALS_DIR');
         putenv('PROOFPATCH_SNAPSHOT_DIR');
 

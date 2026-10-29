@@ -7,6 +7,8 @@ namespace ProofPatch\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\Evidence\Receipt;
 use ProofPatch\Verifier\OwnedCaseVerifier;
+use ProofPatch\Verifier\SeparateProcessOracle;
+use ProofPatch\Verifier\ModalIsolatedRunner;
 
 final class OwnedCaseVerifierTest extends TestCase
 {
@@ -167,6 +169,42 @@ PHP;
         self::assertStringContainsString('ABORTED: Candidate failed static AST safety check', $candidateLog);
     }
 
+    public function testCandidateCannotChangeHarnessExpectedValue(): void
+    {
+        $candidate = <<<'PHP'
+<?php
+function orderTotal(array $items): int
+{
+    $GLOBALS['expected'] = 0;
+    return 0;
+}
+PHP;
+        self::assertTrue(OwnedCaseVerifier::checkCandidateSafety($candidate)['safe']);
+
+        $verifier = new OwnedCaseVerifier(dirname(__DIR__, 2), $this->testRunsDir, null, new SeparateProcessOracle());
+        $report = $verifier->verify($candidate);
+
+        self::assertSame('FAILED', $report['decision']);
+        self::assertFalse($report['gates']['candidatePassed']);
+        self::assertSame(255, $report['runs']['candidate']['exitCode']);
+        self::assertStringContainsString('test oracle is isolated', (string) file_get_contents($report['evidenceDirectory'] . '/candidate/run.log'));
+        self::assertArrayNotHasKey('publicationAuthorizationToken', $report);
+    }
+
+    public function testBlockedCandidateDoesNotUseProvider(): void
+    {
+        $calls = 0;
+        $runner = new ModalIsolatedRunner(sandboxExecutor: function () use (&$calls): array {
+            $calls++;
+            return [];
+        });
+        $verifier = new OwnedCaseVerifier(dirname(__DIR__, 2), $this->testRunsDir, null, $runner);
+        $report = $verifier->verify('<?php function orderTotal(array $items): int { return 0; }');
+
+        self::assertSame('FAILED', $report['decision']);
+        self::assertSame(0, $calls);
+    }
+
     public function testUntrustedCandidateWithoutKnownShaIsBlockedFromHostExecution(): void
     {
         $projectRoot = dirname(__DIR__, 2);
@@ -221,5 +259,103 @@ PHP;
 
         $candidateLog = file_get_contents($report['evidenceDirectory'] . '/candidate/run.log');
         self::assertStringContainsString('Candidate failed static AST safety check', $candidateLog);
+    }
+
+    public function testBaselineExecutesCheckedBytesFromPrivateTempDirectoryNotMutableWorkspaceFiles(): void
+    {
+        $projectRoot = dirname(__DIR__, 2);
+        $verifier = new OwnedCaseVerifier($projectRoot, $this->testRunsDir);
+
+        $reflection = new \ReflectionClass($verifier);
+        $baselineMethod = $reflection->getMethod('runBaselineTest');
+
+        $baseSource = (string) file_get_contents($projectRoot . '/tests/Fixtures/owned-review-case/src/OrderTotal.php');
+        $inspectCwdTest = <<<'PHP'
+<?php
+declare(strict_types=1);
+require __DIR__ . '/../src/OrderTotal.php';
+$cwd = getcwd();
+echo "EXEC_CWD:{$cwd}\n";
+exit(1);
+PHP;
+
+        $res = $baselineMethod->invoke($verifier, $baseSource, $inspectCwdTest);
+
+        self::assertSame(1, $res['exitCode']);
+        self::assertMatchesRegularExpression('/EXEC_CWD:.*proofpatch-base-[a-f0-9]{16}/', $res['log']);
+        self::assertStringNotContainsString($projectRoot, $res['log']);
+
+        // Verify the private directory was cleaned up and no longer exists
+        preg_match('/EXEC_CWD:(.+)/', $res['log'], $matches);
+        self::assertNotEmpty($matches[1]);
+        self::assertDirectoryDoesNotExist(trim($matches[1]));
+    }
+
+    public function testVerifyFailsClosedWhenBaseFixtureIsAltered(): void
+    {
+        $mockProject = sys_get_temp_dir() . '/proofpatch-mock-proj-' . bin2hex(random_bytes(6));
+        $fixtureDir = $mockProject . '/tests/Fixtures/owned-review-case';
+        mkdir($fixtureDir . '/src', 0700, true);
+        mkdir($fixtureDir . '/tests', 0700, true);
+        $mockProject = (string) realpath($mockProject);
+        $fixtureDir = (string) realpath($fixtureDir);
+
+        // Put altered base file (not matching KNOWN_BASE_SHA256)
+        file_put_contents($fixtureDir . '/src/OrderTotal.php', "<?php\n// Tampered base\nfunction orderTotal(array \$i): int { return 0; }\n");
+        // Put authentic test file
+        $projectRoot = dirname(__DIR__, 2);
+        copy($projectRoot . '/tests/Fixtures/owned-review-case/tests/order_total.php', $fixtureDir . '/tests/order_total.php');
+
+        $verifier = new OwnedCaseVerifier($mockProject, $this->testRunsDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Owned review case fixture integrity check failed.');
+
+        try {
+            $verifier->verify('<?php // dummy candidate');
+        } finally {
+            @unlink($fixtureDir . '/src/OrderTotal.php');
+            @unlink($fixtureDir . '/tests/order_total.php');
+            @rmdir($fixtureDir . '/src');
+            @rmdir($fixtureDir . '/tests');
+            @rmdir($fixtureDir);
+            @rmdir($mockProject . '/tests/Fixtures');
+            @rmdir($mockProject . '/tests');
+            @rmdir($mockProject);
+        }
+    }
+
+    public function testVerifyFailsClosedWhenTestFixtureIsAltered(): void
+    {
+        $mockProject = sys_get_temp_dir() . '/proofpatch-mock-proj-' . bin2hex(random_bytes(6));
+        $fixtureDir = $mockProject . '/tests/Fixtures/owned-review-case';
+        mkdir($fixtureDir . '/src', 0700, true);
+        mkdir($fixtureDir . '/tests', 0700, true);
+        $mockProject = (string) realpath($mockProject);
+        $fixtureDir = (string) realpath($fixtureDir);
+
+        $projectRoot = dirname(__DIR__, 2);
+        // Put authentic base file
+        copy($projectRoot . '/tests/Fixtures/owned-review-case/src/OrderTotal.php', $fixtureDir . '/src/OrderTotal.php');
+        // Put altered test file (not matching KNOWN_TEST_SHA256)
+        file_put_contents($fixtureDir . '/tests/order_total.php', "<?php\n// Tampered test\nexit(0);\n");
+
+        $verifier = new OwnedCaseVerifier($mockProject, $this->testRunsDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Owned review case fixture integrity check failed.');
+
+        try {
+            $verifier->verify('<?php // dummy candidate');
+        } finally {
+            @unlink($fixtureDir . '/src/OrderTotal.php');
+            @unlink($fixtureDir . '/tests/order_total.php');
+            @rmdir($fixtureDir . '/src');
+            @rmdir($fixtureDir . '/tests');
+            @rmdir($fixtureDir);
+            @rmdir($mockProject . '/tests/Fixtures');
+            @rmdir($mockProject . '/tests');
+            @rmdir($mockProject);
+        }
     }
 }

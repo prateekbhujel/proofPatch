@@ -41,6 +41,8 @@ $app->handleRequest(\Illuminate\Http\Request::capture());
 PHP;
         file_put_contents($router, str_replace(['ROOT', 'STORAGE'], [var_export($root, true), var_export($directory.'/storage', true)], $script));
         $key = 'base64:'.base64_encode(random_bytes(32));
+        $serverDb = $directory . '/server_test.sqlite';
+        touch($serverDb);
         $servers = [];
         try {
             for ($i = 0; $i < 2; ++$i) {
@@ -48,7 +50,7 @@ PHP;
                 self::assertNotFalse($socket, $message);
                 $address = stream_socket_get_name($socket, false);
                 fclose($socket);
-                $server = new Process([PHP_BINARY, '-S', $address, $router], $root, ['APP_KEY' => $key, 'APP_ENV' => 'local']);
+                $server = new Process([PHP_BINARY, '-S', $address, $router], $root, ['APP_KEY' => $key, 'APP_ENV' => 'local', 'PROOFPATCH_DB' => $serverDb]);
                 $server->start();
                 $servers[] = [$server, $address];
                 $ready = false;

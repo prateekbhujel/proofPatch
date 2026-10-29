@@ -7,15 +7,18 @@ namespace ProofPatch\Tests\Integration;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\Http\Controllers\DashboardController;
+use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 
 final class GitHubDeviceFlowIntegrationTest extends TestCase
 {
+    use InteractsWithIsolatedDatabase;
+
     private string $tempSnapshots;
 
     protected function setUp(): void
     {
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $this->setupIsolatedDatabase();
+        $this->bootstrapAndMigrateIsolatedDatabase();
 
         $this->tempSnapshots = sys_get_temp_dir().'/proofpatch_deviceflow_int_'.bin2hex(random_bytes(6));
         putenv('PROOFPATCH_SNAPSHOT_DIR='.$this->tempSnapshots);
@@ -27,6 +30,8 @@ final class GitHubDeviceFlowIntegrationTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->teardownIsolatedDatabase();
+
         putenv('PROOFPATCH_SNAPSHOT_DIR');
         foreach (glob($this->tempSnapshots.'/*') ?: [] as $f) {
             @unlink($f);

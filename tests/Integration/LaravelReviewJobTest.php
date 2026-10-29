@@ -20,6 +20,18 @@ final class LaravelReviewJobTest extends TestCase
         self::assertTrue(mkdir($this->directory, 0700));
         $this->database = $this->directory.'/reviews.sqlite';
         touch($this->database);
+
+        $prodDb = realpath(dirname(__DIR__, 2).'/database/proofpatch.sqlite') ?: (dirname(__DIR__, 2).'/database/proofpatch.sqlite');
+        self::assertNotSame(
+            $prodDb,
+            realpath($this->database) ?: $this->database,
+            'CRITICAL SAFETY FAILURE: Test database must not point to the production/development database!'
+        );
+        self::assertFalse(
+            str_ends_with(str_replace('\\', '/', $this->database), 'database/proofpatch.sqlite'),
+            'CRITICAL SAFETY FAILURE: Test database points to database/proofpatch.sqlite!'
+        );
+
         self::assertSame(0, $this->runArtisan('migrate', '--force')->getExitCode());
     }
 
@@ -42,6 +54,7 @@ final class LaravelReviewJobTest extends TestCase
     {
         $snapshot = (new PullRequestSnapshot($this->directory.'/snapshots'))->capture([
             'repository' => 'example/project', 'number' => 12, 'headSha' => str_repeat('a', 40),
+            'isPrivate' => false, 'visibility' => 'public',
         ]);
         $first = $this->runArtisan('review:record', $snapshot['id']);
         self::assertSame(0, $first->getExitCode(), $first->getErrorOutput().$first->getOutput());
@@ -94,6 +107,7 @@ final class LaravelReviewJobTest extends TestCase
     {
         $snapshot = (new PullRequestSnapshot($this->directory.'/snapshots'))->capture([
             'repository' => 'example/project', 'number' => 12, 'headSha' => str_repeat('a', 40),
+            'isPrivate' => false, 'visibility' => 'public',
         ]);
         self::assertSame(0, $this->runArtisan('review:record', $snapshot['id'])->getExitCode());
         $db = new \PDO('sqlite:'.$this->database);

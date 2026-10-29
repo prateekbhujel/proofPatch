@@ -8,15 +8,18 @@ use Illuminate\Http\Request;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\GitHub\PullRequestSnapshot;
 use ProofPatch\Http\Controllers\DashboardController;
+use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 
 final class PrivateSnapshotTriageLeakageTest extends TestCase
 {
+    use InteractsWithIsolatedDatabase;
+
     private string $tempSnapshotsDir;
 
     protected function setUp(): void
     {
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $this->setupIsolatedDatabase();
+        $this->bootstrapAndMigrateIsolatedDatabase();
 
         $this->tempSnapshotsDir = sys_get_temp_dir().'/proofpatch_triage_sec_'.bin2hex(random_bytes(6));
         @mkdir($this->tempSnapshotsDir, 0755, true);
@@ -30,6 +33,8 @@ final class PrivateSnapshotTriageLeakageTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->teardownIsolatedDatabase();
+
         putenv('PROOFPATCH_SNAPSHOT_DIR');
         if (is_dir($this->tempSnapshotsDir)) {
             foreach (glob($this->tempSnapshotsDir.'/*') ?: [] as $f) {

@@ -10,11 +10,14 @@ use ProofPatch\Agent\IssueSuggestion;
 use ProofPatch\Agent\RequestBudget;
 use ProofPatch\Evidence\Receipt;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
+use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 final class IssueWorkbenchConnectedWorkflowTest extends TestCase
 {
+    use InteractsWithIsolatedDatabase;
+
     private string $tempBudgetDir;
     private ?string $originalHome;
     private ?string $originalBasetenKey;
@@ -22,8 +25,8 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
 
     protected function setUp(): void
     {
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $this->setupIsolatedDatabase();
+        $this->bootstrapAndMigrateIsolatedDatabase();
 
         $this->originalHome = getenv('HOME') !== false ? (string) getenv('HOME') : null;
         $this->originalBasetenKey = getenv('BASETEN_API_KEY') !== false ? (string) getenv('BASETEN_API_KEY') : null;
@@ -46,6 +49,8 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->teardownIsolatedDatabase();
+
         if ($this->originalHome !== null) {
             putenv('HOME='.$this->originalHome);
         } else {
@@ -210,5 +215,195 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
 
         self::assertTrue($res->isRedirection());
         self::assertStringContainsString('restricted to the allowlisted owned review case fixture', (string) $session->get('error'));
+    }
+
+    public function testSelectRepositoryLoadsIssuesAndPullsIntoSession(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'gho_dummy_token_12345']);
+
+        $mockHttp = new MockHttpClient([
+            // 1. /repos/my-org/my-repo/issues?state=open...
+            new MockResponse(json_encode([
+                [
+                    'number' => 10,
+                    'title' => 'Cart total calculation wrong with zero items',
+                    'body' => 'See src/OrderTotal.php',
+                    'user' => ['login' => 'tester'],
+                    'html_url' => 'https://github.com/my-org/my-repo/issues/10',
+                    'created_at' => '2026-10-29T12:00:00Z',
+                    'labels' => [['name' => 'bug']],
+                ],
+            ])),
+            // 2. /repos/my-org/my-repo/pulls?state=open...
+            new MockResponse(json_encode([
+                [
+                    'number' => 11,
+                    'title' => 'Update README',
+                    'state' => 'open',
+                    'head' => ['ref' => 'patch-1', 'sha' => '1111222233334444555566667777888899990000'],
+                    'base' => ['ref' => 'main', 'sha' => '2222333344445555666677778888999900001111'],
+                    'user' => ['login' => 'contributor'],
+                ],
+            ])),
+        ]);
+
+        $controller = new IssueWorkbenchController($mockHttp);
+
+        $req = Request::create('/issues/select-repository', 'POST', [
+            'repository' => 'my-org/my-repo',
+        ]);
+        $req->setLaravelSession($session);
+        $res = $controller->selectRepository($req);
+
+        self::assertTrue($res->isRedirection());
+        self::assertStringEndsWith('/issues', $res->getTargetUrl());
+
+        self::assertSame('my-org/my-repo', $session->get('selected_github_repo'));
+        $issues = $session->get('github_repo_issues');
+        self::assertIsArray($issues);
+        self::assertCount(1, $issues);
+        self::assertSame(10, $issues[0]['number']);
+        self::assertSame('Cart total calculation wrong with zero items', $issues[0]['title']);
+
+        $pulls = $session->get('github_repo_pulls');
+        self::assertIsArray($pulls);
+        self::assertCount(1, $pulls);
+        self::assertSame(11, $pulls[0]['number']);
+    }
+
+    public function testLoadIssueFetchesAndIntakesTask(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'gho_dummy_token_12345']);
+
+        $sourceCode = "<?php\n\nclass OrderTotal {\n    public function calculate(): int { return 100; }\n}\n";
+        $mockHttp = new MockHttpClient([
+            // 1. /repos/my-org/my-repo (repo metadata for default branch)
+            new MockResponse(json_encode(['default_branch' => 'main'])),
+            // 2. /repos/my-org/my-repo/commits/main
+            new MockResponse(json_encode(['sha' => '1111222233334444555566667777888899990000'])),
+            // 3. /repos/my-org/my-repo/issues/10
+            new MockResponse(json_encode([
+                'number' => 10,
+                'title' => 'Zero-quantity order items error',
+                'body' => 'Calculation error in OrderTotal.php',
+            ])),
+            // 4. /repos/my-org/my-repo/contents/src/OrderTotal.php?ref=...
+            new MockResponse(json_encode([
+                'type' => 'file',
+                'encoding' => 'base64',
+                'size' => strlen($sourceCode),
+                'content' => base64_encode($sourceCode),
+            ])),
+        ]);
+
+        $controller = new IssueWorkbenchController($mockHttp);
+
+        $req = Request::create('/issues/load-issue', 'POST', [
+            'repository' => 'my-org/my-repo',
+            'issue_number' => 10,
+            'path' => 'src/OrderTotal.php',
+        ]);
+        $req->setLaravelSession($session);
+        $res = $controller->loadIssue($req);
+
+        self::assertTrue($res->isRedirection());
+        self::assertStringEndsWith('/issues', $res->getTargetUrl());
+
+        $context = $session->get('issue_context');
+        self::assertIsArray($context);
+        self::assertSame('my-org/my-repo', $context['repository']);
+        self::assertSame(10, $context['issueNumber']);
+        self::assertSame('src/OrderTotal.php', $context['path']);
+        self::assertSame($sourceCode, $context['source']);
+
+        $taskId = $session->get('issue_task_id');
+        self::assertNotNull($taskId);
+        $task = \ProofPatch\Models\WorkbenchTask::find($taskId);
+        self::assertNotNull($task);
+        self::assertSame('my-org/my-repo', $task->repository);
+        self::assertSame(10, $task->issue_number);
+        self::assertSame('queued', $task->status);
+
+        // A disconnected session must not see or restore an authenticated repository's saved task.
+        $session->forget('github_auth');
+        $session->put('github_repo_issues', [['title' => 'Private issue']]);
+        $session->put('github_repo_pulls', [['title' => 'Private pull request']]);
+        $show = Request::create('/issues', 'GET');
+        $show->setLaravelSession($session);
+        $props = $controller->show($show)->toResponse($show)->getOriginalContent()->getData()['page']['props'];
+        self::assertNull($props['context']);
+        self::assertNotContains($taskId, array_column($props['tasks'], 'id'));
+        self::assertSame([], $props['githubConnection']['repoIssues']);
+        self::assertSame([], $props['githubConnection']['repoPulls']);
+        $switch = Request::create('/issues/switch-task', 'POST', ['task_id' => $taskId]);
+        $switch->setLaravelSession($session);
+        $controller->switchTask($switch);
+        self::assertNull($session->get('issue_context'));
+    }
+
+    public function testSelectRepositoryAndLoadIssueRequireAuthentication(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $controller = new IssueWorkbenchController($this->blockingHttp);
+
+        $reqSelect = Request::create('/issues/select-repository', 'POST', ['repository' => 'owner/repo']);
+        $reqSelect->setLaravelSession($session);
+        $resSelect = $controller->selectRepository($reqSelect);
+        self::assertTrue($resSelect->isRedirection());
+        self::assertStringContainsString('Connect your GitHub account', (string) $session->get('error'));
+
+        $session->forget('error');
+        $reqLoad = Request::create('/issues/load-issue', 'POST', ['repository' => 'owner/repo', 'issue_number' => 1]);
+        $reqLoad->setLaravelSession($session);
+        $resLoad = $controller->loadIssue($reqLoad);
+        self::assertTrue($resLoad->isRedirection());
+        self::assertStringContainsString('Connect your GitHub account', (string) $session->get('error'));
+    }
+
+    public function testShowDeliversGitHubConnectionDataToView(): void
+    {
+        $session = app('session')->driver('array');
+        $session->put('github_auth', [
+            'token' => 'gho_valid_test_token_123',
+            'user' => ['login' => 'testuser', 'name' => 'Test User'],
+            'repositories' => [
+                ['fullName' => 'testuser/alpha', 'isPrivate' => false],
+                ['fullName' => 'testuser/beta', 'isPrivate' => true],
+            ],
+        ]);
+        $session->put('selected_github_repo', 'testuser/alpha');
+        $session->put('github_repo_issues', [
+            ['number' => 42, 'title' => 'Bug in OrderTotal', 'body' => 'Details', 'user' => 'tester'],
+        ]);
+        $session->put('github_repo_pulls', [
+            ['number' => 43, 'title' => 'Fix OrderTotal', 'state' => 'open'],
+        ]);
+
+        $controller = new IssueWorkbenchController($this->blockingHttp);
+        $req = Request::create('/issues', 'GET');
+        $req->setLaravelSession($session);
+
+        $response = $controller->show($req);
+        self::assertInstanceOf(\Inertia\Response::class, $response);
+
+        $reflection = new \ReflectionClass($response);
+        $propsProperty = $reflection->getProperty('props');
+        $propsProperty->setAccessible(true);
+        $props = $propsProperty->getValue($response);
+
+        self::assertArrayHasKey('githubConnection', $props);
+        $conn = $props['githubConnection'];
+        self::assertTrue($conn['isConnected']);
+        self::assertSame('testuser', $conn['user']['login']);
+        self::assertCount(2, $conn['repositories']);
+        self::assertSame('testuser/alpha', $conn['selectedRepo']);
+        self::assertCount(1, $conn['repoIssues']);
+        self::assertSame(42, $conn['repoIssues'][0]['number']);
+        self::assertCount(1, $conn['repoPulls']);
     }
 }

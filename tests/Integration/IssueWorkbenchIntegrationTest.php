@@ -9,11 +9,14 @@ use PHPUnit\Framework\TestCase;
 use ProofPatch\Agent\IssueSuggestion;
 use ProofPatch\Agent\RequestBudget;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
+use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 final class IssueWorkbenchIntegrationTest extends TestCase
 {
+    use InteractsWithIsolatedDatabase;
+
     private string $tempBudgetDir;
     private ?string $originalHome;
     private ?string $originalBasetenKey;
@@ -21,8 +24,8 @@ final class IssueWorkbenchIntegrationTest extends TestCase
 
     protected function setUp(): void
     {
-        $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
-        $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $this->setupIsolatedDatabase();
+        $this->bootstrapAndMigrateIsolatedDatabase();
 
         $this->originalHome = getenv('HOME') !== false ? (string) getenv('HOME') : null;
         $this->originalBasetenKey = getenv('BASETEN_API_KEY') !== false ? (string) getenv('BASETEN_API_KEY') : null;
@@ -47,6 +50,8 @@ final class IssueWorkbenchIntegrationTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->teardownIsolatedDatabase();
+
         if ($this->originalHome !== null) {
             putenv('HOME='.$this->originalHome);
         } else {

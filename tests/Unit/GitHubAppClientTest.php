@@ -482,4 +482,87 @@ final class GitHubAppClientTest extends TestCase
         $this->assertNotEmpty($status['errors'], 'Should explicitly record installation error');
         $this->assertStringContainsString('Installation 301', $status['errors'][0]);
     }
+
+    public function testListOpenIssuesExcludesPullRequests(): void
+    {
+        $http = new MockHttpClient([
+            new MockResponse(json_encode([
+                [
+                    'number' => 1,
+                    'title' => 'Issue One',
+                    'body' => 'Bug report description',
+                    'user' => ['login' => 'alice'],
+                    'html_url' => 'https://github.com/org/repo/issues/1',
+                    'created_at' => '2026-10-29T10:00:00Z',
+                    'labels' => [['name' => 'bug']],
+                ],
+                [
+                    // This is a pull request, so it has 'pull_request' key
+                    'number' => 2,
+                    'title' => 'PR Two',
+                    'pull_request' => ['url' => 'https://api.github.com/repos/org/repo/pulls/2'],
+                    'user' => ['login' => 'bob'],
+                ],
+                [
+                    'number' => 3,
+                    'title' => 'Issue Three',
+                    'body' => 'Another issue',
+                    'user' => ['login' => 'charlie'],
+                    'html_url' => 'https://github.com/org/repo/issues/3',
+                    'created_at' => '2026-10-29T11:00:00Z',
+                    'labels' => [],
+                ],
+            ])),
+        ]);
+
+        $client = new GitHubAppClient($http);
+        $status = null;
+        $issues = $client->listOpenIssues('test_token', 'org/repo', $status);
+
+        $this->assertCount(2, $issues);
+        $this->assertSame(1, $issues[0]['number']);
+        $this->assertSame('Issue One', $issues[0]['title']);
+        $this->assertSame(['bug'], $issues[0]['labels']);
+        $this->assertSame(3, $issues[1]['number']);
+        $this->assertSame('Issue Three', $issues[1]['title']);
+    }
+
+    public function testFetchIssueContext(): void
+    {
+        $sourceContent = "<?php\n\nclass OrderTotal {}\n";
+        $http = new MockHttpClient([
+            // 1. /repos/org/repo (default branch)
+            new MockResponse(json_encode([
+                'default_branch' => 'main',
+            ])),
+            // 2. /repos/org/repo/commits/main
+            new MockResponse(json_encode([
+                'sha' => '1111222233334444555566667777888899990000',
+            ])),
+            // 3. /repos/org/repo/issues/42
+            new MockResponse(json_encode([
+                'number' => 42,
+                'title' => 'Fix calculation',
+                'body' => 'Details about the bug in OrderTotal',
+            ])),
+            // 4. /repos/org/repo/contents/src/OrderTotal.php?ref=...
+            new MockResponse(json_encode([
+                'type' => 'file',
+                'encoding' => 'base64',
+                'size' => strlen($sourceContent),
+                'content' => base64_encode($sourceContent),
+            ])),
+        ]);
+
+        $client = new GitHubAppClient($http);
+        $context = $client->fetchIssueContext('test_token', 'org/repo', 42, 'src/OrderTotal.php');
+
+        $this->assertSame('org/repo', $context['repository']);
+        $this->assertSame(42, $context['issueNumber']);
+        $this->assertSame('Fix calculation', $context['title']);
+        $this->assertSame('1111222233334444555566667777888899990000', $context['commit']);
+        $this->assertSame('src/OrderTotal.php', $context['path']);
+        $this->assertSame($sourceContent, $context['source']);
+        $this->assertSame(hash('sha256', $sourceContent), $context['sourceSha256']);
+    }
 }

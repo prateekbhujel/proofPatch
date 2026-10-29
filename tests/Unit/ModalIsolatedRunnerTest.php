@@ -65,6 +65,7 @@ final class ModalIsolatedRunnerTest extends TestCase
         self::assertSame('simulated-test-runner', $result['runnerType']);
         self::assertFalse($result['genuineProviderEvidence'], 'Simulation must explicitly state genuineProviderEvidence is false');
         self::assertFalse($result['isolated'], 'Simulation must honestly state isolated is false');
+        self::assertFalse($result['networkBlocked'], 'A host callback cannot establish network isolation');
         self::assertSame(0, $result['exitCode']);
         self::assertSame('mock-sb-01', $result['sandboxId']);
     }

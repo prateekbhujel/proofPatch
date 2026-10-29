@@ -41,7 +41,8 @@ interface IsolatedRunnerInterface
     ): array;
 
     /**
-     * Checks if this runner is available, configured, and authenticated with sufficient credits.
+     * Reports local runner configuration. This does not verify provider authentication,
+     * connectivity, sandbox isolation, or available credits.
      *
      * @return array{available: bool, runner: string, reason: string}
      */

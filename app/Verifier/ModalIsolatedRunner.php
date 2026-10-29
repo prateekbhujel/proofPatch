@@ -123,7 +123,8 @@ final class ModalIsolatedRunner implements IsolatedRunnerInterface
                 'sandboxId' => (string) ($res['sandboxId'] ?? ('simulated-sb-' . bin2hex(random_bytes(6)))),
                 'runnerType' => 'simulated-test-runner',
                 'genuineProviderEvidence' => false,
-                'networkBlocked' => (bool) ($res['networkBlocked'] ?? true),
+                // A simulated callback runs in the host process, not a network sandbox.
+                'networkBlocked' => false,
                 'credentialsMounted' => false,
                 'isolated' => false,
                 'oracleVerified' => $oracleVerified,

@@ -486,7 +486,7 @@ final readonly class OwnedCaseVerifier
                         : (!$candidateStaticSafetyPassed
                             ? 'Candidate failed static AST safety check: ' . ($safety['reason'] ?? 'Disallowed construct')
                             : (!$isTrustedFixtureCandidate
-                                ? 'Host execution disabled: untrusted candidate code blocked without microVM isolation.'
+                                ? 'Untrusted candidate blocked: the test oracle is not yet protected from candidate code.'
                                 : 'Candidate failed test execution.')),
                 ],
             ],
@@ -495,13 +495,13 @@ final readonly class OwnedCaseVerifier
                 'status' => $isSimulated ? 'allowlisted_bounded_demonstration' : 'genuine_isolated_execution',
                 'boundary' => $isSimulated
                     ? 'Local temporary directories and git worktrees are NOT security sandboxes.'
-                    : 'Containerized microVM boundary with kernel-enforced network and filesystem limits (Modal Sandbox).',
+                    : 'Modal Sandbox requested with network blocking and no mounted credentials; isolation was not independently probed in this run.',
                 'isolationLevel' => $isSimulated
                     ? 'Static Token & AST Guard + Ephemeral Private Directory (Host execution restricted strictly to checked-in allowlisted fixtures; no OS-level sandbox or syscall filter enforced)'
-                    : 'MicroVM Container Sandbox (untrusted candidate execution isolated from host)',
+                    : 'Modal Sandbox requested for a pinned fixture.',
                 'remainingGap' => $isSimulated
-                    ? 'Arbitrary untrusted repository code execution requires an external containerized microVM boundary with kernel-enforced network and filesystem limits (e.g. Modal Sandbox). Modal CLI is uninstalled; ProofPatch reports this boundary truthfully.'
-                    : 'None; candidate executed inside dedicated isolated microVM with network and filesystem limits.',
+                    ? 'Arbitrary untrusted candidates remain blocked; this host or simulated run is not a security sandbox.'
+                    : 'Only the pinned fixture is supported. The test oracle is not yet protected from arbitrary candidate code.',
             ],
         ];
 

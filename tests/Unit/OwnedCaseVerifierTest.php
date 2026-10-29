@@ -188,6 +188,8 @@ PHP;
         self::assertFalse($report['gates']['candidatePassed']);
         self::assertSame(255, $report['runs']['candidate']['exitCode']);
         self::assertStringContainsString('test oracle is isolated', (string) file_get_contents($report['evidenceDirectory'] . '/candidate/run.log'));
+        self::assertStringContainsString('test oracle is not yet protected', $report['runs']['candidate']['summary']);
+        self::assertStringContainsString('not a security sandbox', $report['backendSandboxGap']['remainingGap']);
         self::assertArrayNotHasKey('publicationAuthorizationToken', $report);
     }
 

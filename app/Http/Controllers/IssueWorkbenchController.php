@@ -101,6 +101,11 @@ final class IssueWorkbenchController
         }
         $context = $request->session()->get('issue_context');
         $modelContextAllowed = is_array($context) && $this->canSendModelContext($request, $context);
+        try {
+            $modelKeyAvailable = strlen(Credentials::baseten()) >= 16;
+        } catch (\Throwable) {
+            $modelKeyAvailable = false;
+        }
         $preview = null;
         $budget = null;
         try {
@@ -210,6 +215,7 @@ final class IssueWorkbenchController
             'tasks' => $tasks,
             'githubConnection' => $githubConnection,
             'modelContextAllowed' => $modelContextAllowed,
+            'modelKeyAvailable' => $modelKeyAvailable,
         ]);
     }
 

@@ -142,6 +142,7 @@ interface VerificationReport {
   kind: string;
   createdAt: string;
   decision: 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE';
+  isSimulated?: boolean;
   baseCommit: string;
   isSynthetic?: boolean;
   provenance?: string;
@@ -208,6 +209,7 @@ interface Props {
   tasks?: WorkbenchTaskData[];
   githubConnection?: GitHubConnectionData | null;
   modelContextAllowed?: boolean;
+  modelKeyAvailable?: boolean;
 }
 
 export default function Issues({
@@ -226,6 +228,7 @@ export default function Issues({
   tasks = [],
   githubConnection = null,
   modelContextAllowed = false,
+  modelKeyAvailable = false,
 }: Props) {
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
@@ -316,7 +319,7 @@ export default function Issues({
 
   function requestSuggestion(event: React.FormEvent) {
     event.preventDefault();
-    const canSubmit = !sending && modelContextAllowed && Boolean(preview) && (Boolean(budget?.canRequest) || isDedicatedTestRepo || isOwnedFixture);
+    const canSubmit = !sending && modelContextAllowed && Boolean(preview) && (Boolean(budget?.canRequest && modelKeyAvailable) || isDedicatedTestRepo || isOwnedFixture);
     if (!canSubmit) return;
     router.post(
       '/issues/propose',
@@ -598,12 +601,12 @@ export default function Issues({
                 <div className="rounded-md border border-amber-200 bg-white p-2.5 space-y-1.5 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      5/5 Gates Passed
+                      Fixture checks passed
                     </span>
                     <span className="text-[10px] font-mono text-slate-500">Receipt SHA</span>
                   </div>
                   <p className="text-xs font-semibold text-slate-900 line-clamp-2">{context.title}</p>
-                  <p className="text-[11px] text-slate-500">Verified; ready for maintainer draft PR review.</p>
+                  <p className="text-[11px] text-slate-500">{verificationReport.isSimulated !== false ? 'Local test only; not ready to publish.' : 'Fixture run complete; review the evidence.'}</p>
                 </div>
               ) : (
                 <div className="text-[11px] text-slate-400 italic p-2 text-center">No pending reviews</div>
@@ -1040,34 +1043,34 @@ export default function Issues({
                   <div className="flex items-center gap-3">
                     <button
                       type="submit"
-                      disabled={!modelContextAllowed || sending || (!budget?.canRequest && !isDedicatedTestRepo && !isOwnedFixture)}
+                      disabled={!modelContextAllowed || sending || (!(budget?.canRequest && modelKeyAvailable) && !isDedicatedTestRepo && !isOwnedFixture)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>
                         {sending
                           ? 'Assigning to Muse…'
-                          : budget?.canRequest
+                          : budget?.canRequest && modelKeyAvailable
                           ? 'Assign to Muse'
                           : 'Load Offline Reference Repair'}
                       </span>
                     </button>
                     <span className="text-[11px] text-slate-500 font-mono">
-                      {budget?.canRequest
+                      {budget?.canRequest && modelKeyAvailable
                         ? `Estimated reservation: $${(preview.estimatedMicros / 1000000).toFixed(4)}`
                         : 'Offline reference repair ($0.00)'}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400">
-                    {modelContextAllowed ? 'Sends the issue and selected file to the model provider' : 'Private or unverified content stays on this computer'}
+                    {!modelContextAllowed ? 'Private or unverified content stays on this computer' : budget?.canRequest && modelKeyAvailable ? 'Sends the issue and selected file to the model provider' : 'No model request will be sent'}
                   </span>
                 </div>
 
-                {!budget?.canRequest && (
+                {(!budget?.canRequest || !modelKeyAvailable) && (
                   <p className="text-xs text-amber-800 bg-amber-50 p-2.5 rounded border border-amber-200">
                     {isDedicatedTestRepo || isOwnedFixture
-                      ? 'Local model request allowance is exhausted. You can load and verify the authentic offline reference example for this owned case.'
-                      : 'Local model request allowance is exhausted. No external request will be sent.'}
+                      ? 'Muse is unavailable. You can load the offline reference example.'
+                      : 'Muse is unavailable. Check the key and local request allowance.'}
                   </p>
                 )}
               </form>
@@ -1088,7 +1091,7 @@ export default function Issues({
                 </p>
               </div>
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${suggestion.candidate?.verified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-                {suggestion.candidate?.verified ? 'Verified Candidate' : 'Unverified Proposal'}
+                {suggestion.candidate?.verified ? (verificationReport?.isSimulated !== false ? 'Local Fixture Passed' : 'Fixture Passed') : 'Unverified Proposal'}
               </span>
             </div>
 
@@ -1150,7 +1153,7 @@ export default function Issues({
                       <span>Falsifiable ProofPatcher Verifier</span>
                     </h3>
                     <p className="text-[11px] text-violet-800 mt-0.5">
-                      Runs isolated AST token checks, baseline failure reproduction, negative control guard, and candidate tests (replicated bounded test cases).
+                      Runs checks on a known test fixture. Other candidate code is not yet supported.
                     </p>
                   </div>
                   <button
@@ -1205,12 +1208,12 @@ export default function Issues({
                         {verificationReport.decision === 'VERIFIED' ? (
                           <>
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>VERIFIED</span>
+                            <span>{verificationReport.isSimulated !== false ? 'LOCAL FIXTURE PASSED' : 'FIXTURE PASSED'}</span>
                           </>
                         ) : (
                           <>
                             <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                            <span>FAILED</span>
+                            <span>{verificationReport.decision}</span>
                           </>
                         )}
                       </span>
@@ -1252,7 +1255,7 @@ export default function Issues({
                       {verificationReport.gates.candidatePassed ? 'Passed (Exit 0)' : `Failed (Exit ${verificationReport.runs.candidate?.exitCode ?? '?'})`}
                     </span>
                     <span className="text-[10px] text-slate-500">
-                      {verificationReport.gates.candidatePassed ? 'All tests pass' : (verificationReport.runs.candidate?.exitCode === 255 ? 'Host execution blocked' : 'Test failed')}
+                      {verificationReport.gates.candidatePassed ? 'Fixture checks passed' : (verificationReport.runs.candidate?.exitCode === 255 ? 'Candidate execution blocked' : 'Test failed')}
                     </span>
                   </div>
 
@@ -1363,7 +1366,7 @@ export default function Issues({
                 </details>
 
                 {/* Pull Request Publication Section */}
-                {verificationReport.decision === 'VERIFIED' && (
+                {verificationReport.decision === 'VERIFIED' && verificationReport.isSimulated === false && (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-2xs">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <div className="flex items-center gap-2">
@@ -1406,7 +1409,7 @@ export default function Issues({
                     ) : (
                       <div className="space-y-2">
                         <p className="text-xs text-slate-600">
-                          The proposal passed all 5 verification gates. Prepare a draft pull request in the dedicated test repository (<code className="font-mono text-slate-800">configured repository</code>) with cryptographic audit evidence attached.
+                          The fixture passed its checks. Prepare a draft pull request in the dedicated test repository (<code className="font-mono text-slate-800">configured repository</code>) with the run evidence attached.
                         </p>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
                           <span className="text-[10px] text-slate-500 italic">
@@ -1435,7 +1438,7 @@ export default function Issues({
                 )}
 
                 <p className="text-[11px] text-slate-500">
-                  Allowlisted bounded run. Autonomous untrusted code execution requires containerized microVMs. See <Link href="/docs" className="text-violet-700 hover:underline">Documentation</Link>.
+                  {verificationReport.isSimulated !== false ? 'Local fixture run; no isolated sandbox was verified. ' : 'Only the known fixture is supported. '}Other candidates remain blocked. See <Link href="/docs" className="text-violet-700 hover:underline">Documentation</Link>.
                 </p>
               </div>
             )}

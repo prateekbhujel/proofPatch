@@ -601,4 +601,45 @@ final class AdversarialTestOracleBoundaryTest extends TestCase
             );
         }
     }
+
+    /**
+     * Vector 16: Early exit output forgery (e.g. exit($total)) is rejected by static safety and cannot attest normal completion.
+     */
+    public function testEarlyExitOutputForgeryCannotAttestNormalCompletion(): void
+    {
+        $candidate = <<<'PHP'
+<?php
+declare(strict_types=1);
+
+function orderTotal(array $items): int
+{
+    $total = 0;
+    foreach ($items as $item) {
+        $total += $item['unit_price'] * $item['quantity'];
+    }
+    exit((string) $total);
+}
+PHP;
+
+        // Static safety check must reject exit construct immediately
+        $safety = OwnedCaseVerifier::checkCandidateSafety($candidate);
+        self::assertFalse($safety['safe']);
+        self::assertStringContainsString('exit or die', strtolower($safety['reason']));
+
+        // Full verifier must fail closed and refuse publication token
+        $verifier = $this->createVerifierWithRunner(function () {
+            return [
+                'exitCode' => 0,
+                'output' => "250\n",
+                'oracleVerified' => false,
+                'sandboxId' => 'sb-adversarial-early-exit',
+            ];
+        });
+
+        $report = $verifier->verify($candidate);
+        self::assertSame('FAILED', $report['decision']);
+        self::assertFalse($report['gates']['candidateStaticSafetyPassed']);
+        self::assertFalse($report['gates']['candidatePassed']);
+        self::assertArrayNotHasKey('publicationAuthorizationToken', $report);
+    }
 }

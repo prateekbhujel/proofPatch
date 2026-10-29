@@ -70,6 +70,29 @@ final class IssueWorkbenchController
         return TaskWorkflowHelper::resolveGitHubToken($request);
     }
 
+    /** Only an explicitly public repository with a current grant may be sent to a model. */
+    private function canSendModelContext(Request $request, array $context): bool
+    {
+        if (($context['isSynthetic'] ?? false) === true) {
+            return true;
+        }
+
+        $access = $request->attributes->get('proofpatch_github_access');
+        $repo = $context['repository'] ?? null;
+        $auth = $request->session()->get('github_auth');
+        if (!is_array($access) || !is_int($access['userId'] ?? null) || !is_string($repo)
+            || !isset($access['repositories'][strtolower($repo)]) || !is_array($auth['repositories'] ?? null)) {
+            return false;
+        }
+        foreach ($auth['repositories'] as $repository) {
+            if (is_array($repository) && is_string($repository['fullName'] ?? null)
+                && strcasecmp($repository['fullName'], $repo) === 0) {
+                return ($repository['isPrivate'] ?? null) === false;
+            }
+        }
+        return false;
+    }
+
     public function show(Request $request): Response
     {
         $activeContext = $request->session()->get('issue_context');
@@ -77,6 +100,7 @@ final class IssueWorkbenchController
             $request->session()->forget(self::CASE_SESSION_KEYS);
         }
         $context = $request->session()->get('issue_context');
+        $modelContextAllowed = is_array($context) && $this->canSendModelContext($request, $context);
         $preview = null;
         $budget = null;
         try {
@@ -85,16 +109,20 @@ final class IssueWorkbenchController
                 $preview = (new IssueSuggestion($this->getHttpClient(), $this->budget()))->preview($context);
                 $budget['canRequest'] = $budget['canRequest'] && $budget['remainingMicros'] >= $preview['estimatedMicros'];
 
-                $approvalStore = $this->approvalStore();
-                $headSha = $this->resolveContextHeadSha($context);
-                $approval = $approvalStore->issue(
-                    (string) $context['repository'],
-                    (int) $context['issueNumber'],
-                    $headSha,
-                    (string) $preview['digest']
-                );
-                $preview['approvalToken'] = $approval['token'];
-                $request->session()->put('issue_approval_token', $approval['token']);
+                if ($modelContextAllowed) {
+                    $approvalStore = $this->approvalStore();
+                    $headSha = $this->resolveContextHeadSha($context);
+                    $approval = $approvalStore->issue(
+                        (string) $context['repository'],
+                        (int) $context['issueNumber'],
+                        $headSha,
+                        (string) $preview['digest']
+                    );
+                    $preview['approvalToken'] = $approval['token'];
+                    $request->session()->put('issue_approval_token', $approval['token']);
+                } else {
+                    $request->session()->forget('issue_approval_token');
+                }
             }
         } catch (\Throwable) {
             $request->session()->forget('issue_context');
@@ -179,6 +207,7 @@ final class IssueWorkbenchController
             'error' => $request->session()->get('error'),
             'tasks' => $tasks,
             'githubConnection' => $githubConnection,
+            'modelContextAllowed' => $modelContextAllowed,
         ]);
     }
 
@@ -416,6 +445,15 @@ final class IssueWorkbenchController
                 }
 
                 if ($hasKey && $budgetCanRequest) {
+                    if (!$this->canSendModelContext($request, $context)) {
+                        throw new \RuntimeException('Private or unverified repository content stays local and cannot be sent to a model.');
+                    }
+                    // The repository may have changed visibility since intake. Recheck
+                    // anonymously immediately before sending any content to a provider.
+                    $current = (new PublicIssueContext($this->getHttpClient()))->fetch($context['issueUrl'], $context['path']);
+                    if (!hash_equals($service->preview($current)['digest'], $digest)) {
+                        throw new \RuntimeException('The issue or repository changed. Preview the request again.');
+                    }
                     $this->consumeProposalApproval($request, $context, $digest);
                     $suggestion = $service->propose($context, $digest, Credentials::baseten());
                     $suggestion['commit'] = $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit();
@@ -471,6 +509,9 @@ final class IssueWorkbenchController
                 }
 
                 if ($hasKey && $budgetCanRequest) {
+                    if (!$this->canSendModelContext($request, $context)) {
+                        throw new \RuntimeException('Private or unverified repository content stays local and cannot be sent to a model.');
+                    }
                     $this->consumeProposalApproval($request, $context, $digest);
                     $suggestion = $service->propose($context, $digest, Credentials::baseten());
                     $suggestion['commit'] = null;
@@ -510,6 +551,9 @@ final class IssueWorkbenchController
                     ];
                 }
             } else {
+                if (!$this->canSendModelContext($request, $context)) {
+                    throw new \RuntimeException('Private or unverified repository content stays local and cannot be sent to a model.');
+                }
                 if (!$budgetCanRequest) {
                     throw new \RuntimeException('The local model request allowance is exhausted.');
                 }

@@ -206,6 +206,7 @@ interface Props {
   error: string | null;
   tasks?: WorkbenchTaskData[];
   githubConnection?: GitHubConnectionData | null;
+  modelContextAllowed?: boolean;
 }
 
 export default function Issues({
@@ -223,6 +224,7 @@ export default function Issues({
   error,
   tasks = [],
   githubConnection = null,
+  modelContextAllowed = false,
 }: Props) {
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
@@ -311,7 +313,7 @@ export default function Issues({
 
   function requestSuggestion(event: React.FormEvent) {
     event.preventDefault();
-    const canSubmit = !sending && Boolean(preview) && (Boolean(budget?.canRequest) || isDedicatedTestRepo || isOwnedFixture);
+    const canSubmit = !sending && modelContextAllowed && Boolean(preview) && (Boolean(budget?.canRequest) || isDedicatedTestRepo || isOwnedFixture);
     if (!canSubmit) return;
     router.post(
       '/issues/propose',
@@ -1016,12 +1018,12 @@ export default function Issues({
                   </pre>
                 </details>
 
-                <details className="rounded-md border border-slate-200 p-3 bg-slate-50/50">
+                {modelContextAllowed && <details className="rounded-md border border-slate-200 p-3 bg-slate-50/50">
                   <summary className="cursor-pointer font-semibold text-slate-900">Exact JSON Payload</summary>
                   <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-700 font-mono bg-white p-2.5 rounded border border-slate-200">
                     {JSON.stringify(preview.body, null, 2)}
                   </pre>
-                </details>
+                </details>}
               </div>
             )}
 
@@ -1031,7 +1033,7 @@ export default function Issues({
                   <div className="flex items-center gap-3">
                     <button
                       type="submit"
-                      disabled={sending || (!budget?.canRequest && !isDedicatedTestRepo && !isOwnedFixture)}
+                      disabled={!modelContextAllowed || sending || (!budget?.canRequest && !isDedicatedTestRepo && !isOwnedFixture)}
                       className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
@@ -1050,7 +1052,7 @@ export default function Issues({
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-400">
-                    Sends sanitized issue context and target source for patch generation
+                    {modelContextAllowed ? 'Sends the issue and selected file to the model provider' : 'Private or unverified content stays on this computer'}
                   </span>
                 </div>
 

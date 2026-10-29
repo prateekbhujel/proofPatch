@@ -405,6 +405,9 @@ final class DedicatedWorkflowIntegrationTest extends TestCase
         // 2. GET /issues: show() must NOT throw or clear context
         $showReq = Request::create('/issues', 'GET');
         $showReq->setLaravelSession($session);
+        $repo = \ProofPatch\GitHub\DedicatedTestRepo::requireName();
+        $session->put('github_auth.repositories', [['fullName' => $repo, 'isPrivate' => false]]);
+        $showReq->attributes->set('proofpatch_github_access', ['userId' => 1, 'repositories' => [strtolower($repo) => true]]);
         $showRes = $controller->show($showReq);
         self::assertInstanceOf(\Inertia\Response::class, $showRes);
 

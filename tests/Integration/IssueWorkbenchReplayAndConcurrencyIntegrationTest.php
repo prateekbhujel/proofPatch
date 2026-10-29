@@ -108,6 +108,37 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
         ];
     }
 
+    private function authorizePublicContext(Request $request): void
+    {
+        $repo = \ProofPatch\GitHub\DedicatedTestRepo::requireName();
+        $request->session()->put('github_auth.repositories', [['fullName' => $repo, 'isPrivate' => false]]);
+        $request->attributes->set('proofpatch_github_access', [
+            'userId' => 1, 'repositories' => [strtolower($repo) => true],
+        ]);
+    }
+
+    private function mockPublicContextAndModel(array $context): MockHttpClient
+    {
+        return new MockHttpClient(function (string $method, string $url) use ($context): MockResponse {
+            if ($method === 'POST') {
+                return new MockResponse(json_encode($this->mockModelResponse()));
+            }
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            if (str_ends_with($path, '/commits/main')) {
+                return new MockResponse(json_encode(['sha' => $context['commit']]));
+            }
+            if (str_ends_with($path, '/issues/1')) {
+                return new MockResponse(json_encode(['number' => 1, 'title' => $context['title'], 'body' => $context['body']]));
+            }
+            if (str_ends_with($path, '/contents/src/OrderTotal.php')) {
+                return new MockResponse(json_encode(['type' => 'file', 'path' => $context['path'], 'encoding' => 'base64',
+                    'size' => strlen($context['source']), 'content' => base64_encode($context['source'])]));
+            }
+            return new MockResponse(json_encode(['private' => false, 'visibility' => 'public',
+                'default_branch' => 'main', 'full_name' => $context['repository']]));
+        });
+    }
+
     public function testShowGeneratesSingleUseApprovalTokenBoundToPreview(): void
     {
         $session = app('session')->driver('array');
@@ -125,6 +156,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
 
         $showRequest = Request::create('/issues', 'GET');
         $showRequest->setLaravelSession($session);
+        $this->authorizePublicContext($showRequest);
 
         $response = $controller->show($showRequest);
         $props = $response->toResponse($showRequest)->getOriginalContent()->getData()['page']['props'];
@@ -158,9 +190,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
         $approvalStore = new SingleUseReviewApproval($this->approvalsDir);
 
         // Mock Baseten HTTP client to simulate live model provider response
-        $mockHttp = new MockHttpClient([
-            new MockResponse(json_encode($this->mockModelResponse())),
-        ]);
+        $mockHttp = $this->mockPublicContextAndModel($context);
 
         $controller = new IssueWorkbenchController(
             http: $mockHttp,
@@ -184,6 +214,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
                 // Missing approval_token!
             ]);
             $proposeRequest->setLaravelSession($session);
+            $this->authorizePublicContext($proposeRequest);
 
             $response = $controller->propose($proposeRequest);
             self::assertTrue($response->isRedirection());
@@ -219,10 +250,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
         $budget = new RequestBudget($this->budgetDir, 500000, 10);
         $approvalStore = new SingleUseReviewApproval($this->approvalsDir);
 
-        $mockHttp = new MockHttpClient([
-            // First live call
-            new MockResponse(json_encode($this->mockModelResponse())),
-        ]);
+        $mockHttp = $this->mockPublicContextAndModel($context);
 
         $controller = new IssueWorkbenchController(
             http: $mockHttp,
@@ -252,6 +280,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
                 'approval_token' => $token,
             ]);
             $req1->setLaravelSession($session);
+            $this->authorizePublicContext($req1);
             $res1 = $controller->propose($req1);
             self::assertTrue($res1->isRedirection());
             self::assertNull($res1->getSession()?->get('error'));
@@ -271,6 +300,7 @@ final class IssueWorkbenchReplayAndConcurrencyIntegrationTest extends TestCase
                 'approval_token' => $token,
             ]);
             $req2->setLaravelSession($session);
+            $this->authorizePublicContext($req2);
             $res2 = $controller->propose($req2);
             self::assertTrue($res2->isRedirection());
 

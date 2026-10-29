@@ -12,6 +12,9 @@ use ProofPatch\Http\Controllers\IssueWorkbenchController;
 use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\Http\Middleware\AuthorizeGithubTasks;
 use ProofPatch\Models\WorkbenchTask;
+use ProofPatch\Agent\IssueSuggestion;
+use ProofPatch\Agent\RequestBudget;
+use ProofPatch\Support\TaskWorkflowHelper;
 use ProofPatch\Tests\Support\InteractsWithIsolatedDatabase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -229,5 +232,93 @@ final class GitHubTaskAccessIsolationTest extends TestCase
         $task = WorkbenchTask::findOrFail($request->session()->get('issue_task_id'));
         self::assertSame(1, $task->github_user_id);
         self::assertSame('Private details', $task->body);
+    }
+
+    public function testPrivateAndUnknownVisibilityNeverReachModel(): void
+    {
+        $previousKey = getenv('BASETEN_API_KEY');
+        putenv('BASETEN_API_KEY=' . str_repeat('x', 32));
+        $budgetDir = sys_get_temp_dir() . '/proofpatch-privacy-budget-' . bin2hex(random_bytes(6));
+        mkdir($budgetDir, 0700);
+        $calls = 0;
+        $http = new MockHttpClient(function () use (&$calls): MockResponse {
+            ++$calls;
+            throw new \RuntimeException('Unexpected external call');
+        });
+        try {
+            $task = WorkbenchTask::recordIntake($this->context(), false, githubUserId: 1);
+            $budget = new RequestBudget($budgetDir, 500000, 10);
+            $controller = new IssueWorkbenchController($http, $budget);
+            foreach ([true, null] as $visibility) {
+                $request = $this->request('POST', '/issues/propose');
+                $request->session()->put('github_auth.repositories', [[
+                    'fullName' => 'owner/private-repo', 'isPrivate' => $visibility,
+                ]]);
+                $request->attributes->set('proofpatch_github_access', [
+                    'userId' => 1, 'repositories' => ['owner/private-repo' => true],
+                ]);
+                TaskWorkflowHelper::hydrateTaskSession($request, $task);
+                $context = $request->session()->get('issue_context');
+                $digest = (new IssueSuggestion($http, $budget))->preview($context)['digest'];
+                $request->merge(['approved' => true, 'digest' => $digest]);
+
+                $response = $controller->propose($request);
+                self::assertTrue($response->isRedirection());
+                self::assertStringContainsString('stays local', (string) $request->session()->get('error'));
+                self::assertNull($request->session()->get('issue_suggestion'));
+            }
+            self::assertSame(0, $calls);
+        } finally {
+            $previousKey === false ? putenv('BASETEN_API_KEY') : putenv('BASETEN_API_KEY=' . $previousKey);
+            foreach (glob($budgetDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($budgetDir);
+        }
+    }
+
+    public function testDedicatedPublicRepositoryIsRecheckedBeforeSending(): void
+    {
+        $previousKey = getenv('BASETEN_API_KEY');
+        putenv('BASETEN_API_KEY=' . str_repeat('x', 32));
+        $budgetDir = sys_get_temp_dir() . '/proofpatch-privacy-budget-' . bin2hex(random_bytes(6));
+        mkdir($budgetDir, 0700);
+        $calls = [];
+        $http = new MockHttpClient(function (string $method, string $url) use (&$calls): MockResponse {
+            $calls[] = [$method, $url];
+            return new MockResponse(json_encode(['private' => true, 'visibility' => 'private']));
+        });
+        try {
+            $context = $this->context();
+            $context['source'] = (string) file_get_contents(base_path('tests/Fixtures/owned-review-case/src/OrderTotal.php'));
+            $context['sourceSha256'] = hash('sha256', $context['source']);
+            $context['path'] = 'src/OrderTotal.php';
+            $task = WorkbenchTask::recordIntake($context, true, githubUserId: 1);
+            $budget = new RequestBudget($budgetDir, 500000, 10);
+            $controller = new IssueWorkbenchController($http, $budget);
+            $request = $this->request('POST', '/issues/propose');
+            $request->session()->put('github_auth.repositories', [[
+                'fullName' => 'owner/private-repo', 'isPrivate' => false,
+            ]]);
+            $request->attributes->set('proofpatch_github_access', [
+                'userId' => 1, 'repositories' => ['owner/private-repo' => true],
+            ]);
+            TaskWorkflowHelper::hydrateTaskSession($request, $task);
+            $digest = (new IssueSuggestion($http, $budget))->preview($context)['digest'];
+            $request->merge(['approved' => true, 'digest' => $digest]);
+
+            $controller->propose($request);
+            self::assertStringContainsString('could not be verified as public', (string) $request->session()->get('error'));
+            self::assertNull($request->session()->get('issue_suggestion'));
+            self::assertCount(1, $calls);
+            self::assertSame('GET', $calls[0][0]);
+            self::assertStringStartsWith('https://api.github.com/', $calls[0][1]);
+        } finally {
+            $previousKey === false ? putenv('BASETEN_API_KEY') : putenv('BASETEN_API_KEY=' . $previousKey);
+            foreach (glob($budgetDir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($budgetDir);
+        }
     }
 }

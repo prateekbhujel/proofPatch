@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
+import { TaskCardSection, LocalTaskCard } from '../Components/TaskCardSection';
 import { ArrowRight, Sparkles, Shield, AlertTriangle, CheckCircle2, MessageSquare, FileCode, Check, Copy, XCircle, Terminal, GitPullRequest, ExternalLink, Lock, Kanban, Clock, Layers, FolderGit2, RefreshCw } from 'lucide-react';
 
 interface GitHubRepo {
@@ -207,6 +208,7 @@ interface Props {
   budget: { canRequest: boolean; attempts: number; maxAttempts: number } | null;
   error: string | null;
   tasks?: WorkbenchTaskData[];
+  localTasks?: LocalTaskCard[];
   githubConnection?: GitHubConnectionData | null;
   modelContextAllowed?: boolean;
   modelKeyAvailable?: boolean;
@@ -226,6 +228,7 @@ export default function Issues({
   budget,
   error,
   tasks = [],
+  localTasks = [],
   githubConnection = null,
   modelContextAllowed = false,
   modelKeyAvailable = false,
@@ -683,6 +686,12 @@ export default function Issues({
             </div>
           )}
         </section>
+
+        {/* Independent Task Cards (Manual Backlog & Triage) */}
+        <TaskCardSection
+          localTasks={localTasks}
+          githubConnection={githubConnection}
+        />
 
         {/* 1. Ticket Intake & Repository Browser */}
         <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-4 shadow-xs">

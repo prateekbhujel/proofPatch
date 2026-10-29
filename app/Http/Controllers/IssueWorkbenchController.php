@@ -381,25 +381,25 @@ final class IssueWorkbenchController
 
     public function capture(Request $request): RedirectResponse
     {
-        $request->session()->forget(self::CASE_SESSION_KEYS);
         try {
             $url = $request->input('issue_url');
             $path = $request->input('path');
             if (!is_string($url) || strlen($url) > 512 || !is_string($path)) {
                 throw new \InvalidArgumentException('Enter a public GitHub issue URL and a source file path.');
             }
-            $context = (new PublicIssueContext($this->getHttpClient()))->fetch($url, $path);
-
             $access = $request->attributes->get('proofpatch_github_access');
             $githubUserId = is_array($access) && is_int($access['userId'] ?? null)
                 ? $access['userId']
                 : null;
-            if ($githubUserId === null) {
-                $sessionUser = $request->session()->get('github_auth.user.id');
-                if (is_int($sessionUser) && $sessionUser > 0) {
-                    $githubUserId = $sessionUser;
-                }
+            if ($githubUserId === null || $githubUserId <= 0) {
+                throw new \RuntimeException('Connect GitHub before loading an issue.');
             }
+            [$owner, $repo] = PublicIssueContext::parseIssueUrl($url);
+            $allowed = $access['repositories'] ?? null;
+            if (!is_array($allowed) || !isset($allowed[strtolower($owner.'/'.$repo)])) {
+                throw new \RuntimeException('Grant the GitHub app access to this repository before loading its issue.');
+            }
+            $context = (new PublicIssueContext($this->getHttpClient()))->fetch($url, $path);
 
             $task = WorkbenchTask::recordIntake($context, false, githubUserId: $githubUserId);
             $metadata = $task->metadata ?? [];
@@ -409,6 +409,7 @@ final class IssueWorkbenchController
                 $task->save();
             }
 
+            $request->session()->forget(self::CASE_SESSION_KEYS);
             $this->hydrateTaskSession($request, $task);
             return redirect('/issues');
         } catch (\Throwable $error) {

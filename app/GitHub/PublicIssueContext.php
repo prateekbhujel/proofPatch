@@ -15,12 +15,8 @@ final readonly class PublicIssueContext
 
     public function fetch(string $issueUrl, string $path): array
     {
-        if (!preg_match('~\Ahttps://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/issues/([1-9][0-9]{0,8})/?\z~', trim($issueUrl), $matches)
-            || in_array($matches[2], ['.', '..'], true)) {
-            throw new \InvalidArgumentException('Enter a public GitHub issue URL.');
-        }
+        [$owner, $repo, $number] = self::parseIssueUrl($issueUrl);
         self::validatePath($path);
-        [, $owner, $repo, $number] = $matches;
         $root = 'https://api.github.com/repos/'.rawurlencode($owner).'/'.rawurlencode($repo);
         $repository = $owner.'/'.$repo;
         $first = $this->get($root);
@@ -53,6 +49,16 @@ final readonly class PublicIssueContext
             'path' => $path, 'source' => $source, 'sourceSha256' => hash('sha256', $source)];
         self::validateContext($context);
         return $context;
+    }
+
+    /** @return array{string, string, string} */
+    public static function parseIssueUrl(string $issueUrl): array
+    {
+        if (!preg_match('~\Ahttps://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/issues/([1-9][0-9]{0,8})/?\z~', trim($issueUrl), $matches)
+            || in_array($matches[2], ['.', '..'], true)) {
+            throw new \InvalidArgumentException('Enter a public GitHub issue URL.');
+        }
+        return [$matches[1], $matches[2], $matches[3]];
     }
 
     public static function validatePath(string $path): void

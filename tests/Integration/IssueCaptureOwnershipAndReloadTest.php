@@ -183,4 +183,40 @@ final class IssueCaptureOwnershipAndReloadTest extends TestCase
         self::assertNull($user2Session->get('issue_task_id'), 'User 2 session must have User 1 task ID cleared');
         self::assertNull($user2Session->get('issue_context'), 'User 2 session must have User 1 context cleared');
     }
+
+    public function testCaptureWithoutIdentityOrGrantPreservesCurrentWork(): void
+    {
+        foreach ([
+            [['userId' => null, 'repositories' => []], 'Connect GitHub before loading an issue.'],
+            [['userId' => 1, 'repositories' => ['owner/other' => true]], 'Grant the GitHub app access to this repository before loading its issue.'],
+        ] as [$access, $expectedError]) {
+            $session = app('session')->driver('array');
+            $previousContext = ['repository' => 'example/current', 'title' => 'Unfinished work'];
+            $session->put('issue_context', $previousContext);
+            $session->put('issue_task_id', 1234);
+            app('redirect')->setSession($session);
+
+            $request = Request::create('/issues/capture', 'POST', [
+                'issue_url' => 'https://github.com/owner/public-repo/issues/7',
+                'path' => 'src/file.php',
+            ]);
+            $request->setLaravelSession($session);
+            $request->attributes->set('proofpatch_github_access', $access);
+
+            $calls = 0;
+            $http = new MockHttpClient(function () use (&$calls): MockResponse {
+                $calls++;
+                throw new \RuntimeException('Unexpected GitHub request.');
+            });
+            $count = WorkbenchTask::count();
+            $response = (new IssueWorkbenchController($http))->capture($request);
+
+            self::assertTrue($response->isRedirection());
+            self::assertSame($expectedError, $session->get('error'));
+            self::assertSame($previousContext, $session->get('issue_context'));
+            self::assertSame(1234, $session->get('issue_task_id'));
+            self::assertSame($count, WorkbenchTask::count());
+            self::assertSame(0, $calls);
+        }
+    }
 }

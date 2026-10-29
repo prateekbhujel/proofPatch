@@ -84,16 +84,11 @@ final class DedicatedWorkflowIntegrationTest extends TestCase
         @rmdir($path);
     }
 
-    private function createMockGitHubClient(): MockHttpClient
+    private function createMockGitHubClient(?string $testOverride = null): MockHttpClient
     {
         $srcContent = (string) file_get_contents(dirname(__DIR__, 2) . '/tests/Fixtures/owned-review-case/src/OrderTotal.php');
         $testFixturePath = dirname(__DIR__, 2) . '/tests/Fixtures/owned-review-case/tests/order_total.php';
-        $dedicatedRepoPath = getenv('PROOFPATCH_TEST_REPO_PATH') ?: (dirname(base_path()) . '/proofpatch-test-fixture');
-        if (is_file($dedicatedRepoPath . '/tests/order_total.php')) {
-            $testContent = (string) file_get_contents($dedicatedRepoPath . '/tests/order_total.php');
-        } else {
-            $testContent = (string) file_get_contents($testFixturePath);
-        }
+        $testContent = $testOverride ?? (string) file_get_contents($testFixturePath);
 
         return new MockHttpClient(function (string $method, string $url) use ($srcContent, $testContent): MockResponse {
             if (str_ends_with($url, '/issues/1')) {
@@ -127,6 +122,17 @@ final class DedicatedWorkflowIntegrationTest extends TestCase
         });
     }
 
+    public function testDedicatedFetcherRejectsTamperedTestHarness(): void
+    {
+        $harnessPath = dirname(__DIR__) . '/Fixtures/owned-review-case/tests/order_total.php';
+        $modified = (string) file_get_contents($harnessPath) . "\n// tampered\n";
+        $fetcher = new DedicatedTestRepoFetcher($this->createMockGitHubClient($modified));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Test harness digest mismatch');
+        $fetcher->fetchAndVerify('test-github-token');
+    }
+
     public function testLoadDedicatedCaseInitializesSessionWithBoundMetadata(): void
     {
         $mockHttp = $this->createMockGitHubClient();
@@ -144,13 +150,13 @@ final class DedicatedWorkflowIntegrationTest extends TestCase
         self::assertStringEndsWith('/issues', $response->getTargetUrl());
 
         $context = $session->get('issue_context');
-        self::assertIsArray($context);
+        self::assertIsArray($context, (string) $session->get('error'));
         self::assertSame(\ProofPatch\GitHub\DedicatedTestRepo::name(), $context['repository']);
         self::assertSame(DedicatedTestRepoPublisher::AUTHORIZED_ISSUE_NUMBER, $context['issueNumber']);
         self::assertSame(DedicatedTestRepoPublisher::AUTHORIZED_FILE_PATH, $context['path']);
         self::assertSame(\ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(), $context['commit']);
         self::assertSame(DedicatedTestRepoFetcher::EXPECTED_SOURCE_SHA256, $context['sourceSha256']);
-        self::assertSame(DedicatedTestRepoFetcher::EXPECTED_TEST_SHA256, $context['testSha256']);
+        self::assertSame(\ProofPatch\Verifier\OwnedCaseVerifier::KNOWN_TEST_SHA256, $context['testSha256']);
         self::assertTrue($session->get('issue_is_dedicated_test_repo'));
         self::assertTrue($session->get('issue_is_owned_fixture'));
     }

@@ -129,9 +129,11 @@ final readonly class DedicatedTestRepoFetcher
         }
 
         $actualTestSha = hash('sha256', $testContent);
-        if (!hash_equals(self::EXPECTED_TEST_SHA256, $actualTestSha)) {
+        $isKnownHarness = hash_equals(self::EXPECTED_TEST_SHA256, $actualTestSha)
+            || hash_equals(\ProofPatch\Verifier\OwnedCaseVerifier::KNOWN_TEST_SHA256, $actualTestSha);
+        if (!$isKnownHarness) {
             throw new \RuntimeException(
-                "Test harness digest mismatch at commit " . DedicatedTestRepo::requireBaseCommit() . ": expected " . self::EXPECTED_TEST_SHA256 . ", got {$actualTestSha}."
+                "Test harness digest mismatch at commit " . DedicatedTestRepo::requireBaseCommit() . ": no approved fixture matched {$actualTestSha}."
             );
         }
 

@@ -446,7 +446,7 @@ final class AdversarialTestOracleBoundaryTest extends TestCase
         );
 
         // Test with the valid candidate: must pass all 5 gates and be VERIFIED
-        $validCandidate = "<?php\n\ndeclare(strict_types=1);\n\nfunction orderTotal(array \$items): int\n{\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n    return \$total;\n}\n";
+        $validCandidate = "<?php\n\ndeclare(strict_types=1);\n\nfunction orderTotal(array \$items): int\n{\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n\n    return \$total;\n}\n";
         $reportValid = $verifier->verify($validCandidate);
         self::assertSame('VERIFIED', $reportValid['decision']);
         self::assertTrue($reportValid['gates']['candidatePassed']);
@@ -552,7 +552,7 @@ final class AdversarialTestOracleBoundaryTest extends TestCase
     {
         $oracle = new \ProofPatch\Verifier\SeparateProcessOracle();
 
-        $validCandidate = "<?php\n\ndeclare(strict_types=1);\n\nfunction orderTotal(array \$items): int\n{\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n    return \$total;\n}\n";
+        $validCandidate = "<?php\n\ndeclare(strict_types=1);\n\nfunction orderTotal(array \$items): int\n{\n    \$total = 0;\n    foreach (\$items as \$item) {\n        \$total += \$item['unit_price'] * \$item['quantity'];\n    }\n\n    return \$total;\n}\n";
 
         $res = $oracle->runIsolated($validCandidate, $this->testHarness);
         self::assertSame(0, $res['exitCode']);

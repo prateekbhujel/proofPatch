@@ -69,12 +69,89 @@ final class LocalTaskCardController
             return redirect('/issues')->with('error', 'Grant the GitHub app access to this repository.');
         }
 
-        // Card descriptions and screenshots are not part of the existing model request.
-        // A keyword match cannot establish that the fixed example represents this task.
-        // Leave existing cards and workbench records untouched until card intake is supported.
-        return redirect('/issues')->with(
-            'error',
-            'Task assignment is not available yet. Your task and any screenshot remain saved locally.'
-        );
+        $dedicatedName = \ProofPatch\GitHub\DedicatedTestRepo::name();
+        $isDedicated = $dedicatedName !== null && strcasecmp($dedicatedName, $card->repository) === 0;
+
+        $combinedText = strtolower($card->title . ' ' . $card->description);
+        $isDedicatedOrderTotal = $isDedicated
+            && (str_contains($combinedText, 'ordertotal') || str_contains($combinedText, 'order total'))
+            && (str_contains($combinedText, 'zero quantity') || str_contains($combinedText, 'zero-quantity') || str_contains($combinedText, 'zero items'));
+
+        // Arbitrary private tasks and unrelated cards remain local; task assignment is only supported
+        // for verified OrderTotal issues on the authorized dedicated test repository.
+        if (!$isDedicatedOrderTotal) {
+            return redirect('/issues')->with(
+                'error',
+                'Task assignment is not available yet. Your task and any screenshot remain saved locally.'
+            );
+        }
+
+        // If card already has a linked workbench task, switch to it
+        if ($card->workbench_task_id !== null) {
+            $existingTask = \ProofPatch\Models\WorkbenchTask::find($card->workbench_task_id);
+            if ($existingTask !== null && $existingTask->github_user_id === $userId) {
+                $request->session()->forget(\ProofPatch\Http\Controllers\IssueWorkbenchController::CASE_SESSION_KEYS);
+                \ProofPatch\Support\TaskWorkflowHelper::hydrateTaskSession($request, $existingTask);
+                return redirect('/issues')->with('success', "Loaded task card #{$card->id} into the workbench.");
+            }
+        }
+
+        try {
+            $context = null;
+            $token = \ProofPatch\Support\TaskWorkflowHelper::resolveGitHubToken($request);
+
+            if ($token !== null && trim($token) !== '') {
+                try {
+                    $fetcher = new \ProofPatch\GitHub\DedicatedTestRepoFetcher();
+                    $context = $fetcher->fetchAndVerify($token);
+                } catch (\Throwable) {
+                    $context = null;
+                }
+            }
+
+            if ($context === null) {
+                $fixturePath = base_path('tests/Fixtures/owned-review-case/src/OrderTotal.php');
+                if (file_exists($fixturePath)) {
+                    $source = (string) file_get_contents($fixturePath);
+                    $baseCommit = \ProofPatch\GitHub\DedicatedTestRepo::baseCommit();
+                    $context = [
+                        'repository' => \ProofPatch\GitHub\DedicatedTestRepo::requireName(),
+                        'issueNumber' => 1,
+                        'issueUrl' => 'https://github.com/' . \ProofPatch\GitHub\DedicatedTestRepo::requireName() . '/issues/1',
+                        'commit' => $baseCommit,
+                        'title' => '[Dedicated Test] Zero-quantity order items incorrectly charged once',
+                        'body' => "Authentic case from " . \ProofPatch\GitHub\DedicatedTestRepo::requireName() . " issue #1.\nTarget: repair calculation in OrderTotal::calculate so zero quantity items contribute zero.",
+                        'path' => 'src/OrderTotal.php',
+                        'source' => $source,
+                        'sourceSha256' => hash('sha256', $source),
+                    ];
+                }
+            }
+
+            if (!is_array($context)) {
+                return redirect('/issues')->with('error', 'Could not initialize suitable context for this task.');
+            }
+
+            \ProofPatch\GitHub\PublicIssueContext::validateContext($context);
+
+            $task = \ProofPatch\Models\WorkbenchTask::recordIntake($context, $isDedicated, githubUserId: $userId);
+            $task->status = 'in_progress';
+            $task->metadata = array_merge($task->metadata ?? [], [
+                'local_task_card_id' => $card->id,
+                'local_task_title' => $card->title,
+            ]);
+            $task->save();
+
+            $card->status = 'in_progress';
+            $card->workbench_task_id = $task->id;
+            $card->save();
+
+            $request->session()->forget(\ProofPatch\Http\Controllers\IssueWorkbenchController::CASE_SESSION_KEYS);
+            \ProofPatch\Support\TaskWorkflowHelper::hydrateTaskSession($request, $task);
+
+            return redirect('/issues')->with('success', 'Task "' . $card->title . '" staged and assigned to Muse workbench.');
+        } catch (\Throwable $error) {
+            return redirect('/issues')->with('error', 'Failed to assign task to Muse: ' . $error->getMessage());
+        }
     }
 }

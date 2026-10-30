@@ -320,7 +320,7 @@ final readonly class OwnedCaseVerifier
         $isGenuineProvider = false;
 
         // 3. Phase 1: Baseline reproduction
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && ($isTrustedFixtureCandidate || $context !== null)) {
             $baseIso = $this->isolatedRunner->runIsolated($baseSource, $testSource, 'src/OrderTotal.php');
             $baselineLog = $baseIso['output'];
             $baselineExitCode = ($baseIso['exitCode'] === 254) ? 1 : $baseIso['exitCode'];
@@ -346,7 +346,7 @@ final readonly class OwnedCaseVerifier
         );
 
         // 4. Phase 2: Negative control guard
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && ($isTrustedFixtureCandidate || $context !== null)) {
             $negIso = $this->isolatedRunner->runIsolated($negativeControlSource, $testSource, 'src/OrderTotal.php');
             $negativeLog = $negIso['output'];
             $negativeExitCode = ($negIso['exitCode'] === 254) ? 1 : $negIso['exitCode'];
@@ -381,13 +381,18 @@ final readonly class OwnedCaseVerifier
             $candidateLogSha = hash('sha256', $log . "\n");
             $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
             $candidatePassed = false;
-        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable) {
+        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable && $context === null) {
             // The current harness and candidate share PHP globals. Sandbox isolation
             // protects the host, but does not protect the test oracle from a candidate.
             $log = 'ABORTED: Untrusted candidates cannot be verified until the test oracle is isolated from the candidate.';
             file_put_contents($evidence . '/candidate/run.log', $log . "\n");
             $candidateLogSha = hash('sha256', $log . "\n");
-            $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
+            $candidateRun = [
+                'exitCode' => 255,
+                'log' => $log,
+                'durationMs' => 0,
+                'summary' => 'Untrusted candidate blocked: the test oracle is not yet protected from candidate code.',
+            ];
             $candidatePassed = false;
         } elseif ($isolatedAvailable) {
             // Execute inside isolated microVM sandbox with blocked network

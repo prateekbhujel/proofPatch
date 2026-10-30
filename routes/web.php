@@ -11,6 +11,7 @@ use ProofPatch\Http\Controllers\LocalTaskImageController;
 use ProofPatch\Http\Controllers\ManualInlineCommentController;
 
 Route::get('/', [DashboardController::class, 'overview']);
+Route::get('/overview', [DashboardController::class, 'overview']);
 Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/tasks', [LocalTaskCardController::class, 'store']);
 Route::post('/issues/tasks/{cardId}/assign', [LocalTaskCardController::class, 'assign'])->whereNumber('cardId');

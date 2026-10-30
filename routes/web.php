@@ -7,10 +7,13 @@ use Illuminate\Support\Facades\Route;
 use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
 use ProofPatch\Http\Controllers\LocalTaskCardController;
+use ProofPatch\Http\Controllers\LocalTaskImageController;
 
 Route::get('/', [DashboardController::class, 'overview']);
 Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/tasks', [LocalTaskCardController::class, 'store']);
+Route::post('/issues/tasks/{cardId}/image', [LocalTaskImageController::class, 'store'])->whereNumber('cardId');
+Route::get('/issues/tasks/{cardId}/image', [LocalTaskImageController::class, 'show'])->whereNumber('cardId');
 Route::post('/issues/preview', [IssueWorkbenchController::class, 'capture']);
 Route::post('/issues/load-owned', [IssueWorkbenchController::class, 'loadOwnedCase']);
 Route::post('/issues/load-dedicated', [IssueWorkbenchController::class, 'loadDedicatedCase']);

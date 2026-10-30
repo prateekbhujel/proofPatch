@@ -149,7 +149,8 @@ final class IssueWorkbenchController
         $access = $request->attributes->get('proofpatch_github_access');
         if (is_array($access) && is_int($access['userId'] ?? null) && $access['userId'] > 0
             && is_array($access['repositories'] ?? null) && $access['repositories'] !== []) {
-            $localTasks = LocalTaskCard::where('github_user_id', $access['userId'])
+            $localTasks = LocalTaskCard::select(['id', 'title', 'description', 'repository', 'status', 'updated_at', 'image_mime'])
+                ->where('github_user_id', $access['userId'])
                 ->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(repository)'), array_keys($access['repositories']))
                 ->orderByDesc('updated_at')
                 ->get()

@@ -21,6 +21,7 @@ final class LocalTaskCard extends Model
             'description' => $this->description,
             'repository' => $this->repository,
             'status' => $this->status,
+            'hasImage' => $this->image_mime !== null,
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];
     }

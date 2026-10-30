@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useForm } from '@inertiajs/react';
 import {
   ListPlus,
@@ -17,6 +17,38 @@ export interface LocalTaskCard {
   repository: string;
   status: string;
   updatedAt: string | null;
+  hasImage: boolean;
+}
+
+function TaskImage({ task }: { task: LocalTaskCard }) {
+  const input = useRef<HTMLInputElement>(null);
+  const { data, setData, post, processing, reset } = useForm<{image: File | null}>({ image: null });
+
+  if (task.hasImage) {
+    return <a href={`/issues/tasks/${task.id}/image`} target="_blank" rel="noreferrer" className="text-xs text-violet-700 underline">View screenshot</a>;
+  }
+
+  return (
+    <form onSubmit={(event) => {
+      event.preventDefault();
+      if (!data.image) return;
+      post(`/issues/tasks/${task.id}/image`, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+          const props = page.props as Record<string, unknown>;
+          const flash = props.flash as Record<string, unknown> | undefined;
+          if (!props.error && !flash?.error) {
+            reset();
+            if (input.current) input.current.value = '';
+          }
+        },
+      });
+    }} className="space-y-2">
+      <label htmlFor={`task-image-${task.id}`} className="block text-xs font-medium text-slate-700">Screenshot (PNG or JPEG, up to 2 MB)</label>
+      <input ref={input} id={`task-image-${task.id}`} type="file" accept="image/png,image/jpeg" onChange={(event) => setData('image', event.target.files?.[0] ?? null)} className="block w-full text-xs text-slate-600" />
+      <button type="submit" disabled={!data.image || processing} className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-50">{processing ? 'Saving…' : 'Add screenshot'}</button>
+    </form>
+  );
 }
 
 export interface GitHubRepoOption {
@@ -132,7 +164,7 @@ export function TaskCardSection({
       <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-600 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
         <div>
-          Tasks are saved locally. Muse and image attachments are not connected yet.
+          Tasks and screenshots stay on this computer. Muse is not connected to these tasks yet.
         </div>
       </div>
 
@@ -268,6 +300,7 @@ export function TaskCardSection({
                     <summary className="cursor-pointer font-medium">Description</summary>
                     <p className="mt-2 whitespace-pre-wrap break-words">{task.description}</p>
                   </details>
+                  <TaskImage task={task} />
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">

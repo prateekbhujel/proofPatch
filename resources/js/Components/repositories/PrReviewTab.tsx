@@ -1,0 +1,192 @@
+import React from 'react';
+import {
+  Sparkles,
+  Lock,
+  Copy,
+  Check,
+  CheckCircle2,
+  AlertTriangle,
+} from 'lucide-react';
+import { BudgetData, ReviewPreviewData, ReviewResult } from './types';
+
+interface PrReviewTabProps {
+  review?: ReviewResult | null;
+  reviewPreview?: ReviewPreviewData | null;
+  isPrivate: boolean;
+  reviewApproved: boolean;
+  setReviewApproved: (approved: boolean) => void;
+  reviewProcessing: boolean;
+  budget?: BudgetData | null;
+  modelKeyAvailable?: boolean;
+  copiedReviewDigest: boolean;
+  copyText: (text: string, type: any) => void;
+  handleReviewSubmit: (e: React.FormEvent) => void;
+  setReviewFormData: (key: string, val: unknown) => void;
+  reviewError?: string | null;
+}
+
+export function PrReviewTab({
+  review,
+  reviewPreview,
+  isPrivate,
+  reviewApproved,
+  setReviewApproved,
+  reviewProcessing,
+  budget,
+  modelKeyAvailable,
+  copiedReviewDigest,
+  copyText,
+  handleReviewSubmit,
+  setReviewFormData,
+  reviewError,
+}: PrReviewTabProps) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Automated Review &amp; Security Findings</h2>
+        <p className="text-xs text-slate-500">
+          Muse Spark Open review engine analyzes changed diffs for correctness, anti-slop quality, and logic bugs.
+        </p>
+      </div>
+
+      {reviewError && (
+        <div role="alert" className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{reviewError}</span>
+        </div>
+      )}
+
+      {review && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-violet-700" />
+              <span className="text-xs font-semibold text-slate-900">Review Completed</span>
+            </div>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                review.riskLevel === 'low'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : review.riskLevel === 'medium'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+              }`}
+            >
+              {review.riskLevel} risk
+            </span>
+          </div>
+
+          <div className="border-t border-slate-100 pt-2.5">
+            <h3 className="text-xs font-semibold text-slate-900 mb-0.5">Summary</h3>
+            <p className="text-xs text-slate-700 leading-relaxed">{review.summary}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-mono">
+            <span>Tokens: {review.usage.prompt_tokens} in / {review.usage.completion_tokens} out</span>
+            <span>Reviewed: {new Date(review.reviewedAt).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Pre-review: Technical Request Disclosure & Maintainer Consent */}
+      {!review && reviewPreview && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <span>{reviewPreview.filesCount} diff {reviewPreview.filesCount === 1 ? 'file' : 'files'} included in review scope</span>
+            <span className="font-mono text-[11px]">~${(reviewPreview.estimatedMicros / 1000000).toFixed(4)} estimated reservation</span>
+          </div>
+
+          {/* Accessible Full Request Inspection Disclosure */}
+          <details className="border border-slate-200 rounded-lg p-3 bg-white space-y-3">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-800 flex items-center justify-between">
+              <span>Inspect Complete Model Request Payload &amp; Cryptographic Digest</span>
+              <span className="text-[11px] text-slate-500 font-normal">Click to expand</span>
+            </summary>
+            <div className="space-y-3 pt-3 text-xs border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div><span className="text-slate-500">Destination:</span> <code className="font-mono text-slate-800">{reviewPreview.destination}</code></div>
+                <div><span className="text-slate-500">Model:</span> <code className="font-mono text-slate-800">{(reviewPreview.body as any)?.model || 'meta-models/muse-spark-open-1026'}</code></div>
+                <div className="col-span-2 flex items-center justify-between gap-2">
+                  <span className="text-slate-500">Payload SHA-256 Digest:</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(reviewPreview.digest, 'reviewDigest')}
+                    className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
+                  >
+                    {copiedReviewDigest ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="text-[10px]">{copiedReviewDigest ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <p className="col-span-2 font-mono text-[11px] text-slate-700 break-all bg-slate-50 p-2 rounded border border-slate-200">
+                  {reviewPreview.digest}
+                </p>
+              </div>
+
+              {reviewPreview.body && (
+                <div>
+                  <span className="text-slate-500 text-[11px] font-medium">Exact Request Body (Sent to engine):</span>
+                  <pre className="mt-1.5 p-3 rounded bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto max-h-80 whitespace-pre-wrap">
+                    {JSON.stringify(reviewPreview.body, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* Explicit Consent Form & Honest Budget Status */}
+          <form onSubmit={handleReviewSubmit} className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+            {isPrivate && (
+              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-semibold text-amber-900">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Private Repository Review Unsupported</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-900">
+                  Private pull requests stay in this session and are not sent to a model.
+                </p>
+              </div>
+            )}
+
+            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-700">
+              <input
+                type="checkbox"
+                checked={reviewApproved}
+                onChange={(e) => {
+                  setReviewApproved(e.target.checked);
+                  setReviewFormData('confirm', e.target.checked);
+                  setReviewFormData('digest', reviewPreview.digest);
+                  setReviewFormData('approval_token', reviewPreview.approvalToken || '');
+                }}
+                className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+              />
+              <span className="leading-relaxed">
+                I have inspected the complete request payload and SHA-256 digest above. I approve sending this untrusted diff to the review engine.
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
+              <div className="text-xs">
+                {budget ? (
+                  <span className="text-slate-600">
+                    Usage: <strong className="font-mono text-slate-900">{budget.attempts}/{budget.maxAttempts}</strong> attempts
+                  </span>
+                ) : (
+                  <span className="text-slate-400">Budget status unknown</span>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={reviewProcessing || !reviewApproved || isPrivate || !budget?.canRequest || !modelKeyAvailable}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-700 text-white text-xs font-semibold hover:bg-violet-800 disabled:opacity-40 transition shadow-xs"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{reviewProcessing ? 'Analyzing PR with Muse…' : 'Approve & Run Review'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

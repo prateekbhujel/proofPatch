@@ -101,7 +101,11 @@ test('AppLayout renders compact application sidebar without a top horizontal nav
 });
 
 test('Disconnected Issues screen displays full-screen GitHub onboarding and honest credit metrics without synthetic shortcuts', () => {
-  const issuesSource = readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8');
+  const issuesSource = [
+    readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8'),
+  ].join('\n');
 
   // Must check connection and branch to disconnected onboarding view
   assert.match(issuesSource, /if \(!isConnected\)/);
@@ -148,7 +152,15 @@ test('Settings page exposes user-configurable Maintainer Automation Rules and ho
 });
 
 test('Issues workbench includes 3-Pillar architecture explainability, 4-step guided flow bar, Repo Context Memory, and bot attribution', () => {
-  const issuesSource = readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8');
+  const issuesSource = [
+    readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/GuidedStepBar.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/IssueHeaderCard.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/ProposalDiffCard.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../resources/js/Components/workbench/VerificationPipelineCard.tsx', import.meta.url), 'utf8'),
+  ].join('\n');
 
   // 3-Pillar Architecture Cards on Landing Screen
   assert.match(issuesSource, /1\. Meta Muse Spark/);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '../Components/AppLayout';
-import { TaskCardSection, LocalTaskCard } from '../Components/TaskCardSection';
+import { TaskCardSection, LocalTaskCard, CardPreview } from '../Components/TaskCardSection';
 import { KanbanBoard, KanbanTask } from '../Components/ui/KanbanBoard';
 import { ThinkingAnimation } from '../Components/ui/ThinkingAnimation';
 import { VerificationPipeline } from '../Components/ui/VerificationPipeline';
@@ -253,6 +253,7 @@ interface Props {
   error: string | null;
   tasks?: WorkbenchTaskData[];
   localTasks?: LocalTaskCard[];
+  cardPreview?: CardPreview | null;
   githubConnection?: GitHubConnectionData | null;
   modelContextAllowed?: boolean;
   modelKeyAvailable?: boolean;
@@ -273,6 +274,7 @@ export default function Issues({
   error,
   tasks = [],
   localTasks = [],
+  cardPreview = null,
   githubConnection = null,
   modelContextAllowed = false,
   modelKeyAvailable = false,
@@ -553,6 +555,7 @@ export default function Issues({
         {/* ═══════════════════════ Independent Task Cards Section ═══════════════════════ */}
         <TaskCardSection
           localTasks={localTasks}
+          cardPreview={cardPreview}
           githubConnection={githubConnection}
         />
 

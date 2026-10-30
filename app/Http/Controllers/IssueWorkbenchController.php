@@ -239,6 +239,7 @@ final class IssueWorkbenchController
             'error' => $request->session()->get('error'),
             'tasks' => $tasks,
             'localTasks' => $localTasks,
+            'cardPreview' => CardPreviewController::visiblePreview($request),
             'githubConnection' => $githubConnection,
             'modelContextAllowed' => $modelContextAllowed,
             'modelKeyAvailable' => $modelKeyAvailable,

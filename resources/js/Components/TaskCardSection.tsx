@@ -98,8 +98,50 @@ export interface GitHubRepoOption {
   isPrivate?: boolean;
 }
 
+export interface CardPreview {
+  status: 'local_preview_not_sent';
+  digest: string;
+  context: { cardId: number; cardVersion: string; repository: string; title: string; description: string; path: string; commit: string; source: string; sourceSha256: string };
+}
+
+function CardPreviewForm({ task, preview }: { task: LocalTaskCard; preview: CardPreview | null }) {
+  const { data, setData, post, processing } = useForm({ path: '', commit: '' });
+  const current = preview?.context.cardId === Number(task.id) ? preview : null;
+  return (
+    <details className="text-xs text-slate-600 border border-slate-200 rounded-lg p-3">
+      <summary className="cursor-pointer font-medium text-slate-800">Preview task context</summary>
+      <p className="mt-2">Choose a file and full commit SHA from a public repository. The preview stays local; screenshots are not included.</p>
+      <form className="mt-3 space-y-2" onSubmit={(event) => {
+        event.preventDefault();
+        post(`/issues/tasks/${task.id}/preview`, { preserveScroll: true });
+      }}>
+        <label className="block">File path
+          <input required value={data.path} onChange={(event) => setData('path', event.target.value)}
+            placeholder="src/example.php" className="mt-1 w-full rounded border border-slate-300 px-2 py-1" />
+        </label>
+        <label className="block">Full commit SHA
+          <input required pattern="[a-f0-9]{40}" value={data.commit} onChange={(event) => setData('commit', event.target.value)}
+            placeholder="40-character commit SHA" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 font-mono" />
+        </label>
+        <button disabled={processing} className="rounded bg-violet-700 px-3 py-1.5 text-white disabled:opacity-50" type="submit">
+          {processing ? 'Loading…' : 'Preview'}
+        </button>
+      </form>
+      {current && <div className="mt-3 space-y-2">
+        <p className="font-medium text-slate-800">Local preview · not sent to a model</p>
+        <p className="break-words">{current.context.title}</p>
+        <p className="whitespace-pre-wrap break-words">{current.context.description}</p>
+        <p className="font-mono break-all">{current.context.path} @ {current.context.commit}</p>
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2">{current.context.source}</pre>
+        <details><summary className="cursor-pointer">Preview digest</summary><p className="font-mono break-all">{current.digest}</p></details>
+      </div>}
+    </details>
+  );
+}
+
 export interface TaskCardSectionProps {
   localTasks?: LocalTaskCard[];
+  cardPreview?: CardPreview | null;
   githubConnection?: {
     isConnected?: boolean;
     repositories?: GitHubRepoOption[];
@@ -109,6 +151,7 @@ export interface TaskCardSectionProps {
 
 export function TaskCardSection({
   localTasks = [],
+  cardPreview = null,
   githubConnection = null,
 }: TaskCardSectionProps) {
   const allowedRepositories = githubConnection?.repositories || [];
@@ -425,6 +468,7 @@ export function TaskCardSection({
                     <p className="mt-2 whitespace-pre-wrap break-words">{task.description}</p>
                   </details>
                   <TaskImage task={task} />
+                  <CardPreviewForm task={task} preview={cardPreview} />
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 gap-2">

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import {
   ListPlus,
   Clock,
@@ -8,6 +8,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 
 export interface LocalTaskCard {
@@ -18,6 +19,7 @@ export interface LocalTaskCard {
   status: string;
   updatedAt: string | null;
   hasImage: boolean;
+  workbenchTaskId?: number | null;
 }
 
 function TaskImage({ task }: { task: LocalTaskCard }) {
@@ -77,6 +79,7 @@ export function TaskCardSection({
 
   const [isFormOpen, setIsFormOpen] = useState(localTasks.length === 0);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
+  const [assigningId, setAssigningId] = useState<string | number | null>(null);
 
   const { data, setData, post, processing, reset } = useForm({
     title: '',
@@ -164,7 +167,7 @@ export function TaskCardSection({
       <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-600 flex items-start gap-2">
         <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
         <div>
-          Tasks and screenshots stay on this computer. Muse is not connected to these tasks yet.
+          Tasks and screenshots stay on this computer. Assigning a suitable task to Muse runs strictly against public or synthetic test data; screenshots and private descriptions are never sent to a model.
         </div>
       </div>
 
@@ -303,14 +306,45 @@ export function TaskCardSection({
                   <TaskImage task={task} />
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="flex items-center gap-1 font-mono">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 gap-2">
+                  <span className="flex items-center gap-1 font-mono shrink-0">
                     <Clock className="w-3 h-3 text-slate-400" />
                     <span>{task.updatedAt ? task.updatedAt.slice(0, 16).replace('T', ' ') : 'Recently'}</span>
                   </span>
-                  <span className="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                    Saved locally
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {task.status === 'queued' ? (
+                      <button
+                        type="button"
+                        disabled={assigningId === task.id}
+                        onClick={() => {
+                          setAssigningId(task.id);
+                          router.post(`/issues/tasks/${task.id}/assign`, {}, {
+                            preserveScroll: true,
+                            onFinish: () => setAssigningId(null),
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-50 transition"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>{assigningId === task.id ? 'Assigning…' : 'Assign to Muse'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={assigningId === task.id}
+                        onClick={() => {
+                          setAssigningId(task.id);
+                          router.post(`/issues/tasks/${task.id}/assign`, {}, {
+                            preserveScroll: true,
+                            onFinish: () => setAssigningId(null),
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:text-violet-900 underline"
+                      >
+                        <span>Open in Workbench</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

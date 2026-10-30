@@ -198,13 +198,13 @@ final class WorkbenchTask extends Model
         $candidate = $suggestion['candidate'] ?? [];
         $candidateSource = $candidate['source'] ?? null;
         $candidateSha = $candidate['sha256'] ?? null;
-        $metadata = [
+        $metadata = array_merge($this->metadata ?? [], [
             'model' => $suggestion['model'] ?? null,
             'explanation' => $suggestion['explanation'] ?? null,
             'find' => $suggestion['find'] ?? null,
             'replace' => $suggestion['replace'] ?? null,
             'usage' => $suggestion['usage'] ?? null,
-        ];
+        ]);
 
         $now = now();
         $updated = $query->update([
@@ -229,6 +229,11 @@ final class WorkbenchTask extends Model
             throw new \ProofPatch\Exceptions\StaleTaskConcurrencyException(
                 "Stale proposal rejected: Task #{$this->id} was modified concurrently (expected version {$targetVersion})."
             );
+        }
+
+        $cardId = $this->metadata['local_task_card_id'] ?? null;
+        if (is_int($cardId) && $cardId > 0) {
+            LocalTaskCard::whereKey($cardId)->update(['status' => 'in_progress', 'updated_at' => $now]);
         }
 
         $this->refresh();
@@ -275,6 +280,11 @@ final class WorkbenchTask extends Model
             throw new \ProofPatch\Exceptions\StaleTaskConcurrencyException(
                 "Stale verification rejected: Candidate or task state was modified concurrently while verification was running."
             );
+        }
+
+        $cardId = $this->metadata['local_task_card_id'] ?? null;
+        if (is_int($cardId) && $cardId > 0) {
+            LocalTaskCard::whereKey($cardId)->update(['status' => $status, 'updated_at' => $now]);
         }
 
         $this->refresh();
@@ -359,6 +369,11 @@ final class WorkbenchTask extends Model
             throw new \ProofPatch\Exceptions\StaleTaskConcurrencyException(
                 "Stale publication rejected: Task #{$this->id} was modified concurrently while PR was being published."
             );
+        }
+
+        $cardId = $this->metadata['local_task_card_id'] ?? null;
+        if (is_int($cardId) && $cardId > 0) {
+            LocalTaskCard::whereKey($cardId)->update(['status' => 'completed', 'updated_at' => $now]);
         }
 
         $this->refresh();

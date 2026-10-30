@@ -21,13 +21,14 @@ final class ThreeOutcomesSameCaseIntegrationTest extends TestCase
         $this->tempDir = sys_get_temp_dir() . '/proofpatch_three_outcomes_' . bin2hex(random_bytes(6));
         mkdir($this->tempDir, 0700, true);
 
+        $baseDir = dirname(__DIR__, 2);
         // Load authentic case bytes from dedicated test repository clone or repository-contained fixture
-        $dedicatedRepoPath = getenv('PROOFPATCH_TEST_REPO_PATH') ?: (dirname(base_path()) . '/proofpatch-test-fixture');
+        $dedicatedRepoPath = getenv('PROOFPATCH_TEST_REPO_PATH') ?: (dirname($baseDir) . '/proofpatch-test-fixture');
         if (is_file($dedicatedRepoPath . '/src/OrderTotal.php') && is_file($dedicatedRepoPath . '/tests/order_total.php')) {
             $this->baseSource = (string) file_get_contents($dedicatedRepoPath . '/src/OrderTotal.php');
             $this->testHarness = (string) file_get_contents($dedicatedRepoPath . '/tests/order_total.php');
         } else {
-            $fixturePath = base_path('tests/Fixtures/owned-review-case');
+            $fixturePath = $baseDir . '/tests/Fixtures/owned-review-case';
             $this->baseSource = (string) file_get_contents($fixturePath . '/src/OrderTotal.php');
             $this->testHarness = (string) file_get_contents($fixturePath . '/tests/order_total.php');
         }

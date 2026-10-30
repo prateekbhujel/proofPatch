@@ -13,6 +13,7 @@ use ProofPatch\Http\Controllers\ManualInlineCommentController;
 Route::get('/', [DashboardController::class, 'overview']);
 Route::get('/issues', [IssueWorkbenchController::class, 'show']);
 Route::post('/issues/tasks', [LocalTaskCardController::class, 'store']);
+Route::post('/issues/tasks/{cardId}/assign', [LocalTaskCardController::class, 'assign'])->whereNumber('cardId');
 Route::post('/issues/tasks/{cardId}/image', [LocalTaskImageController::class, 'store'])->whereNumber('cardId');
 Route::get('/issues/tasks/{cardId}/image', [LocalTaskImageController::class, 'show'])->whereNumber('cardId');
 Route::post('/issues/preview', [IssueWorkbenchController::class, 'capture']);

@@ -145,6 +145,171 @@ final class LocalTaskCardTest extends TestCase
         self::assertSame(0, LocalTaskCard::count());
     }
 
+    public function testAssignTaskToMuseFailsClosedOnArbitraryPrivateRepo(): void
+    {
+        $card = new LocalTaskCard();
+        $card->github_user_id = 1;
+        $card->repository = 'owner/private-repo';
+        $card->title = 'Fix proprietary payment logic';
+        $card->description = 'Secret customer payment credentials and logic details';
+        $card->status = 'queued';
+        $card->save();
+
+        $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
+        $request->session()->put('github_auth', [
+            'token' => 'fake-token',
+            'user' => ['id' => 1],
+            'repositories' => [['fullName' => 'owner/private-repo', 'isPrivate' => true]],
+        ]);
+
+        $response = $this->middleware(1, true)->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
+        self::assertTrue($response->isRedirection());
+        self::assertStringContainsString('Private repository content and task text stay local', (string) $request->session()->get('error'));
+
+        // Verify card remains queued and unassigned
+        $card->refresh();
+        self::assertSame('queued', $card->status);
+        self::assertNull($card->workbench_task_id);
+    }
+
+    public function testAssignSuitableTaskLoadsDedicatedContextAndTracksLifecycle(): void
+    {
+        $previousRepo = getenv('PROOFPATCH_TEST_REPO');
+        $previousBaseCommit = getenv('PROOFPATCH_TEST_BASE_COMMIT');
+        $dedicatedRepo = 'owner/dedicated-test';
+        putenv('PROOFPATCH_TEST_REPO=' . $dedicatedRepo);
+        putenv('PROOFPATCH_TEST_BASE_COMMIT=' . str_repeat('c', 40));
+
+        try {
+            $card = new LocalTaskCard();
+            $card->github_user_id = 1;
+            $card->repository = $dedicatedRepo;
+            $card->title = 'Fix order total calculation for zero quantity';
+            $card->description = 'Private user reproduction notes: customer entered 0 quantity and was charged.';
+            $card->status = 'queued';
+            $card->save();
+
+            $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
+            $request->session()->put('github_auth', [
+                'token' => 'fake-token',
+                'user' => ['id' => 1],
+                'repositories' => [['fullName' => $dedicatedRepo, 'isPrivate' => false]],
+            ]);
+
+            // Set up middleware with grant for the dedicated repo
+            $middleware = new AuthorizeGithubTasks(new GitHubAppClient(new MockHttpClient([
+                new MockResponse(json_encode(['id' => 1, 'login' => 'user1'])),
+                new MockResponse(json_encode(['installations' => [['id' => 101]]])),
+                new MockResponse(json_encode(['repositories' => [[
+                    'id' => 5, 'name' => 'dedicated-test', 'full_name' => $dedicatedRepo,
+                    'owner' => ['login' => 'owner'], 'private' => false,
+                ]]])),
+            ])));
+
+            $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
+            self::assertTrue($response->isRedirection());
+            self::assertStringContainsString('assigned to Muse', (string) $request->session()->get('success'));
+
+            $card->refresh();
+            self::assertSame('in_progress', $card->status);
+            self::assertNotNull($card->workbench_task_id);
+
+            // Session has active context loaded
+            $context = $request->session()->get('issue_context');
+            self::assertIsArray($context);
+            self::assertSame('src/OrderTotal.php', $context['path']);
+            // Crucially: Private task description is NOT in model context!
+            self::assertStringNotContainsString('customer entered 0 quantity', json_encode($context));
+
+            // Verify lifecycle sync through WorkbenchTask
+            $task = \ProofPatch\Models\WorkbenchTask::find($card->workbench_task_id);
+            self::assertNotNull($task);
+            self::assertSame($card->id, $task->metadata['local_task_card_id'] ?? null);
+
+            // 1. Propose proposal -> card stays in_progress
+            $suggestion = [
+                'status' => 'offline_reference_example',
+                'isOfflineExample' => true,
+                'model' => null,
+                'path' => 'src/OrderTotal.php',
+                'find' => "max(1, \$item['quantity'])",
+                'replace' => "\$item['quantity']",
+                'candidate' => [
+                    'source' => str_replace("max(1, \$item['quantity'])", "\$item['quantity']", $context['source']),
+                    'sha256' => hash('sha256', str_replace("max(1, \$item['quantity'])", "\$item['quantity']", $context['source'])),
+                ],
+            ];
+            $task->recordProposal($suggestion);
+            $card->refresh();
+            self::assertSame('in_progress', $card->status);
+
+            // 2. Verify candidate -> card becomes needs_review
+            $report = [
+                'id' => 'run-test-123',
+                'decision' => 'VERIFIED',
+                'isSimulated' => false,
+            ];
+            $task->recordVerification($report, (int) $task->version, $suggestion['candidate']['sha256']);
+            $card->refresh();
+            self::assertSame('needs_review', $card->status);
+
+            // 3. Publish PR -> card becomes completed
+            $prResult = [
+                'prNumber' => 42,
+                'prUrl' => 'https://github.com/' . $dedicatedRepo . '/pull/42',
+                'branch' => 'proofpatch/fix-run-test-123',
+                'receiptSha256' => str_repeat('e', 64),
+            ];
+            $task->claimPublication((int) $task->version, $suggestion['candidate']['sha256'], 'run-test-123');
+            $task->recordPublication($prResult, (int) $task->version, 'run-test-123', $suggestion['candidate']['sha256']);
+            $card->refresh();
+            self::assertSame('completed', $card->status);
+        } finally {
+            $previousRepo === false ? putenv('PROOFPATCH_TEST_REPO') : putenv('PROOFPATCH_TEST_REPO=' . $previousRepo);
+            $previousBaseCommit === false ? putenv('PROOFPATCH_TEST_BASE_COMMIT') : putenv('PROOFPATCH_TEST_BASE_COMMIT=' . $previousBaseCommit);
+        }
+    }
+
+    public function testAssignSuitableSyntheticTaskLoadsContext(): void
+    {
+        $card = new LocalTaskCard();
+        $card->github_user_id = 1;
+        $card->repository = 'synthetic-fixture/order-total';
+        $card->title = 'Fix order total synthetic bug';
+        $card->description = 'Private description text';
+        $card->status = 'queued';
+        $card->save();
+
+        $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
+        $request->session()->put('github_auth', [
+            'token' => 'fake-token',
+            'user' => ['id' => 1],
+            'repositories' => [['fullName' => 'synthetic-fixture/order-total', 'isPrivate' => false]],
+        ]);
+
+        $middleware = new AuthorizeGithubTasks(new GitHubAppClient(new MockHttpClient([
+            new MockResponse(json_encode(['id' => 1, 'login' => 'user1'])),
+            new MockResponse(json_encode(['installations' => [['id' => 101]]])),
+            new MockResponse(json_encode(['repositories' => [[
+                'id' => 9, 'name' => 'order-total', 'full_name' => 'synthetic-fixture/order-total',
+                'owner' => ['login' => 'synthetic-fixture'], 'private' => false,
+            ]]])),
+        ])));
+
+        $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
+        self::assertTrue($response->isRedirection());
+        self::assertStringContainsString('assigned to Muse', (string) $request->session()->get('success'));
+
+        $card->refresh();
+        self::assertSame('in_progress', $card->status);
+        self::assertNotNull($card->workbench_task_id);
+
+        $context = $request->session()->get('issue_context');
+        self::assertIsArray($context);
+        self::assertTrue($context['isSynthetic']);
+        self::assertStringNotContainsString('Private description text', json_encode($context));
+    }
+
     public function testMigrationRollbackOnlyRemovesLocalCardsInIsolatedDatabase(): void
     {
         $migration = require dirname(__DIR__, 2).'/database/migrations/2026_10_30_000001_create_local_task_cards.php';

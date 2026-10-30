@@ -62,6 +62,9 @@ final readonly class GitHubAppClient
             try {
                 $installationsData = $this->get($instEndpoint, $token);
             } catch (\Throwable $e) {
+                if ($instPage === 1 && str_contains($e->getMessage(), '403')) {
+                    return $this->listUserRepositoriesFallback($token, $status);
+                }
                 $errors[] = "Installations page {$instPage}: ".$e->getMessage();
                 $instTruncated = true;
                 break;
@@ -143,6 +146,43 @@ final readonly class GitHubAppClient
         $status = [
             'truncated' => $instTruncated || $repoTruncated,
             'installationsCount' => count($allInstallations),
+            'repositoriesCount' => count($repositories),
+            'errors' => $errors,
+        ];
+
+        return $repositories;
+    }
+
+    private function listUserRepositoriesFallback(string $token, ?array &$status = null): array
+    {
+        $repositories = [];
+        $errors = [];
+        try {
+            $reposData = $this->get('/user/repos?affiliation=owner,collaborator&per_page=100', $token);
+            if (is_array($reposData)) {
+                foreach ($reposData as $repo) {
+                    $fullName = (string) ($repo['full_name'] ?? '');
+                    if ($fullName === '') {
+                        continue;
+                    }
+                    $repositories[] = [
+                        'id' => (int) ($repo['id'] ?? 0),
+                        'name' => (string) ($repo['name'] ?? ''),
+                        'fullName' => $fullName,
+                        'owner' => (string) ($repo['owner']['login'] ?? ''),
+                        'isPrivate' => !self::isExplicitlyPublic($repo),
+                        'defaultBranch' => (string) ($repo['default_branch'] ?? 'main'),
+                        'htmlUrl' => (string) ($repo['html_url'] ?? 'https://github.com/'.$fullName),
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+
+        $status = [
+            'truncated' => false,
+            'installationsCount' => 0,
             'repositoriesCount' => count($repositories),
             'errors' => $errors,
         ];

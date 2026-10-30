@@ -726,16 +726,26 @@ export default function Repositories({
                       <span>Connect Your GitHub Account</span>
                     </div>
                     <p className="text-slate-500 text-[11px] leading-relaxed">
-                      Connect via RFC 8628 Device Flow to browse and inspect your owned public repositories directly.
+                      Connect via local GitHub credentials or RFC 8628 Device Flow to browse and inspect your authorized repositories directly.
                     </p>
                   </div>
-                  <Link
-                    href="/settings"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs motion-safe:transition motion-reduce:transition-none shrink-0 self-start sm:self-center"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Open Settings</span>
-                  </Link>
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => router.post('/github/local/connect')}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md text-white bg-slate-900 hover:bg-slate-800 shadow-xs motion-safe:transition motion-reduce:transition-none"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Connect Active Account</span>
+                    </button>
+                    <Link
+                      href="/settings"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs motion-safe:transition motion-reduce:transition-none"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Settings</span>
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>

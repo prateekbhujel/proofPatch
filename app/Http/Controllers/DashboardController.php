@@ -858,6 +858,40 @@ final class DashboardController
         return redirect('/repositories')->with('github_status', 'Disconnected from GitHub.');
     }
 
+    public function connectLocalCli(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $token = trim((string) (getenv('PROOFPATCH_GITHUB_TOKEN') ?: shell_exec('gh auth token 2>/dev/null') ?: ''));
+        if ($token === '') {
+            $this->putSession($request, 'github_error', 'No active GitHub CLI token found on host. Run `gh auth login`.');
+            return redirect('/settings')->with('github_error', 'No active GitHub CLI token found on host. Run `gh auth login`.');
+        }
+
+        try {
+            $client = $this->getGitHubAppClient();
+            $user = $client->getCurrentUser($token);
+            $reposStatus = [];
+            $repos = $client->listSelectedRepositories($token, $reposStatus);
+
+            $this->putSession($request, 'github_auth', [
+                'token' => $token,
+                'user' => $user,
+                'repositories' => $repos,
+                'repositoriesStatus' => $reposStatus,
+                'connectedAt' => gmdate(DATE_ATOM),
+            ]);
+
+            $configured = DedicatedTestRepo::name();
+            $selected = $configured ?? ($repos[0]['fullName'] ?? null);
+            $this->putSession($request, 'selected_github_repo', $selected);
+            $this->addNotification($request, 'success', 'GitHub Connected', "Connected as @{$user['login']}.");
+
+            return redirect('/repositories')->with('github_status', "Connected as @{$user['login']}.");
+        } catch (\Throwable $e) {
+            $this->putSession($request, 'github_error', 'Failed to connect: ' . $e->getMessage());
+            return redirect('/settings')->with('github_error', 'Failed to connect: ' . $e->getMessage());
+        }
+    }
+
     public function selectInstalledRepository(Request $request): \Illuminate\Http\RedirectResponse
     {
         $auth = $this->getSession($request, 'github_auth');

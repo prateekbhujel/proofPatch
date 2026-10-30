@@ -40,6 +40,7 @@ Route::post('/repositories/review/draft/clear', [DashboardController::class, 'cl
 Route::post('/github/device/initiate', [DashboardController::class, 'initiateDeviceFlow']);
 Route::post('/github/device/poll', [DashboardController::class, 'pollDeviceFlow']);
 Route::post('/github/device/disconnect', [DashboardController::class, 'disconnectDeviceFlowRequest']);
+Route::post('/github/local/connect', [DashboardController::class, 'connectLocalCli']);
 Route::post('/github/repositories/select', [DashboardController::class, 'selectInstalledRepository']);
 Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);

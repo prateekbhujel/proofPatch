@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { Sparkles, Brain, Check, Loader2, Terminal, Code2 } from 'lucide-react';
 
 interface ThinkingStep {
   label: string;
@@ -14,68 +15,32 @@ interface ThinkingAnimationProps {
 }
 
 const shimmer: Variants = {
-  hidden: { backgroundPosition: '200% 0' },
+  hidden: { x: '-100%' },
   visible: {
-    backgroundPosition: '-200% 0',
-    transition: { duration: 2, repeat: Infinity, ease: 'linear' as const },
+    x: '100%',
+    transition: {
+      repeat: Infinity,
+      duration: 1.8,
+      ease: 'linear' as const,
+    },
   },
 };
 
-function PulseOrb({ delay = 0, color = '#8b5cf6' }: { delay?: number; color?: string }) {
-  return (
-    <motion.div
-      className="absolute rounded-full"
-      style={{
-        width: 6,
-        height: 6,
-        background: color,
-        filter: `blur(1px) drop-shadow(0 0 4px ${color})`,
-      }}
-      animate={{
-        scale: [1, 1.8, 1],
-        opacity: [0.5, 1, 0.5],
-      }}
-      transition={{
-        duration: 1.4,
-        repeat: Infinity,
-        delay,
-        ease: 'easeInOut',
-      }}
-    />
-  );
-}
-
-function StreamingDots() {
-  return (
-    <div className="flex items-center gap-1">
-      {[0, 1, 2].map((i) => (
-        <motion.div
-          key={i}
-          className="w-1.5 h-1.5 rounded-full bg-violet-400"
-          animate={{
-            y: [0, -4, 0],
-            opacity: [0.4, 1, 0.4],
-          }}
-          transition={{
-            duration: 0.8,
-            repeat: Infinity,
-            delay: i * 0.15,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-export function ThinkingAnimation({ isActive, steps, title = 'Processing', subtitle }: ThinkingAnimationProps) {
+export function ThinkingAnimation({
+  isActive,
+  steps,
+  title = 'AI Thinking & Synthesizing',
+  subtitle = 'Analyzing AST, evaluating test invariants, and generating falsifiable repair…',
+}: ThinkingAnimationProps) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (isActive) {
       setElapsed(0);
-      intervalRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+      intervalRef.current = setInterval(() => {
+        setElapsed((prev) => +(prev + 0.1).toFixed(1));
+      }, 100);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
@@ -88,138 +53,111 @@ export function ThinkingAnimation({ isActive, steps, title = 'Processing', subti
     <AnimatePresence>
       {isActive && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="overflow-hidden"
+          initial={{ opacity: 0, y: -10, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -10, scale: 0.98 }}
+          transition={{ duration: 0.3 }}
+          className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/90 via-white to-purple-50/70 p-5 shadow-lg shadow-violet-500/5 space-y-4"
         >
-          <div className="relative rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 via-white to-indigo-50/60 p-5 space-y-4 overflow-hidden">
-            {/* Animated background shimmer */}
+          {/* Background Animated Shimmer Wave */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
             <motion.div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: 'linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.04) 25%, rgba(139,92,246,0.08) 50%, rgba(139,92,246,0.04) 75%, transparent 100%)',
-                backgroundSize: '200% 100%',
-              }}
               variants={shimmer}
               initial="hidden"
               animate="visible"
+              className="w-1/2 h-full bg-gradient-to-r from-transparent via-violet-300 to-transparent transform -skew-x-12"
             />
+          </div>
 
-            {/* Floating orbs */}
-            <div className="absolute top-3 right-4 flex items-center gap-2">
-              <PulseOrb delay={0} color="#8b5cf6" />
-              <PulseOrb delay={0.4} color="#6366f1" />
-              <PulseOrb delay={0.8} color="#a78bfa" />
-            </div>
-
-            {/* Header */}
-            <div className="relative flex items-center gap-3">
+          {/* Header with Brain/Sparkle Pulse Orb */}
+          <div className="flex items-center justify-between gap-3 relative z-10 border-b border-violet-100 pb-3">
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <motion.div
-                  className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-200"
-                  animate={{ rotate: [0, 5, -5, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                  </svg>
-                </motion.div>
-                {/* Ping ring */}
-                <motion.div
-                  className="absolute inset-0 rounded-lg border-2 border-violet-400"
-                  animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900">{title}</span>
-                  <StreamingDots />
+                {/* Outer Breathing Halo */}
+                <span className="absolute -inset-1 rounded-xl bg-violet-400/30 animate-pulse-ring" />
+                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-violet-500/25">
+                  <Brain className="w-5 h-5 animate-pulse" />
                 </div>
-                {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
               </div>
-              <span className="text-xs font-mono text-slate-400 tabular-nums">{elapsed}s</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
+                    {title}
+                  </h3>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 border border-violet-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-600 animate-ping" />
+                    STREAMING
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+              </div>
             </div>
 
-            {/* Steps */}
-            <div className="relative space-y-0">
-              {steps.map((step, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1, duration: 0.3 }}
-                  className="flex items-center gap-3 py-2 relative"
-                >
-                  {/* Vertical connector line */}
-                  {i < steps.length - 1 && (
-                    <div className="absolute left-[11px] top-[28px] w-[2px] h-[calc(100%-12px)] bg-slate-200" />
-                  )}
+            <div className="text-right shrink-0">
+              <span className="text-xs font-mono font-bold text-violet-700 bg-violet-100/80 px-2.5 py-1 rounded-md border border-violet-200">
+                {elapsed.toFixed(1)}s
+              </span>
+            </div>
+          </div>
 
-                  {/* Status indicator */}
-                  <div className="relative z-10 shrink-0">
-                    {step.status === 'active' ? (
-                      <motion.div
-                        className="w-6 h-6 rounded-full bg-violet-100 border-2 border-violet-500 flex items-center justify-center"
-                        animate={{ borderColor: ['#8b5cf6', '#6366f1', '#8b5cf6'] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      >
-                        <motion.div
-                          className="w-2 h-2 rounded-full bg-violet-500"
-                          animate={{ scale: [1, 1.4, 1] }}
-                          transition={{ duration: 1, repeat: Infinity }}
-                        />
-                      </motion.div>
-                    ) : step.status === 'done' ? (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center"
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </motion.div>
-                    ) : step.status === 'error' ? (
-                      <div className="w-6 h-6 rounded-full bg-rose-500 flex items-center justify-center">
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </div>
+          {/* Pipeline Step Progress List */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 relative z-10">
+            {steps.map((step, idx) => {
+              const isDone = step.status === 'done';
+              const isCurrent = step.status === 'active';
+
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs font-medium transition-all ${
+                    isDone
+                      ? 'border-emerald-200 bg-emerald-50/60 text-emerald-900'
+                      : isCurrent
+                      ? 'border-violet-300 bg-white shadow-xs text-violet-900 ring-1 ring-violet-400'
+                      : 'border-slate-200/80 bg-slate-50/50 text-slate-500'
+                  }`}
+                >
+                  <div className="shrink-0">
+                    {isDone ? (
+                      <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xs">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    ) : isCurrent ? (
+                      <Loader2 className="w-4 h-4 text-violet-600 animate-spin" />
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-slate-100 border-2 border-slate-300" />
+                      <span className="w-4 h-4 rounded-full border border-slate-300 bg-white flex items-center justify-center text-[9px] text-slate-400 font-mono">
+                        {idx + 1}
+                      </span>
                     )}
                   </div>
+                  <span className="truncate">{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
 
-                  <span
-                    className={`text-xs font-medium ${
-                      step.status === 'active'
-                        ? 'text-violet-900'
-                        : step.status === 'done'
-                        ? 'text-emerald-700'
-                        : step.status === 'error'
-                        ? 'text-rose-700'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {step.label}
-                  </span>
-
-                  {step.status === 'active' && (
-                    <motion.div
-                      className="ml-auto h-1 w-16 rounded-full bg-violet-100 overflow-hidden"
-                    >
-                      <motion.div
-                        className="h-full bg-gradient-to-r from-violet-400 to-indigo-500 rounded-full"
-                        animate={{ width: ['0%', '100%'] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                      />
-                    </motion.div>
-                  )}
-                </motion.div>
-              ))}
+          {/* Interactive Simulated Terminal Bar */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 text-slate-200 p-3 space-y-1.5 font-mono text-xs shadow-inner">
+            <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Terminal className="w-3 h-3 text-violet-400" />
+                <span>codex-evaluator :: sandboxed-oracle</span>
+              </div>
+              <span className="text-emerald-400 font-bold">120Hz Real-Time Kinematics</span>
+            </div>
+            <div className="space-y-0.5 text-[11px] pt-1">
+              <div className="text-slate-300 flex items-center gap-2">
+                <span className="text-violet-400">❯</span>
+                <span className="text-slate-100">ast_parse(source=OrderTotal.php, mode=isolated)</span>
+              </div>
+              <div className="text-slate-400 flex items-center gap-2">
+                <span className="text-violet-400">❯</span>
+                <span>evaluating_negative_control: caught early-exit injection</span>
+              </div>
+              <div className="text-emerald-400 flex items-center gap-2 font-semibold">
+                <span className="text-emerald-400">✔</span>
+                <span>oracle_token: single_use_bound_digest_verified</span>
+              </div>
             </div>
           </div>
         </motion.div>

@@ -2,13 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
 
-code, pre {
-  font-family: 'JetBrains Mono', monospace;
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
 }
 
 /* Crisp rendering when zoomed into UI screenshots */
@@ -16,4 +20,34 @@ code, pre {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
+}
+
+/* Shimmer keyframes */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer-sweep 2.2s infinite ease-in-out;
+}
+
+/* Pulse radar keyframes */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 0; }
+  100% { transform: scale(0.95); opacity: 0; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Subtle gradient mesh backdrop */
+.mesh-glow-violet {
+  background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 60%);
+}
+
+.mesh-glow-indigo {
+  background: radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
 }

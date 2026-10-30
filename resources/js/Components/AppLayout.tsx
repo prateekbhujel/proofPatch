@@ -13,9 +13,8 @@ import {
   Info,
   AlertTriangle,
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 
 interface NotificationItem {
@@ -39,7 +38,6 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
   const notifications: NotificationItem[] = ((props as any).notifications as NotificationItem[]) || [];
 
   const [isTrayOpen, setIsTrayOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const trayRef = useRef<HTMLDivElement>(null);
 
   const currentNav = (() => {
@@ -105,231 +103,203 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0f0f13] text-slate-200 antialiased font-sans">
-      {/* Sidebar */}
-      <motion.aside
-        animate={{ width: sidebarCollapsed ? 64 : 220 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className="fixed left-0 top-0 bottom-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#13131a]/95 backdrop-blur-xl"
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 h-14 border-b border-white/[0.06] shrink-0">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <motion.div
-              whileHover={{ rotate: 8 }}
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-violet-500/20"
-            >
-              P
-            </motion.div>
-            <AnimatePresence>
-              {!sidebarCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="font-bold text-sm text-white tracking-tight whitespace-nowrap overflow-hidden"
-                >
-                  ProofPatcher
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </Link>
-        </div>
-
-        {/* Nav items */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isCurrent = currentNav === item.key;
-            return (
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 antialiased font-sans mesh-glow-violet">
+      {/* Top Glassmorphic Navigation Bar */}
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 gap-4">
+            {/* Brand Logo with glowing accent */}
+            <div className="flex items-center gap-3 shrink-0">
               <Link
-                key={item.key}
-                href={item.href}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group ${
-                  isCurrent
-                    ? 'bg-violet-500/10 text-violet-300'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
-                }`}
+                href="/"
+                className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 rounded-lg"
               >
-                {/* Active indicator bar */}
-                {isCurrent && (
-                  <motion.div
-                    layoutId="activeNavIndicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-violet-500"
-                    transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                  />
-                )}
-                <Icon className={`w-[18px] h-[18px] shrink-0 ${isCurrent ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                <AnimatePresence>
-                  {!sidebarCollapsed && (
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: 'auto' }}
-                      exit={{ opacity: 0, width: 0 }}
-                      className="whitespace-nowrap overflow-hidden"
-                    >
-                      {item.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                <div className="relative">
+                  <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm tracking-tight shadow-md shadow-violet-500/20 group-hover:shadow-violet-500/30 transition">
+                    P
+                  </span>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-slate-900 tracking-tight text-sm flex items-center gap-1.5">
+                    ProofPatcher
+                    <span className="text-[10px] font-semibold text-violet-700 bg-violet-50 px-1.5 py-0.2 rounded border border-violet-200">
+                      v2.0
+                    </span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 hidden sm:block leading-none">
+                    Falsifiable AI Verification Engine
+                  </span>
+                </div>
               </Link>
-            );
-          })}
-        </nav>
+            </div>
 
-        {/* Sidebar collapse toggle */}
-        <div className="px-2 pb-3 border-t border-white/[0.06] pt-3">
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition"
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            <AnimatePresence>
-              {!sidebarCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="whitespace-nowrap"
+            {/* Navigation Links with animated pills */}
+            <nav className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isCurrent = currentNav === item.key;
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 whitespace-nowrap ${
+                      isCurrent
+                        ? 'bg-violet-50 text-violet-700 border border-violet-200/80 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-violet-600' : 'text-slate-400'}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Right Actions: Notifications */}
+            <div className="flex items-center gap-2.5 relative">
+              <div className="relative" ref={trayRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsTrayOpen(!isTrayOpen)}
+                  aria-label="View notifications"
+                  className={`p-2 rounded-lg border text-slate-600 hover:text-slate-900 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
+                    isTrayOpen ? 'bg-slate-100 border-slate-300' : 'border-slate-200/80 bg-white hover:bg-slate-50'
+                  }`}
                 >
-                  Collapse
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
-      </motion.aside>
+                  <Bell className="w-4 h-4" />
+                  {notifications.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                      {notifications.length > 9 ? '9+' : notifications.length}
+                    </span>
+                  )}
+                </button>
 
-      {/* Main content area */}
-      <div
-        className="flex-1 flex flex-col"
-        style={{ marginLeft: sidebarCollapsed ? 64 : 220, transition: 'margin-left 0.3s ease' }}
-      >
-        {/* Top bar */}
-        <header className="sticky top-0 z-40 h-14 bg-[#13131a]/80 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between px-6">
-          <div />
-
-          {/* Right actions */}
-          <div className="flex items-center gap-3 relative">
-            {/* Notifications */}
-            <div className="relative" ref={trayRef}>
-              <button
-                type="button"
-                onClick={() => setIsTrayOpen(!isTrayOpen)}
-                aria-label="View notifications"
-                className={`p-2 rounded-lg border transition ${
-                  isTrayOpen
-                    ? 'bg-white/10 border-white/10 text-white'
-                    : 'border-transparent text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Bell className="w-4 h-4" />
-                {notifications.length > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center"
-                  >
-                    {notifications.length > 9 ? '9+' : notifications.length}
-                  </motion.span>
-                )}
-              </button>
-
-              {/* Notifications dropdown */}
-              <AnimatePresence>
-                {isTrayOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#1a1a24] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
-                  >
-                    <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06] flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <Bell className="w-3.5 h-3.5 text-violet-400" />
-                        <span className="text-xs font-semibold text-white">Notifications</span>
-                        <span className="text-[10px] text-slate-500 font-mono">({notifications.length})</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {notifications.length > 0 && (
+                {/* Notifications Dropdown Tray */}
+                <AnimatePresence>
+                  {isTrayOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                    >
+                      <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Bell className="w-3.5 h-3.5 text-violet-600" />
+                          <span className="text-xs font-semibold text-slate-900">Notifications</span>
+                          <span className="text-[10px] text-slate-400 font-mono">({notifications.length})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {notifications.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleClearNotifications}
+                              className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Clear all</span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={handleClearNotifications}
-                            className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
+                            onClick={() => setIsTrayOpen(false)}
+                            className="p-1 rounded text-slate-400 hover:text-slate-600"
                           >
-                            <Trash2 className="w-3 h-3" />
-                            Clear
+                            <X className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        <button type="button" onClick={() => setIsTrayOpen(false)} className="p-1 rounded text-slate-500 hover:text-white">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="max-h-80 overflow-y-auto divide-y divide-white/[0.04]">
-                      {notifications.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-slate-500 space-y-1">
-                          <p className="font-medium text-slate-400">No new notifications</p>
-                          <p className="text-[11px]">Workflow events appear here.</p>
                         </div>
-                      ) : (
-                        notifications.map((item) => {
-                          const Icon = item.type === 'error' ? AlertTriangle : item.type === 'success' ? CheckCircle2 : Info;
-                          const iconColor = item.type === 'error' ? 'text-rose-400' : item.type === 'success' ? 'text-emerald-400' : 'text-violet-400';
-                          return (
-                            <div key={item.id} className="p-3 hover:bg-white/[0.03] text-xs space-y-0.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 font-medium text-white">
-                                  <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
-                                  <span>{item.title}</span>
+                      </div>
+
+                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+                            <p className="font-medium text-slate-700">No new notifications</p>
+                            <p className="text-[11px] text-slate-400">
+                              Workflow events and verifications appear here.
+                            </p>
+                          </div>
+                        ) : (
+                          notifications.map((item) => {
+                            const Icon =
+                              item.type === 'error'
+                                ? AlertTriangle
+                                : item.type === 'success'
+                                ? CheckCircle2
+                                : Info;
+                            const iconColor =
+                              item.type === 'error'
+                                ? 'text-rose-500'
+                                : item.type === 'success'
+                                ? 'text-emerald-500'
+                                : 'text-violet-600';
+
+                            return (
+                              <div key={item.id} className="p-3 hover:bg-slate-50/70 text-xs space-y-0.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 font-medium text-slate-900">
+                                    <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
+                                    <span>{item.title}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                    {formatTimestamp(item.timestamp)}
+                                  </span>
                                 </div>
-                                <span className="text-[10px] text-slate-500 whitespace-nowrap">{formatTimestamp(item.timestamp)}</span>
+                                <p className="text-slate-600 pl-5 text-[11px] leading-relaxed break-words font-mono">
+                                  {formatNotificationMessage(item.message)}
+                                </p>
                               </div>
-                              <p className="text-slate-400 pl-5 text-[11px] leading-relaxed break-words font-mono">
-                                {formatNotificationMessage(item.message)}
-                              </p>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                            );
+                          })
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Page content */}
-        <main className="flex-1 bg-[#0f0f13]">
-          <div className="max-w-[1400px] w-full mx-auto px-6 py-6">
-            {children}
-          </div>
-        </main>
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-[1500px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {children}
+      </main>
 
-        {/* Footer */}
-        <footer className="border-t border-white/[0.06] bg-[#13131a]/50 py-3.5">
-          <div className="max-w-[1400px] w-full mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-            <div className="flex items-center gap-2">
-              <span>© 2026 ProofPatcher</span>
-              <span className="text-slate-700">·</span>
-              <a href="https://github.com/prateekbhujel" target="_blank" rel="noreferrer" className="hover:text-slate-300 transition font-medium">
-                by Pratik Bhujel
-              </a>
-            </div>
-            <div className="flex items-center gap-3">
-              <Link href="/docs" className="hover:text-slate-300 transition font-medium">Docs</Link>
-              <span className="text-slate-700">·</span>
-              <a href="https://github.com/prateekbhujel/proofPatch" target="_blank" rel="noreferrer" className="hover:text-slate-300 transition font-medium">
-                GitHub
-              </a>
-            </div>
+      {/* Clean Global Footer */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-4">
+        <div className="max-w-[1500px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-slate-600">
+            <span>© 2026 ProofPatcher</span>
+            <span className="text-slate-300">·</span>
+            <a
+              href="https://github.com/prateekbhujel"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-600 hover:text-slate-900 font-medium transition"
+            >
+              by Pratik Bhujel
+            </a>
           </div>
-        </footer>
-      </div>
+          <div className="flex items-center gap-3 text-slate-500">
+            <Link href="/docs" className="hover:text-slate-800 transition font-medium">
+              Docs
+            </Link>
+            <span className="text-slate-300">·</span>
+            <a
+              href="https://github.com/prateekbhujel/proofPatch"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-slate-800 transition font-medium flex items-center gap-1"
+            >
+              <span>GitHub</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -35,7 +35,7 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
         href={`/issues/tasks/${task.id}/image`}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-medium"
+        className="inline-flex items-center gap-1.5 text-xs text-violet-700 hover:text-violet-900 font-semibold underline"
       >
         <ImageIcon className="w-3.5 h-3.5" />
         <span>View screenshot</span>
@@ -62,7 +62,7 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
       }}
       className="space-y-2 pt-1"
     >
-      <label htmlFor={`task-image-${task.id}`} className="block text-[11px] font-medium text-slate-400">
+      <label htmlFor={`task-image-${task.id}`} className="block text-[11px] font-semibold text-slate-700">
         Attach Screenshot (PNG or JPEG, up to 2 MB)
       </label>
       <div className="flex items-center gap-2">
@@ -72,12 +72,12 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
           type="file"
           accept="image/png,image/jpeg"
           onChange={(event) => setData('image', event.target.files?.[0] ?? null)}
-          className="block w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/[0.06] file:text-slate-300 hover:file:bg-white/10"
+          className="block w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
         />
         <button
           type="submit"
           disabled={!data.image || processing}
-          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg text-white bg-violet-600 hover:bg-violet-700 transition disabled:opacity-50 shrink-0"
+          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 transition disabled:opacity-50 shrink-0"
         >
           <Upload className="w-3 h-3" />
           <span>{processing ? 'Saving…' : 'Upload'}</span>
@@ -170,32 +170,27 @@ export function TaskCardSection({
   }
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="rounded-2xl border border-white/[0.06] bg-[#16161f]/80 backdrop-blur-sm p-5 space-y-4 shadow-xl shadow-black/10"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-white/[0.06] pb-3">
+    <section className="rounded-2xl border border-slate-200/90 bg-white p-5 space-y-4 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-              <ListPlus className="w-4 h-4 text-violet-400" />
-              Tasks
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <ListPlus className="w-3.5 h-3.5 text-slate-600" />
+              Tasks & Backlog
             </h2>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
               {localTasks.length} queued
             </span>
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Keep track of work for your repositories.
+            Keep track of work for your repositories. Cards stay local on this computer.
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setIsFormOpen(!isFormOpen)}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl text-slate-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition shrink-0"
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition shrink-0"
         >
           <span>{isFormOpen ? 'Close' : 'New task'}</span>
           {isFormOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -203,7 +198,7 @@ export function TaskCardSection({
       </div>
 
       {/* Scope Disclaimer Banner */}
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-xs text-slate-400 flex items-start gap-2.5">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 flex items-start gap-2.5">
         <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
         <div className="leading-relaxed">
           Tasks and screenshots stay on this computer. Assigning a suitable task to Muse runs strictly against public or synthetic test data; screenshots and private descriptions are never sent to a model.
@@ -217,18 +212,18 @@ export function TaskCardSection({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.25 }}
             onSubmit={handleSubmit}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-3.5 text-xs overflow-hidden"
+            className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 space-y-3.5 text-xs overflow-hidden"
           >
-            <div className="font-semibold text-white text-xs">
+            <div className="font-bold text-slate-900 text-xs">
               <span>New Task Card</span>
             </div>
 
             {!hasGrantedRepos && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center justify-between gap-2">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-center justify-between gap-2">
                 <span>Connect GitHub and grant repository access to create tasks.</span>
-                <Link href="/settings" className="font-semibold underline hover:text-amber-200 shrink-0">
+                <Link href="/settings" className="font-semibold underline hover:text-amber-900 shrink-0">
                   Connect in Settings
                 </Link>
               </div>
@@ -236,8 +231,8 @@ export function TaskCardSection({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2 space-y-1">
-                <label htmlFor="local-task-title" className="block text-xs font-medium text-slate-300">
-                  Title <span className="text-rose-400">*</span>
+                <label htmlFor="local-task-title" className="block text-xs font-semibold text-slate-700">
+                  Title <span className="text-rose-500">*</span>
                 </label>
                 <input
                   id="local-task-title"
@@ -248,14 +243,14 @@ export function TaskCardSection({
                   placeholder="e.g. Fix checkout discount calculation for zero items"
                   value={data.title}
                   onChange={(e) => setData('title', e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:bg-white/[0.02] disabled:text-slate-600"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:bg-slate-100 disabled:text-slate-400 shadow-2xs"
                 />
-                {clientErrors.title && <p className="text-[11px] text-rose-400">{clientErrors.title}</p>}
+                {clientErrors.title && <p className="text-[11px] text-rose-600">{clientErrors.title}</p>}
               </div>
 
               <div className="space-y-1">
-                <label htmlFor="local-task-repo" className="block text-xs font-medium text-slate-300">
-                  Repository <span className="text-rose-400">*</span>
+                <label htmlFor="local-task-repo" className="block text-xs font-semibold text-slate-700">
+                  Repository <span className="text-rose-500">*</span>
                 </label>
                 <select
                   id="local-task-repo"
@@ -263,7 +258,7 @@ export function TaskCardSection({
                   disabled={!hasGrantedRepos}
                   value={data.repository}
                   onChange={(e) => setData('repository', e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#1a1a24] px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:bg-white/[0.02] disabled:text-slate-600"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:bg-slate-100 disabled:text-slate-400 shadow-2xs"
                 >
                   {!hasGrantedRepos ? (
                     <option value="" disabled>No authorized repositories</option>
@@ -278,13 +273,13 @@ export function TaskCardSection({
                     </>
                   )}
                 </select>
-                {clientErrors.repository && <p className="text-[11px] text-rose-400">{clientErrors.repository}</p>}
+                {clientErrors.repository && <p className="text-[11px] text-rose-600">{clientErrors.repository}</p>}
               </div>
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="local-task-description" className="block text-xs font-medium text-slate-300">
-                Description <span className="text-rose-400">*</span>
+              <label htmlFor="local-task-description" className="block text-xs font-semibold text-slate-700">
+                Description <span className="text-rose-500">*</span>
               </label>
               <textarea
                 id="local-task-description"
@@ -295,17 +290,17 @@ export function TaskCardSection({
                 placeholder="Describe the problem, reproduction notes, or expected outcome..."
                 value={data.description}
                 onChange={(e) => setData('description', e.target.value)}
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:bg-white/[0.02] disabled:text-slate-600"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:bg-slate-100 disabled:text-slate-400 shadow-2xs"
               />
-              {clientErrors.description && <p className="text-[11px] text-rose-400">{clientErrors.description}</p>}
+              {clientErrors.description && <p className="text-[11px] text-rose-600">{clientErrors.description}</p>}
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[10px] text-slate-500">Saved on this computer</span>
+              <span className="text-[10px] text-slate-400">Saved locally on this computer</span>
               <button
                 type="submit"
                 disabled={!hasGrantedRepos || processing || !data.title.trim() || !data.description.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>{processing ? 'Saving…' : 'Save task'}</span>
               </button>
@@ -316,48 +311,48 @@ export function TaskCardSection({
 
       {/* Task Cards List */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs font-semibold text-slate-300 border-b border-white/[0.06] pb-1.5">
-          <span>Queued ({localTasks.length})</span>
+        <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5">
+          <span>Queued Cards ({localTasks.length})</span>
         </div>
 
         {localTasks.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/[0.08] p-6 text-center text-xs text-slate-500 space-y-1">
-            <FileText className="w-5 h-5 mx-auto text-slate-600 mb-1" />
-            <p className="font-medium text-slate-400">No tasks yet</p>
+          <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500 space-y-1">
+            <FileText className="w-5 h-5 mx-auto text-slate-400 mb-1" />
+            <p className="font-semibold text-slate-700">No tasks created yet</p>
+            <p className="text-[11px]">Click &quot;New task&quot; to queue a task card.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {localTasks.map((task) => (
-              <motion.div
+              <div
                 key={task.id}
-                whileHover={{ y: -2 }}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 space-y-2.5 hover:bg-white/[0.04] transition flex flex-col justify-between"
+                className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5 shadow-2xs hover:border-slate-300 hover:shadow-xs transition flex flex-col justify-between"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-1 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-lg border border-white/[0.06] max-w-[200px] truncate">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 max-w-[200px] truncate">
                       <FolderGit2 className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">{task.repository}</span>
                     </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-violet-500/10 text-violet-400 border border-violet-500/20 capitalize">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 capitalize">
                       {task.status || 'queued'}
                     </span>
                   </div>
 
-                  <h3 className="text-xs font-semibold text-white line-clamp-2" title={task.title}>
+                  <h3 className="text-xs font-bold text-slate-900 line-clamp-2" title={task.title}>
                     {task.title}
                   </h3>
 
-                  <details className="text-[11px] text-slate-400 bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04]">
-                    <summary className="cursor-pointer font-medium text-slate-300">Description</summary>
+                  <details className="text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200/60">
+                    <summary className="cursor-pointer font-semibold text-slate-700">Description</summary>
                     <p className="mt-2 whitespace-pre-wrap break-words">{task.description}</p>
                   </details>
                   <TaskImage task={task} />
                 </div>
 
-                <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-slate-500 gap-2">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 gap-2">
                   <span className="flex items-center gap-1 font-mono shrink-0">
-                    <Clock className="w-3 h-3 text-slate-500" />
+                    <Clock className="w-3 h-3 text-slate-400" />
                     <span>{task.updatedAt ? task.updatedAt.slice(0, 16).replace('T', ' ') : 'Recently'}</span>
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -372,7 +367,7 @@ export function TaskCardSection({
                             onFinish: () => setAssigningId(null),
                           });
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition shadow-xs"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-50 transition shadow-2xs"
                       >
                         <Sparkles className="w-3 h-3" />
                         <span>{assigningId === task.id ? 'Assigning…' : 'Assign to Muse'}</span>
@@ -388,18 +383,18 @@ export function TaskCardSection({
                             onFinish: () => setAssigningId(null),
                           });
                         }}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-violet-400 hover:text-violet-300 underline"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:text-violet-900 underline"
                       >
                         <span>Open in Workbench</span>
                       </button>
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}
       </div>
-    </motion.section>
+    </section>
   );
 }

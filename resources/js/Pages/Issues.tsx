@@ -497,12 +497,9 @@ export default function Issues({
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               <span>Issues Workbench</span>
-              <span className="text-[11px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">
-                Live Interactive Mode
-              </span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Drag-and-drop task triage, AI code proposal, and falsifiable 5-gate verification.
+              Organize tasks and review proposed changes.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -524,10 +521,11 @@ export default function Issues({
         <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50/90 to-amber-50/40 p-4 flex items-start gap-3 shadow-2xs">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-900 space-y-0.5">
-            <p className="font-bold">Host execution disabled</p>
-            <p className="text-amber-800 leading-relaxed">
-              Model-generated or untrusted candidate code cannot be executed on the host. Worktrees, temporary directories, and token filters are not security sandboxes; an isolated microVM runner is required.
-            </p>
+            <p className="font-semibold">Untrusted code cannot run on this computer.</p>
+            <details className="text-amber-800">
+              <summary className="cursor-pointer">Why?</summary>
+              <p>Worktrees and temporary directories are not security sandboxes. Untrusted code needs an isolated runner.</p>
+            </details>
           </div>
         </div>
 
@@ -540,12 +538,8 @@ export default function Issues({
                 Maintainer Task Board
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Drag cards to organize triage. Cards stay backed strictly by verified server execution results.
+                Move cards to organize your work.
               </p>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <Sparkles className="w-3 h-3 text-violet-600" />
-              <span>Drag &amp; Drop Enabled</span>
             </div>
           </div>
 

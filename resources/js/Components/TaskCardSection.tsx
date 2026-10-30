@@ -5,7 +5,6 @@ import {
   ListPlus,
   Clock,
   FolderGit2,
-  AlertCircle,
   FileText,
   ChevronDown,
   ChevronUp,
@@ -247,7 +246,7 @@ export function TaskCardSection({
             </span>
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Cards stay on this computer. Assigning them to Muse is not available yet.
+            Tasks and screenshots stay on this computer. Muse cannot work on them yet.
           </p>
         </div>
 
@@ -259,14 +258,6 @@ export function TaskCardSection({
           <span>{isFormOpen ? 'Close' : 'New task'}</span>
           {isFormOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
-      </div>
-
-      {/* Scope Disclaimer Banner */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 flex items-start gap-2.5">
-        <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-        <div className="leading-relaxed">
-          Tasks and screenshots stay on this computer. Assigning a suitable task to Muse runs strictly against public or synthetic test data; screenshots and private descriptions are never sent to a model.
-        </div>
       </div>
 
       {/* Create Task Form */}

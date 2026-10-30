@@ -90,6 +90,15 @@ final class LocalTaskCardController
             return redirect('/issues')->with('error', 'Private repository content and task text stay local and cannot be sent to an external model. Assigning to Muse requires an authorized public or dedicated test repository.');
         }
 
+        // Target relevance check: Never misrepresent a sample as a user task.
+        // ProofPatcher never substitutes sample fixtures for unrelated tasks.
+        if (!$this->isSupportedOrderTotalTask($card, $isDedicated, $isSynthetic)) {
+            return redirect('/issues')->with(
+                'error',
+                'Cannot assign task to Muse: ProofPatcher never substitutes sample fixtures for unrelated tasks, and private task descriptions and screenshots remain local. Assigning to Muse is currently supported only for the verified OrderTotal test target (src/OrderTotal.php) on the dedicated test repository or synthetic fixture.'
+            );
+        }
+
         // If card already has a linked workbench task, switch to it
         if ($card->workbench_task_id !== null) {
             $existingTask = \ProofPatch\Models\WorkbenchTask::find($card->workbench_task_id);
@@ -178,9 +187,19 @@ final class LocalTaskCardController
             $request->session()->forget(\ProofPatch\Http\Controllers\IssueWorkbenchController::CASE_SESSION_KEYS);
             \ProofPatch\Support\TaskWorkflowHelper::hydrateTaskSession($request, $task);
 
-            return redirect('/issues')->with('success', 'Task "' . $card->title . '" assigned to Muse. Review proposal preview below.');
+            return redirect('/issues')->with('success', 'Task "' . $card->title . '" staged and assigned to Muse workbench for verified target ' . $context['path'] . '. Private task text and screenshots remain local. Review the proposal request below to generate a model proposal with Muse or load an offline reference repair.');
         } catch (\Throwable $error) {
             return redirect('/issues')->with('error', 'Failed to assign task to Muse: ' . $error->getMessage());
         }
+    }
+
+    private function isSupportedOrderTotalTask(LocalTaskCard $card, bool $isDedicated, bool $isSynthetic): bool
+    {
+        if (!$isDedicated && !$isSynthetic) {
+            return false;
+        }
+
+        $combinedText = strtolower($card->title . ' ' . $card->description);
+        return (bool) preg_match('/ordertotal|order\s*total|zero[-\s]quantity|quantity|calculation|calculate|order_total\.php|\bissue\s*#?1\b/i', $combinedText);
     }
 }

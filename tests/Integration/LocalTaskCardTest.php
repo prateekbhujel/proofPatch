@@ -172,6 +172,88 @@ final class LocalTaskCardTest extends TestCase
         self::assertNull($card->workbench_task_id);
     }
 
+    public function testAssignUnrelatedTaskFailsClosedAndNeverSubstitutesSampleFixture(): void
+    {
+        $previousRepo = getenv('PROOFPATCH_TEST_REPO');
+        $previousBaseCommit = getenv('PROOFPATCH_TEST_BASE_COMMIT');
+        $dedicatedRepo = 'owner/dedicated-test';
+        putenv('PROOFPATCH_TEST_REPO=' . $dedicatedRepo);
+        putenv('PROOFPATCH_TEST_BASE_COMMIT=' . str_repeat('c', 40));
+
+        try {
+            // Case 1: Unrelated task on dedicated test repo
+            $unrelatedCard = new LocalTaskCard();
+            $unrelatedCard->github_user_id = 1;
+            $unrelatedCard->repository = $dedicatedRepo;
+            $unrelatedCard->title = 'Add dark mode toggle and refine navigation';
+            $unrelatedCard->description = 'Change navbar styling and add CSS theme tokens.';
+            $unrelatedCard->status = 'queued';
+            $unrelatedCard->save();
+
+            $request = $this->request('POST', "/issues/tasks/{$unrelatedCard->id}/assign");
+            $request->session()->put('github_auth', [
+                'token' => 'fake-token',
+                'user' => ['id' => 1],
+                'repositories' => [['fullName' => $dedicatedRepo, 'isPrivate' => false]],
+            ]);
+
+            $middleware = new AuthorizeGithubTasks(new GitHubAppClient(new MockHttpClient([
+                new MockResponse(json_encode(['id' => 1, 'login' => 'user1'])),
+                new MockResponse(json_encode(['installations' => [['id' => 101]]])),
+                new MockResponse(json_encode(['repositories' => [[
+                    'id' => 5, 'name' => 'dedicated-test', 'full_name' => $dedicatedRepo,
+                    'owner' => ['login' => 'owner'], 'private' => false,
+                ]]])),
+            ])));
+
+            $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $unrelatedCard->id));
+            self::assertTrue($response->isRedirection());
+            self::assertStringContainsString('Cannot assign task to Muse: ProofPatcher never substitutes sample fixtures for unrelated tasks', (string) $request->session()->get('error'));
+
+            $unrelatedCard->refresh();
+            self::assertSame('queued', $unrelatedCard->status);
+            self::assertNull($unrelatedCard->workbench_task_id);
+            self::assertNull($request->session()->get('issue_context'));
+
+            // Case 2: Unrelated public repository
+            $publicCard = new LocalTaskCard();
+            $publicCard->github_user_id = 1;
+            $publicCard->repository = 'owner/unrelated-public-repo';
+            $publicCard->title = 'Fix header styling';
+            $publicCard->description = 'Navbar padding is too small.';
+            $publicCard->status = 'queued';
+            $publicCard->save();
+
+            $request2 = $this->request('POST', "/issues/tasks/{$publicCard->id}/assign");
+            $request2->session()->put('github_auth', [
+                'token' => 'fake-token',
+                'user' => ['id' => 1],
+                'repositories' => [['fullName' => 'owner/unrelated-public-repo', 'isPrivate' => false]],
+            ]);
+
+            $middleware2 = new AuthorizeGithubTasks(new GitHubAppClient(new MockHttpClient([
+                new MockResponse(json_encode(['id' => 1, 'login' => 'user1'])),
+                new MockResponse(json_encode(['installations' => [['id' => 101]]])),
+                new MockResponse(json_encode(['repositories' => [[
+                    'id' => 7, 'name' => 'unrelated-public-repo', 'full_name' => 'owner/unrelated-public-repo',
+                    'owner' => ['login' => 'owner'], 'private' => false,
+                ]]])),
+            ])));
+
+            $response2 = $middleware2->handle($request2, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $publicCard->id));
+            self::assertTrue($response2->isRedirection());
+            self::assertStringContainsString('ProofPatcher never substitutes sample fixtures for unrelated tasks', (string) $request2->session()->get('error'));
+
+            $publicCard->refresh();
+            self::assertSame('queued', $publicCard->status);
+            self::assertNull($publicCard->workbench_task_id);
+            self::assertNull($request2->session()->get('issue_context'));
+        } finally {
+            $previousRepo === false ? putenv('PROOFPATCH_TEST_REPO') : putenv('PROOFPATCH_TEST_REPO=' . $previousRepo);
+            $previousBaseCommit === false ? putenv('PROOFPATCH_TEST_BASE_COMMIT') : putenv('PROOFPATCH_TEST_BASE_COMMIT=' . $previousBaseCommit);
+        }
+    }
+
     public function testAssignSuitableTaskLoadsDedicatedContextAndTracksLifecycle(): void
     {
         $previousRepo = getenv('PROOFPATCH_TEST_REPO');

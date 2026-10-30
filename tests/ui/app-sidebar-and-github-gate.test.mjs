@@ -140,4 +140,32 @@ test('Settings page exposes user-configurable Maintainer Automation Rules and ho
   assert.match(settingsSource, /Baseten Credits/);
   assert.match(settingsSource, /Unavailable/);
   assert.match(settingsSource, /Not exposed via chat completion API/);
+
+  // 3-Pillar & Global Provider Matrix
+  assert.match(settingsSource, /Global Provider &amp; Sandbox Architecture/);
+  assert.match(settingsSource, /Modal gVisor Sandbox/);
+  assert.match(settingsSource, /block_network=True/);
+});
+
+test('Issues workbench includes 3-Pillar architecture explainability, 4-step guided flow bar, Repo Context Memory, and bot attribution', () => {
+  const issuesSource = readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8');
+
+  // 3-Pillar Architecture Cards on Landing Screen
+  assert.match(issuesSource, /1\. Meta Muse Spark/);
+  assert.match(issuesSource, /2\. Baseten Inference/);
+  assert.match(issuesSource, /3\. Modal gVisor Sandbox/);
+  assert.match(issuesSource, /1-Click: Launch Interactive 5-Gate Flow/);
+
+  // 4-Step Guided Co-Maintainer Flow Bar
+  assert.match(issuesSource, /1\. Context Loaded/);
+  assert.match(issuesSource, /2\. Single-Use Approval/);
+  assert.match(issuesSource, /3\. 5-Gate Verifier/);
+  assert.match(issuesSource, /4\. Receipt &amp; PR Response/);
+
+  // Repository Context Memory auto-fill & Issue Media/GIF inspector
+  assert.match(issuesSource, /Repo Context Memory/);
+  assert.match(issuesSource, /proofpatch-repo-memory/);
+  assert.match(issuesSource, /Visual Media \/ GIF Detected/);
+  assert.match(issuesSource, /GitHub Co-Maintainer Response Attribution/);
+  assert.match(issuesSource, /proofpatcher\[bot\]/);
 });

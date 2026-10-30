@@ -1711,9 +1711,11 @@ export default function Repositories({
 
                   {/* Review decisions remain local. */}
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
-                    <p className="font-semibold text-slate-800">Review decisions stay local</p>
+                    <p className="font-semibold text-slate-800">
+                      Review decisions stay local · GitHub Comment Attribution ({githubConnection?.user?.login ? `@${githubConnection.user.login} / Co-Maintainer` : 'proofpatcher[bot]'})
+                    </p>
                     <p className="text-[11px] leading-relaxed">
-                      Approvals and change requests are not submitted to GitHub. Individual comments can be posted manually only to the configured test repository.
+                      Approvals and change requests are not submitted automatically to GitHub. Individual line-anchored comments can be posted manually to the configured test repository with a single-use SHA-256 digest token.
                     </p>
                   </div>
 
@@ -1768,15 +1770,30 @@ export default function Repositories({
                             />
                             <span className="text-xs font-medium text-slate-900">{c.name}</span>
                           </div>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded font-mono font-medium ${
-                              isSuccess
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-amber-50 text-amber-700'
-                            }`}
-                          >
-                            {c.conclusion || c.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {!isSuccess && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(
+                                    `CI Check Notice (${c.name}): Status is "${c.conclusion || c.status}" on commit ${pull.headSha.slice(0, 8)}. Please inspect failing check logs before merge.`
+                                  );
+                                }}
+                                className="text-[11px] font-medium px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 transition"
+                              >
+                                Copy CI Diagnostic Note
+                              </button>
+                            )}
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded font-mono font-medium ${
+                                isSuccess
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {c.conclusion || c.status}
+                            </span>
+                          </div>
                         </div>
                       );
                     })

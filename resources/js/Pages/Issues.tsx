@@ -317,6 +317,63 @@ export default function Issues({
   const [copiedDeviceCode, setCopiedDeviceCode] = useState(false);
   const [isSubmittingDevice, setIsSubmittingDevice] = useState(false);
   const [deviceClientIdInput, setDeviceClientIdInput] = useState(githubConnection?.clientId || '');
+  const [enteredWorkbench, setEnteredWorkbench] = useState(false);
+  const [showLandingHub, setShowLandingHub] = useState(false);
+  const [copiedBotComment, setCopiedBotComment] = useState(false);
+
+  // Persistent Repository Context Memory (pre-fills target path so opening issues is 1-click child's play)
+  const [repoMemory, setRepoMemory] = useState<{
+    defaultPath: string;
+    testCommand: string;
+    branchRule: string;
+    lastVerifiedReceipt: string | null;
+  }>(() => {
+    const fallback = {
+      defaultPath: 'src/OrderTotal.php',
+      testCommand: 'php tests/order_total.php',
+      branchRule: 'draft-pr-only (no auto-merge)',
+      lastVerifiedReceipt: null,
+    };
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const saved = window.localStorage.getItem('proofpatch-repo-memory');
+      if (saved) return { ...fallback, ...JSON.parse(saved) };
+    } catch {}
+    return fallback;
+  });
+
+  useEffect(() => {
+    if (context?.path || verificationReport?.receipt?.sha256) {
+      setRepoMemory((prev) => {
+        const next = {
+          ...prev,
+          defaultPath: context?.path || prev.defaultPath,
+          lastVerifiedReceipt: verificationReport?.receipt?.sha256 || prev.lastVerifiedReceipt,
+        };
+        try {
+          window.localStorage.setItem('proofpatch-repo-memory', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+  }, [context?.path, verificationReport?.receipt?.sha256]);
+
+  // Parse Markdown images / GIFs from issue description for visual repro inspection
+  const detectedIssueMedia = useMemo(() => {
+    const body = context?.body || '';
+    const results: Array<{ alt: string; url: string; isGif: boolean }> = [];
+    const mdRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = mdRegex.exec(body)) !== null) {
+      const url = match[2];
+      results.push({
+        alt: match[1] || 'Issue attachment',
+        url,
+        isGif: /\.gif(\?|$)/i.test(url),
+      });
+    }
+    return results;
+  }, [context?.body]);
 
   // Focused pane mode: 'workbench' (active context), 'local-card' (selected local card), or 'new'
   const [selectedLocalCardId, setSelectedLocalCardId] = useState<number | null>(() => {
@@ -370,7 +427,7 @@ export default function Issues({
 
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
-    const path = issuePathMap[issue.number]?.trim() || '';
+    const path = issuePathMap[issue.number]?.trim() || repoMemory.defaultPath || 'src/OrderTotal.php';
     if (!path) return;
     setLoadingIssueNum(issue.number);
     router.post(
@@ -608,205 +665,295 @@ export default function Issues({
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
-  // DISCONNECTED ONBOARDING VIEW
+  // DISCONNECTED ONBOARDING VIEW (Shown when disconnected & no task is active)
   // ══════════════════════════════════════════════════════════════════════════
   if (!isConnected) {
-    const remainingDollars = budget ? ((budget.remainingMicros || 0) / 1000000).toFixed(2) : '0.50';
+    if ((!context && !cardPreview && !enteredWorkbench) || showLandingHub) {
+      const remainingDollars = budget ? ((budget.remainingMicros || 0) / 1000000).toFixed(2) : '0.50';
 
-    return (
-      <AppLayout activeNav="issues">
-        <Head title="Connect GitHub · ProofPatcher" />
+      return (
+        <AppLayout activeNav="issues">
+          <Head title="Connect GitHub · ProofPatcher" />
 
-        <div className="w-full min-h-[calc(100vh-5rem)] flex flex-col justify-center items-center py-8 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl w-full space-y-8">
-            {/* Monogram Brand Header */}
-            <div className="text-center space-y-3">
-              <div className="flex justify-center mb-2">
-                <PfLogo size={36} className="w-14 h-14" badge={true} />
-              </div>
-              <h1 className="text-3xl font-serif tracking-tight text-slate-900 dark:text-slate-100">
-                Connect your GitHub account
-              </h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed">
-                ProofPatcher is an autonomous co-maintainer workbench. Connect via OAuth Device Flow to triage incoming issues from your real repositories, run the 5-gate verifier, and publish cryptographically attested draft pull requests.
-              </p>
-            </div>
-
-            {/* Global Error Banner */}
-            {error && (
-              <div
-                role="alert"
-                className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-xs text-rose-900 dark:text-rose-200 flex items-start gap-2.5"
-              >
-                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* RFC 8628 OAuth Device Flow Card */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] shadow-xs p-6 sm:p-8 space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
-                <div className="flex items-center gap-2.5">
-                  <Key className="w-5 h-5 text-violet-700 dark:text-violet-400" />
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      GitHub OAuth Device Flow (RFC 8628)
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Safe browser-based activation without pasting private access tokens.
-                    </p>
-                  </div>
+          <div className="w-full min-h-[calc(100vh-5rem)] flex flex-col justify-center items-center py-8 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-4xl w-full space-y-7">
+              {/* Monogram Brand Header */}
+              <div className="text-center space-y-3">
+                <div className="flex justify-center mb-2">
+                  <PfLogo size={36} className="w-14 h-14" badge={true} />
                 </div>
-                <Link
-                  href="/settings"
-                  className="text-xs font-medium text-violet-700 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+                <h1 className="text-3xl font-serif tracking-tight text-slate-900 dark:text-slate-100">
+                  Connect your GitHub account
+                </h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                  ProofPatcher is an autonomous co-maintainer workbench. Connect via OAuth Device Flow to triage incoming issues from your real repositories, run the 5-gate verifier, and publish cryptographically attested draft pull requests.
+                </p>
+              </div>
+
+              {/* Global Error Banner */}
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-xs text-rose-900 dark:text-rose-200 flex items-start gap-2.5"
                 >
-                  <span>Settings &amp; Keys</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-
-              {githubConnection?.deviceFlow?.userCode ? (
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Step 1: Copy your one-time user code
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 font-mono text-2xl sm:text-3xl font-bold tracking-widest text-center py-3 px-4 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/60 text-violet-800 dark:text-violet-300 select-all">
-                        {githubConnection.deviceFlow.userCode}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => copyDeviceCode(githubConnection.deviceFlow!.userCode)}
-                        className="px-4 py-3 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs hover:bg-slate-800 dark:hover:bg-slate-200 transition flex items-center gap-1.5 shrink-0"
-                      >
-                        {copiedDeviceCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        <span>{copiedDeviceCode ? 'Copied' : 'Copy'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <a
-                      href={githubConnection.deviceFlow.verificationUri || 'https://github.com/login/device'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-semibold text-xs text-center flex items-center justify-center gap-2 transition"
-                    >
-                      <span>Step 2: Open GitHub Device Activation</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePollDeviceFlow()}
-                      disabled={isSubmittingDevice}
-                      className="px-4 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-semibold text-xs flex items-center justify-center gap-2 transition disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSubmittingDevice ? 'animate-spin' : ''}`} />
-                      <span>{isSubmittingDevice ? 'Checking status…' : 'Step 3: Check Authorization Status'}</span>
-                    </button>
-                  </div>
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <span>{error}</span>
                 </div>
-              ) : (
-                <form onSubmit={handleInitiateDeviceFlow} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="onboarding-client-id"
-                      className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                    >
-                      GitHub OAuth App Client ID
-                    </label>
-                    <input
-                      id="onboarding-client-id"
-                      type="text"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck={false}
-                      value={deviceClientIdInput}
-                      onChange={(e) => setDeviceClientIdInput(e.target.value)}
-                      placeholder="e.g. Ov23li... (configured in .env or Settings)"
-                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-violet-600"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmittingDevice}
-                    className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs hover:bg-slate-800 dark:hover:bg-slate-200 transition flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Key className="w-4 h-4" />
-                    <span>{isSubmittingDevice ? 'Initiating connection…' : 'Initiate GitHub Device Connection'}</span>
-                  </button>
-                </form>
               )}
-            </div>
 
-            {/* Model Usage & Balances Dashboard */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Model Runtime Allowances &amp; Live Balances
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">Real Measured Metrics</span>
-              </div>
+              {/* Primary Dual-Path Hub: OAuth Device Flow + 1-Click Interactive Verification Flow */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                {/* Left 7 cols: RFC 8628 OAuth Device Flow Card */}
+                <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] shadow-xs p-6 space-y-5 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <Key className="w-5 h-5 text-violet-700 dark:text-violet-400" />
+                        <div>
+                          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            GitHub OAuth Device Flow (RFC 8628)
+                          </h2>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Safe browser-based activation without pasting private access tokens.
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/settings"
+                        className="text-xs font-medium text-violet-700 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+                      >
+                        <span>Settings &amp; Keys</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                    <span>Meta Muse API</span>
-                    <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                    {githubConnection?.deviceFlow?.userCode ? (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Step 1: Copy your one-time user code
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 font-mono text-2xl font-bold tracking-widest text-center py-2.5 px-4 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/60 text-violet-800 dark:text-violet-300 select-all">
+                              {githubConnection.deviceFlow.userCode}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => copyDeviceCode(githubConnection.deviceFlow!.userCode)}
+                              className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs hover:bg-slate-800 dark:hover:bg-slate-200 transition flex items-center gap-1.5 shrink-0"
+                            >
+                              {copiedDeviceCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                              <span>{copiedDeviceCode ? 'Copied' : 'Copy'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                          <a
+                            href={githubConnection.deviceFlow.verificationUri || 'https://github.com/login/device'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-semibold text-xs text-center flex items-center justify-center gap-2 transition"
+                          >
+                            <span>Step 2: Open GitHub Device Activation</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handlePollDeviceFlow()}
+                            disabled={isSubmittingDevice}
+                            className="px-3.5 py-2.5 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-semibold text-xs flex items-center justify-center gap-2 transition disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSubmittingDevice ? 'animate-spin' : ''}`} />
+                            <span>{isSubmittingDevice ? 'Checking status…' : 'Step 3: Check Authorization Status'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleInitiateDeviceFlow} className="space-y-3.5">
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor="onboarding-client-id"
+                            className="block text-xs font-semibold text-slate-700 dark:text-slate-300"
+                          >
+                            GitHub OAuth App Client ID
+                          </label>
+                          <input
+                            id="onboarding-client-id"
+                            type="text"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                            spellCheck={false}
+                            value={deviceClientIdInput}
+                            onChange={(e) => setDeviceClientIdInput(e.target.value)}
+                            placeholder="e.g. Ov23li... (configured in .env or Settings)"
+                            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 px-3.5 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-violet-600"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingDevice}
+                          className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs hover:bg-slate-800 dark:hover:bg-slate-200 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <Key className="w-4 h-4" />
+                          <span>{isSubmittingDevice ? 'Initiating connection…' : 'Initiate GitHub Device Connection'}</span>
+                        </button>
+                      </form>
+                    )}
                   </div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">$15.00</div>
-                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Hackathon Allowance</p>
-                </div>
 
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                    <span>Baseten Credits</span>
-                    <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-                  </div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">$100.00</div>
-                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Model Engine Allowance</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                    <span>Rate Reserve</span>
-                    <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                  </div>
-                  <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">${remainingDollars}</div>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    {budget ? `${budget.attempts}/${budget.maxAttempts} req used` : '9/10 req used'}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    Comments post as <code className="font-mono text-violet-700 dark:text-violet-400">proofpatcher[bot]</code> via App Installation or under your maintainer account with a signed SHA-256 receipt header.
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
-                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                    <span>Live Provider API</span>
-                    <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                {/* Right 5 cols: 1-Click Child's-Play Quick-Start Workbench Card */}
+                <div className="lg:col-span-5 rounded-2xl border-2 border-violet-200 dark:border-violet-800/80 bg-violet-50/35 dark:bg-violet-950/20 p-6 flex flex-col justify-between space-y-4">
+                  <div className="space-y-2.5">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-violet-100 dark:bg-violet-900/70 text-violet-800 dark:text-violet-200">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Instant 3-Step Verification Flow</span>
+                    </div>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      Try the Co-Maintainer Workbench Now
+                    </h2>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Don&apos;t have a GitHub OAuth Client ID handy? Launch the interactive 2-pane workbench immediately to test single-use digest approval, inline diffs, voice dictation, and the 5-gate verifier.
+                    </p>
                   </div>
-                  <div className="text-sm font-semibold font-mono text-slate-600 dark:text-slate-400 pt-1">
-                    Unavailable
+
+                  <div className="space-y-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        setShowLandingHub(false);
+                        setEnteredWorkbench(true);
+                        loadOwned(e);
+                      }}
+                      disabled={loadingOwned}
+                      className="w-full py-2.5 px-4 rounded-xl bg-violet-700 hover:bg-violet-800 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+                    >
+                      <Shield className="w-4 h-4" />
+                      <span>{loadingOwned ? 'Opening Workbench…' : '1-Click: Launch Interactive 5-Gate Flow'}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowLandingHub(false);
+                        setEnteredWorkbench(true);
+                        setViewMode('new');
+                      }}
+                      className="w-full py-2 px-3.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-xs transition flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-violet-600" />
+                      <span>Open Task Composer (Voice &amp; Screenshot)</span>
+                    </button>
                   </div>
-                  <p className="text-[10px] text-slate-400 truncate">Not exposed via completion API</p>
                 </div>
               </div>
-            </div>
 
-            {/* Privacy & Production Guarantee */}
-            <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-900/40 p-4 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-3">
-              <Shield className="w-4 h-4 text-violet-700 dark:text-violet-400 shrink-0" />
-              <span>
-                Offline synthetic shortcuts are disabled in production mode. ProofPatcher operates strictly on authorized GitHub repositories with cryptographic receipts and verifiable proofs.
-              </span>
+              {/* 3-Pillar Architecture Explainability Grid: Meta Muse + Baseten + Modal gVisor Sandbox */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <span>1. Meta Muse Spark</span>
+                    <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Frontier code reasoning (<code className="font-mono text-[10px]">muse-spark-open-1026</code>) for issue triage, anti-slop PR filtering, and minimal single-file repair patches.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <span>2. Baseten Inference</span>
+                    <Cpu className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    High-throughput serving via <code className="font-mono text-[10px]">api.baseten.co</code> with pinned SHA-256 request digests and single-use maintainer approval tokens.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    <span>3. Modal gVisor Sandbox</span>
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Zero-network (<code className="font-mono text-[10px]">block_network=True</code>) ephemeral microVM sandbox for untrusted code—because a Git worktree is not a security sandbox.
+                  </p>
+                </div>
+              </div>
+
+              {/* Model Usage & Balances Dashboard */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Model Runtime Allowances &amp; Live Balances
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">Real Measured Metrics</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Meta Muse API</span>
+                      <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                    </div>
+                    <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">$15.00</div>
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Hackathon Allowance</p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Baseten Credits</span>
+                      <Cpu className="w-3.5 h-3.5 text-emerald-600" />
+                    </div>
+                    <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">$100.00</div>
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Model Engine Allowance</p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Rate Reserve</span>
+                      <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                    </div>
+                    <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100">${remainingDollars}</div>
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      {budget ? `${budget.attempts}/${budget.maxAttempts} req used` : '9/10 req used'}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-3.5 space-y-1">
+                    <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                      <span>Live Provider API</span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                    <div className="text-sm font-semibold font-mono text-slate-600 dark:text-slate-400 pt-1">
+                      Unavailable
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">Not exposed via completion API</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Privacy & Production Guarantee */}
+              <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-900/40 p-4 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-3">
+                <Shield className="w-4 h-4 text-violet-700 dark:text-violet-400 shrink-0" />
+                <span>
+                  Offline synthetic shortcuts are disabled in production mode. ProofPatcher operates strictly on authorized GitHub repositories with cryptographic receipts and verifiable proofs.
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </AppLayout>
-    );
+        </AppLayout>
+      );
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -904,15 +1051,30 @@ export default function Issues({
             </div>
 
             {/* Item Stream */}
-            <div className="pt-1 border-t border-slate-200/70 dark:border-slate-800 space-y-2 max-h-[calc(100vh-22rem)] overflow-y-auto pr-0.5">
+            <div className="pt-1 border-t border-slate-200/70 dark:border-slate-800 space-y-2 max-h-[calc(100vh-26rem)] overflow-y-auto pr-0.5">
               {sidebarTab === 'issues' ? (
                 filteredIssues.length === 0 ? (
-                  <p className="px-2.5 py-4 text-xs text-slate-400 text-center">
-                    {sidebarQuery ? 'No matching issues found.' : 'No open issues in this repository.'}
-                  </p>
+                  <div className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2 text-xs">
+                    <p className="text-slate-500 dark:text-slate-400">
+                      {sidebarQuery
+                        ? 'No matching issues found.'
+                        : isConnected
+                        ? 'No open issues in this repository.'
+                        : 'Interactive verification mode active.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={loadOwned}
+                      disabled={loadingOwned}
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-violet-700 hover:bg-violet-800 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>{loadingOwned ? 'Loading…' : 'Open OrderTotal Case (#101)'}</span>
+                    </button>
+                  </div>
                 ) : (
                   filteredIssues.map((issue) => {
-                    const targetPath = issuePathMap[issue.number] ?? '';
+                    const effectivePath = issuePathMap[issue.number] ?? repoMemory.defaultPath ?? 'src/OrderTotal.php';
                     const isLoadingThis = loadingIssueNum === issue.number;
                     const triage = issue.triage;
 
@@ -944,7 +1106,7 @@ export default function Issues({
                           )}
                         </div>
 
-                        {/* File path intake & load button */}
+                        {/* File path intake & 1-click load button (pre-filled from Repository Context Memory) */}
                         <div className="flex items-center gap-1.5 pt-1">
                           <input
                             type="text"
@@ -952,7 +1114,7 @@ export default function Issues({
                             autoCorrect="off"
                             autoCapitalize="off"
                             spellCheck={false}
-                            value={targetPath}
+                            value={effectivePath}
                             onChange={(e) =>
                               setIssuePathMap((prev) => ({
                                 ...prev,
@@ -965,7 +1127,7 @@ export default function Issues({
                           <button
                             type="button"
                             onClick={() => handleLoadIssue(issue)}
-                            disabled={isLoadingThis || !targetPath.trim()}
+                            disabled={isLoadingThis || !effectivePath.trim()}
                             className="px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-40 transition shrink-0"
                           >
                             {isLoadingThis ? '…' : 'Open'}
@@ -1013,6 +1175,59 @@ export default function Issues({
                 )
               )}
             </div>
+
+            {/* Quick Mode Switcher & Repository Context Memory */}
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('new')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border transition ${
+                    viewMode === 'new'
+                      ? 'bg-violet-700 text-white border-violet-700'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>New Task</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={loadOwned}
+                  disabled={loadingOwned}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border transition ${
+                    viewMode === 'workbench' && context
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Shield className="w-3 h-3" />
+                  <span>{loadingOwned ? 'Loading…' : '5-Gate Case'}</span>
+                </button>
+              </div>
+
+              {/* Persistent Repository Context Memory Card */}
+              <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-2.5 space-y-1 text-[10px]">
+                <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
+                  <span className="flex items-center gap-1">
+                    <Layers className="w-3 h-3 text-violet-600" />
+                    <span>Repo Context Memory</span>
+                  </span>
+                  <span className="text-[9px] font-mono text-emerald-700 dark:text-emerald-400">Auto-Fill Active</span>
+                </div>
+                <div className="font-mono text-slate-600 dark:text-slate-400 truncate">
+                  Target: <span className="text-slate-900 dark:text-slate-200">{repoMemory.defaultPath}</span>
+                </div>
+                <div className="font-mono text-slate-500 dark:text-slate-400 truncate">
+                  Oracle: {repoMemory.testCommand}
+                </div>
+                {repoMemory.lastVerifiedReceipt && (
+                  <div className="font-mono text-emerald-700 dark:text-emerald-400 truncate">
+                    Last Receipt: {repoMemory.lastVerifiedReceipt.slice(0, 12)}…
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Bottom Account & Credit Control */}
@@ -1026,35 +1241,47 @@ export default function Issues({
                     className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-700 aspect-square shrink-0"
                   />
                 ) : (
-                  <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-800 border border-violet-200 flex items-center justify-center font-bold text-[10px] shrink-0">
-                    {githubConnection?.user?.login?.slice(0, 2).toUpperCase() || 'GH'}
+                  <span className="w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-950/80 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800 flex items-center justify-center font-bold text-[10px] shrink-0">
+                    {githubConnection?.user?.login?.slice(0, 2).toUpperCase() || 'PF'}
                   </span>
                 )}
                 <div className="min-w-0">
                   <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                    @{githubConnection?.user?.login}
+                    {githubConnection?.user?.login ? `@${githubConnection.user.login}` : 'proofpatcher[bot]'}
                   </div>
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                    {githubConnection?.selectedRepo || 'GitHub connected'}
+                    {githubConnection?.selectedRepo || (isConnected ? 'GitHub connected' : 'Local 5-Gate Sandbox')}
                   </div>
                 </div>
               </div>
-              <Link
-                href="/settings"
-                aria-label="Account and GitHub settings"
-                title="Account & GitHub settings"
-                className="p-1.5 rounded-md border border-slate-300/80 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 shrink-0"
-              >
-                <SettingsIcon className="w-3.5 h-3.5" />
-              </Link>
+              <div className="flex items-center gap-1 shrink-0">
+                {!isConnected && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLandingHub(true)}
+                    title="Open 3-Pillar Architecture & GitHub OAuth Hub"
+                    className="px-2 py-1 rounded-md border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/60 text-violet-800 dark:text-violet-200 font-semibold text-[10px] hover:bg-violet-100 transition"
+                  >
+                    3-Pillar Hub
+                  </button>
+                )}
+                <Link
+                  href="/settings"
+                  aria-label="Account and GitHub settings"
+                  title="Account & GitHub settings"
+                  className="p-1.5 rounded-md border border-slate-300/80 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 shrink-0"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
 
-            <div className="pt-1.5 border-t border-slate-300/60 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400">
+            <div className="pt-1.5 border-t border-slate-300/60 dark:border-slate-800 flex items-center justify-between gap-2 text-[10px] text-slate-600 dark:text-slate-400">
               <span className="inline-flex items-center gap-1 truncate">
                 <Sparkles className="w-3 h-3 text-violet-700 dark:text-violet-400 shrink-0" />
-                <span>Meta Muse ($15) · Baseten ($100)</span>
+                <span className="truncate">Meta ($15) · Baseten ($100) · Modal</span>
               </span>
-              <span className="font-mono">
+              <span className="font-mono shrink-0">
                 {budget ? `${budget.attempts}/${budget.maxAttempts} req` : '0 req'}
               </span>
             </div>
@@ -1155,6 +1382,59 @@ export default function Issues({
               {/* ──────────────── MODE 3: FOCUSED WORKBENCH ISSUE STREAM ──────────────── */}
               {viewMode === 'workbench' && context && preview && (
                 <div className="space-y-5">
+                  {/* 0. Child's-Play 4-Step Guided Co-Maintainer Flow Bar */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>1. Context Loaded</span>
+                      </span>
+                      <ChevronRight className="w-3 h-3 text-slate-400" />
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                          suggestion
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                            : 'bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700 font-semibold'
+                        }`}
+                      >
+                        {suggestion ? <CheckCircle2 className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
+                        <span>2. Single-Use Approval</span>
+                      </span>
+                      <ChevronRight className="w-3 h-3 text-slate-400" />
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                          verificationReport?.decision === 'VERIFIED'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                            : suggestion
+                            ? 'bg-violet-100 dark:bg-violet-950/70 text-violet-900 dark:text-violet-200 border-violet-300 dark:border-violet-700 font-semibold'
+                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <Shield className="w-3 h-3" />
+                        <span>3. 5-Gate Verifier</span>
+                      </span>
+                      <ChevronRight className="w-3 h-3 text-slate-400" />
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                          verificationReport?.decision === 'VERIFIED'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-semibold'
+                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <GitPullRequest className="w-3 h-3" />
+                        <span>4. Receipt &amp; PR Response</span>
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] font-semibold text-violet-700 dark:text-violet-400 shrink-0">
+                      {!suggestion
+                        ? 'Next: Click "Allow once" below ↓'
+                        : !verificationReport
+                        ? 'Next: Click "Run verifier" below ↓'
+                        : 'All 5 gates verified ✓'}
+                    </div>
+                  </div>
+
                   {/* 1. Focused Issue Header & Source Context */}
                   <div className="space-y-2.5">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1164,6 +1444,11 @@ export default function Issues({
                           : isOwnedFixture || context.isSynthetic
                           ? 'Bundled Fixture'
                           : 'Public GitHub Issue'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-violet-50 dark:bg-violet-950/50 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                        {detectedIssueMedia.length > 0
+                          ? `${detectedIssueMedia.length} Visual Media / GIF Detected`
+                          : 'Text-Only Issue · 0 External Media'}
                       </span>
                       {context.issueUrl && (
                         <a
@@ -1187,6 +1472,33 @@ export default function Issues({
                     <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-slate-50/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
                       {context.body || '(No description)'}
                     </p>
+
+                    {detectedIssueMedia.length > 0 && (
+                      <div className="rounded-xl border border-violet-200 dark:border-violet-800/70 bg-violet-50/30 dark:bg-violet-950/20 p-3 space-y-2">
+                        <div className="text-[11px] font-semibold text-violet-900 dark:text-violet-200 flex items-center justify-between">
+                          <span>Issue Visual Reproduction Media ({detectedIssueMedia.length})</span>
+                          <span className="font-normal text-slate-500">Previewed locally · only text is sent to Muse</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {detectedIssueMedia.map((media, idx) => (
+                            <div key={idx} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 space-y-1">
+                              <div className="text-[10px] font-mono text-slate-500 truncate">
+                                {media.isGif ? '[GIF] ' : '[IMG] '}
+                                {media.alt}
+                              </div>
+                              <a
+                                href={media.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] text-violet-700 dark:text-violet-400 hover:underline truncate block"
+                              >
+                                {media.url}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <details className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-xs">
                       <summary className="cursor-pointer font-medium text-slate-800 dark:text-slate-200 flex items-center justify-between">
@@ -1487,6 +1799,48 @@ export default function Issues({
                               </button>
                             </div>
                           </div>
+
+                          {/* GitHub Co-Maintainer Attribution & 1-Click Response Preview */}
+                          {verificationReport.decision === 'VERIFIED' && (
+                            <div className="rounded-xl border border-violet-200 dark:border-violet-800/80 bg-violet-50/35 dark:bg-violet-950/20 p-3.5 space-y-2 text-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                                  <Bot className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
+                                  <span>GitHub Co-Maintainer Response Attribution</span>
+                                </div>
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300">
+                                  {githubConnection?.user?.login
+                                    ? `Posts via @${githubConnection.user.login} (Co-Maintainer Header)`
+                                    : 'proofpatcher[bot] / Maintainer Signed Receipt'}
+                                </span>
+                              </div>
+                              <pre className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+{`### ProofPatcher Co-Maintainer Verification Receipt
+- **Target**: \`${context.path}\` (${context.repository}#${context.issueNumber})
+- **5-Gate Decision**: \`${verificationReport.decision}\` (Baseline exit 1 → Negative Control exit 1 → Candidate exit 0 → AST Safe → Allowlist Verified)
+- **Receipt SHA-256**: \`${verificationReport.receipt?.sha256 ?? 'unavailable'}\`
+- **Candidate SHA-256**: \`${verificationReport.candidateSha256}\``}
+                              </pre>
+                              <div className="flex items-center justify-between pt-0.5">
+                                <span className="text-[10px] text-slate-500">
+                                  Single-use digest-bound comment ready for GitHub PR/Issue thread
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const text = `### ProofPatcher Co-Maintainer Verification Receipt\n- **Target**: \`${context.path}\` (${context.repository}#${context.issueNumber})\n- **5-Gate Decision**: \`${verificationReport.decision}\` (Baseline exit 1 -> Negative Control exit 1 -> Candidate exit 0 -> AST Safe -> Allowlist Verified)\n- **Receipt SHA-256**: \`${verificationReport.receipt?.sha256 ?? 'unavailable'}\`\n- **Candidate SHA-256**: \`${verificationReport.candidateSha256}\``;
+                                    navigator.clipboard?.writeText(text);
+                                    setCopiedBotComment(true);
+                                    setTimeout(() => setCopiedBotComment(false), 2000);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-700 hover:bg-violet-800 text-white font-semibold text-[11px] transition"
+                                >
+                                  {copiedBotComment ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                  <span>{copiedBotComment ? 'Copied Response!' : 'Copy Verified Response'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -480,6 +480,55 @@ export default function Settings({
                 Local software rate-limit ceiling: ${ceilingDollars} (${remainingDollars} reserve remaining). ProofPatcher requires maintainer confirmation before any tokens are used.
               </p>
             </div>
+
+            {/* 3-Pillar Architecture & Global Provider Extensibility Matrix */}
+            <div className="pt-2 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  Global Provider &amp; Sandbox Architecture
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono">Single-Use Digest Protocol</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-lg border border-violet-200 dark:border-violet-800/70 bg-violet-50/40 dark:bg-violet-950/20 space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-slate-900 dark:text-slate-100">
+                    <span>Meta Muse Spark</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">Active</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Reasoning &amp; single-file patch synthesis (<code className="font-mono text-[10px]">muse-spark-open-1026</code>) plus anti-slop PR review.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-slate-900 dark:text-slate-100">
+                    <span>Baseten Serving</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">Active</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Low-latency OpenAI-compatible serving (<code className="font-mono text-[10px]">api.baseten.co</code>) with deterministic token telemetry.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800/70 bg-amber-50/30 dark:bg-amber-950/20 space-y-1">
+                  <div className="flex items-center justify-between font-semibold text-slate-900 dark:text-slate-100">
+                    <span>Modal gVisor Sandbox</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">gVisor MicroVM</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Ephemeral zero-network (<code className="font-mono text-[10px]">block_network=True</code>) microVM sandbox for untrusted PR/candidate test execution.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>
+                  <strong className="text-slate-700 dark:text-slate-300">Global Provider Support:</strong> Extensible adapter layer supports Meta Direct, Baseten, Anthropic Claude, OpenAI Codex, and Local vLLM/Ollama under the same SHA-256 single-use approval gate.
+                </span>
+                <span className="font-mono text-[10px] text-violet-700 dark:text-violet-400">Demo Stack: Meta + Baseten + Modal</span>
+              </div>
+            </div>
           </div>
         </section>
 

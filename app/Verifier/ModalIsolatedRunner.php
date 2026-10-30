@@ -182,12 +182,28 @@ final class ModalIsolatedRunner implements IsolatedRunnerInterface
             $totalBytes = 0;
             $truncated = false;
             $timedOut = false;
+            $observedExitCode = null;
 
             while (is_resource($process)) {
                 $pstatus = proc_get_status($process);
                 if (!$pstatus['running']) {
-                    $stdoutData .= (string) stream_get_contents($pipes[1], max(0, self::MAX_OUTPUT_BYTES - strlen($stdoutData)));
-                    $stderrData .= (string) stream_get_contents($pipes[2], max(0, self::MAX_OUTPUT_BYTES - strlen($stderrData)));
+                    $observedExitCode = $pstatus['exitcode'];
+                    // Drain both pipes with one shared cap, reading one extra byte to
+                    // detect output that arrived just before the process exited.
+                    foreach ([$pipes[1], $pipes[2]] as $stream) {
+                        $remaining = max(0, self::MAX_OUTPUT_BYTES - $totalBytes);
+                        $chunk = (string) stream_get_contents($stream, $remaining + 1);
+                        if (strlen($chunk) > $remaining) {
+                            $truncated = true;
+                            $chunk = substr($chunk, 0, $remaining);
+                        }
+                        if ($stream === $pipes[1]) {
+                            $stdoutData .= $chunk;
+                        } else {
+                            $stderrData .= $chunk;
+                        }
+                        $totalBytes += strlen($chunk);
+                    }
                     break;
                 }
 
@@ -242,6 +258,9 @@ final class ModalIsolatedRunner implements IsolatedRunnerInterface
             if ($timedOut) {
                 throw new \RuntimeException('Modal microVM execution timed out.');
             }
+            if ($truncated) {
+                throw new \RuntimeException('Modal runner output exceeded the allowed limit.');
+            }
 
             // Read verified private result channel from the host result file
             if (!is_file($resultFile)) {
@@ -250,13 +269,30 @@ final class ModalIsolatedRunner implements IsolatedRunnerInterface
                 );
             }
 
-            $resultContent = (string) file_get_contents($resultFile);
+            // The helper's expected result contains at most bounded stdout and
+            // stderr plus JSON encoding overhead; refuse an oversized file.
+            $resultContent = file_get_contents($resultFile, false, null, 0, 524289);
+            if ($resultContent === false || strlen($resultContent) > 524288) {
+                throw new \RuntimeException('Modal runner result exceeds the allowed limit.');
+            }
             $resultData = json_decode($resultContent, true);
-            if (!is_array($resultData) || !isset($resultData['exit_code'], $resultData['sandbox_id'])) {
+            if (!is_array($resultData) || !is_int($resultData['exit_code'] ?? null)
+                || !is_string($resultData['sandbox_id'] ?? null) || $resultData['sandbox_id'] === ''
+                || !is_bool($resultData['oracle_verified'] ?? null)
+                || !is_bool($resultData['truncated'] ?? null) || !is_bool($resultData['timed_out'] ?? null)
+                || !is_string($resultData['stdout'] ?? null) || !is_string($resultData['stderr'] ?? null)) {
                 throw new \RuntimeException('Corrupted private result data returned by Modal runner.');
             }
 
             $sandboxExitCode = (int) $resultData['exit_code'];
+            // Failed fixture runs legitimately return a non-zero code, but the
+            // helper and its result must agree. A stale or incomplete result is
+            // not evidence of a successful sandbox execution.
+            $helperExitCode = $observedExitCode !== null && $observedExitCode >= 0
+                ? $observedExitCode : $processExitCode;
+            if ($helperExitCode < 0 || $helperExitCode !== $sandboxExitCode) {
+                throw new \RuntimeException('Modal runner exit status does not match its result.');
+            }
             $sandboxId = (string) $resultData['sandbox_id'];
             $oracleVerified = (bool) ($resultData['oracle_verified'] ?? false);
             $isTruncated = (bool) ($resultData['truncated'] ?? $truncated);

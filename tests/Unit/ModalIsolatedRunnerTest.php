@@ -111,4 +111,87 @@ final class ModalIsolatedRunnerTest extends TestCase
 
         $runner->runIsolated('<?php', '<?php', '../etc/passwd');
     }
+
+    public function testHelperResultMustMatchProcessExitStatus(): void
+    {
+        $result = json_encode([
+            'exit_code' => 0, 'sandbox_id' => 'fake', 'oracle_verified' => true,
+            'truncated' => false, 'timed_out' => false, 'stdout' => 'passed', 'stderr' => '',
+        ], JSON_THROW_ON_ERROR);
+        $helper = $this->fakeHelper($result, 7);
+        try {
+            $runner = new ModalIsolatedRunner(pythonPath: $helper, grantVerified: true);
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('exit status does not match');
+            $runner->runIsolated('<?php', '<?php');
+        } finally {
+            @unlink($helper);
+        }
+    }
+
+    public function testHelperOutputFloodCannotOverrideItsResult(): void
+    {
+        $result = json_encode([
+            'exit_code' => 0, 'sandbox_id' => 'fake', 'oracle_verified' => true,
+            'truncated' => false, 'timed_out' => false, 'stdout' => 'passed', 'stderr' => '',
+        ], JSON_THROW_ON_ERROR);
+        $helper = $this->fakeHelper($result, 0, true);
+        try {
+            $runner = new ModalIsolatedRunner(pythonPath: $helper, grantVerified: true);
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('output exceeded');
+            $runner->runIsolated('<?php', '<?php');
+        } finally {
+            @unlink($helper);
+        }
+    }
+
+    public function testFailedFixtureResultCanBeReportedWithoutClaimingAPass(): void
+    {
+        $result = json_encode([
+            'exit_code' => 1, 'sandbox_id' => 'fake', 'oracle_verified' => false,
+            'truncated' => false, 'timed_out' => false, 'stdout' => 'failed', 'stderr' => '',
+        ], JSON_THROW_ON_ERROR);
+        $helper = $this->fakeHelper($result, 1);
+        try {
+            $runner = new ModalIsolatedRunner(pythonPath: $helper, grantVerified: true);
+            $report = $runner->runIsolated('<?php', '<?php');
+            self::assertSame(1, $report['exitCode']);
+            self::assertFalse($report['oracleVerified']);
+        } finally {
+            @unlink($helper);
+        }
+    }
+
+    public function testMalformedHelperResultIsRejected(): void
+    {
+        $result = json_encode([
+            'exit_code' => '0', 'sandbox_id' => 'fake', 'oracle_verified' => true,
+            'truncated' => false, 'timed_out' => false, 'stdout' => 'passed', 'stderr' => '',
+        ], JSON_THROW_ON_ERROR);
+        $helper = $this->fakeHelper($result, 0);
+        try {
+            $runner = new ModalIsolatedRunner(pythonPath: $helper, grantVerified: true);
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Corrupted private result data');
+            $runner->runIsolated('<?php', '<?php');
+        } finally {
+            @unlink($helper);
+        }
+    }
+
+    private function fakeHelper(string $result, int $exitCode, bool $flood = false): string
+    {
+        $file = tempnam(sys_get_temp_dir(), 'proofpatch-fake-helper-');
+        if ($file === false) {
+            throw new \RuntimeException('Cannot create fake helper.');
+        }
+        $script = "#!/bin/sh\nprintf '%s' ".escapeshellarg($result)." > \"\$3\"\n";
+        if ($flood) {
+            $script .= "head -c 70000 /dev/zero\n";
+        }
+        file_put_contents($file, $script.'exit '.$exitCode."\n");
+        chmod($file, 0700);
+        return $file;
+    }
 }

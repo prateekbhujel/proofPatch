@@ -164,7 +164,7 @@ final class LocalTaskCardTest extends TestCase
 
         $response = $this->middleware(1, true)->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
         self::assertTrue($response->isRedirection());
-        self::assertStringContainsString('Private repository content and task text stay local', (string) $request->session()->get('error'));
+        self::assertStringContainsString('Task assignment is not available yet', (string) $request->session()->get('error'));
 
         // Verify card remains queued and unassigned
         $card->refresh();
@@ -208,7 +208,7 @@ final class LocalTaskCardTest extends TestCase
 
             $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $unrelatedCard->id));
             self::assertTrue($response->isRedirection());
-            self::assertStringContainsString('Cannot assign task to Muse: ProofPatcher never substitutes sample fixtures for unrelated tasks', (string) $request->session()->get('error'));
+            self::assertStringContainsString('Task assignment is not available yet', (string) $request->session()->get('error'));
 
             $unrelatedCard->refresh();
             self::assertSame('queued', $unrelatedCard->status);
@@ -242,7 +242,7 @@ final class LocalTaskCardTest extends TestCase
 
             $response2 = $middleware2->handle($request2, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $publicCard->id));
             self::assertTrue($response2->isRedirection());
-            self::assertStringContainsString('ProofPatcher never substitutes sample fixtures for unrelated tasks', (string) $request2->session()->get('error'));
+            self::assertStringContainsString('Task assignment is not available yet', (string) $request2->session()->get('error'));
 
             $publicCard->refresh();
             self::assertSame('queued', $publicCard->status);
@@ -254,7 +254,7 @@ final class LocalTaskCardTest extends TestCase
         }
     }
 
-    public function testAssignSuitableTaskLoadsDedicatedContextAndTracksLifecycle(): void
+    public function testPreviouslyLinkedCardTracksWorkbenchLifecycle(): void
     {
         $previousRepo = getenv('PROOFPATCH_TEST_REPO');
         $previousBaseCommit = getenv('PROOFPATCH_TEST_BASE_COMMIT');
@@ -271,42 +271,24 @@ final class LocalTaskCardTest extends TestCase
             $card->status = 'queued';
             $card->save();
 
-            $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
-            $request->session()->put('github_auth', [
-                'token' => 'fake-token',
-                'user' => ['id' => 1],
-                'repositories' => [['fullName' => $dedicatedRepo, 'isPrivate' => false]],
-            ]);
-
-            // Set up middleware with grant for the dedicated repo
-            $middleware = new AuthorizeGithubTasks(new GitHubAppClient(new MockHttpClient([
-                new MockResponse(json_encode(['id' => 1, 'login' => 'user1'])),
-                new MockResponse(json_encode(['installations' => [['id' => 101]]])),
-                new MockResponse(json_encode(['repositories' => [[
-                    'id' => 5, 'name' => 'dedicated-test', 'full_name' => $dedicatedRepo,
-                    'owner' => ['login' => 'owner'], 'private' => false,
-                ]]])),
-            ])));
-
-            $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
-            self::assertTrue($response->isRedirection());
-            self::assertStringContainsString('assigned to Muse', (string) $request->session()->get('success'));
-
-            $card->refresh();
-            self::assertSame('in_progress', $card->status);
-            self::assertNotNull($card->workbench_task_id);
-
-            // Session has active context loaded
-            $context = $request->session()->get('issue_context');
-            self::assertIsArray($context);
-            self::assertSame('src/OrderTotal.php', $context['path']);
-            // Crucially: Private task description is NOT in model context!
-            self::assertStringNotContainsString('customer entered 0 quantity', json_encode($context));
-
-            // Verify lifecycle sync through WorkbenchTask
-            $task = \ProofPatch\Models\WorkbenchTask::find($card->workbench_task_id);
-            self::assertNotNull($task);
-            self::assertSame($card->id, $task->metadata['local_task_card_id'] ?? null);
+            // Exercise lifecycle behavior for an explicitly constructed test record,
+            // without treating the fixed fixture as a real card assignment.
+            $source = (string) file_get_contents(base_path('tests/Fixtures/owned-review-case/src/OrderTotal.php'));
+            $context = [
+                'repository' => $dedicatedRepo,
+                'issueNumber' => 1,
+                'path' => 'src/OrderTotal.php',
+                'commit' => str_repeat('c', 40),
+                'source' => $source,
+                'sourceSha256' => hash('sha256', $source),
+            ];
+            $task = \ProofPatch\Models\WorkbenchTask::recordIntake($context, true, githubUserId: 1);
+            $task->status = 'in_progress';
+            $task->metadata = ['local_task_card_id' => $card->id];
+            $task->save();
+            $card->status = 'in_progress';
+            $card->workbench_task_id = $task->id;
+            $card->save();
 
             // 1. Propose proposal -> card stays in_progress
             $suggestion = [
@@ -352,7 +334,7 @@ final class LocalTaskCardTest extends TestCase
         }
     }
 
-    public function testAssignSuitableSyntheticTaskLoadsContext(): void
+    public function testKeywordMatchedSyntheticCardDoesNotLoadOrAssignFixture(): void
     {
         $card = new LocalTaskCard();
         $card->github_user_id = 1;
@@ -380,16 +362,40 @@ final class LocalTaskCardTest extends TestCase
 
         $response = $middleware->handle($request, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
         self::assertTrue($response->isRedirection());
-        self::assertStringContainsString('assigned to Muse', (string) $request->session()->get('success'));
-
+        self::assertStringContainsString('Task assignment is not available yet', (string) $request->session()->get('error'));
         $card->refresh();
-        self::assertSame('in_progress', $card->status);
-        self::assertNotNull($card->workbench_task_id);
+        self::assertSame('queued', $card->status);
+        self::assertNull($card->workbench_task_id);
+        self::assertNull($request->session()->get('issue_context'));
+        self::assertSame(0, \ProofPatch\Models\WorkbenchTask::count());
+    }
 
-        $context = $request->session()->get('issue_context');
-        self::assertIsArray($context);
-        self::assertTrue($context['isSynthetic']);
-        self::assertStringNotContainsString('Private description text', json_encode($context));
+    public function testAssignmentDoesNotReplaceKeywordMatchingCardOrExistingContext(): void
+    {
+        $card = new LocalTaskCard();
+        $card->github_user_id = 1;
+        $card->repository = 'owner/dedicated-test';
+        $card->title = 'Improve warehouse quantity chart';
+        $card->description = 'Use the attached screenshot to fix the colors.';
+        $card->status = 'queued';
+        $card->save();
+
+        $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
+        $request->attributes->set('proofpatch_github_access', [
+            'userId' => 1,
+            'repositories' => ['owner/dedicated-test' => true],
+        ]);
+        $request->session()->put('issue_context', ['sentinel' => 'previous context']);
+        $response = (new LocalTaskCardController())->assign($request, (int) $card->id);
+
+        self::assertTrue($response->isRedirection());
+        self::assertStringContainsString('Task assignment is not available yet', $request->session()->get('error'));
+        self::assertSame(['sentinel' => 'previous context'], $request->session()->get('issue_context'));
+        self::assertSame(0, \ProofPatch\Models\WorkbenchTask::count());
+        $card->refresh();
+        self::assertSame('queued', $card->status);
+        self::assertNull($card->workbench_task_id);
+        self::assertSame('Use the attached screenshot to fix the colors.', $card->description);
     }
 
     public function testMigrationRollbackOnlyRemovesLocalCardsInIsolatedDatabase(): void

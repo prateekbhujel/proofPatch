@@ -322,11 +322,7 @@ export default function Issues({
 
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
-    const path =
-      issuePathMap[issue.number]?.trim() ||
-      (issue.title?.toLowerCase().includes('order') || issue.body?.toLowerCase().includes('order')
-        ? 'src/OrderTotal.php'
-        : '');
+    const path = issuePathMap[issue.number]?.trim() || '';
     if (!path) return;
     setLoadingIssueNum(issue.number);
     router.post(
@@ -752,11 +748,7 @@ export default function Issues({
                                   onChange={(e) =>
                                     setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
                                   }
-                                  placeholder={
-                                    issue.title?.toLowerCase().includes('order') || issue.body?.toLowerCase().includes('order')
-                                      ? 'src/OrderTotal.php'
-                                      : 'Source file path'
-                                  }
+                                  placeholder="Source file path"
                                   className="w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
                                 />
                                 <button
@@ -764,9 +756,7 @@ export default function Issues({
                                   onClick={() => handleLoadIssue(issue)}
                                   disabled={
                                     isLoadingThis ||
-                                    (!targetPath.trim() &&
-                                      !issue.title?.toLowerCase().includes('order') &&
-                                      !issue.body?.toLowerCase().includes('order'))
+                                    !targetPath.trim()
                                   }
                                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
                                 >

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, router, useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ListPlus,
@@ -9,7 +9,6 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
-  Sparkles,
   Upload,
   Image as ImageIcon,
   Mic,
@@ -45,7 +44,7 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
           <span>Screenshot Evidence</span>
         </a>
         <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-          Local Multimodal
+          Saved locally
         </span>
       </div>
     );
@@ -121,7 +120,6 @@ export function TaskCardSection({
 
   const [isFormOpen, setIsFormOpen] = useState(localTasks.length === 0);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
-  const [assigningId, setAssigningId] = useState<string | number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -249,7 +247,7 @@ export function TaskCardSection({
             </span>
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Keep track of work for your repositories. Cards stay local on this computer.
+            Cards stay on this computer. Assigning them to Muse is not available yet.
           </p>
         </div>
 
@@ -443,40 +441,7 @@ export function TaskCardSection({
                     <Clock className="w-3 h-3 text-slate-400" />
                     <span>{task.updatedAt ? task.updatedAt.slice(0, 16).replace('T', ' ') : 'Recently'}</span>
                   </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {task.status === 'queued' ? (
-                      <button
-                        type="button"
-                        disabled={assigningId === task.id}
-                        onClick={() => {
-                          setAssigningId(task.id);
-                          router.post(`/issues/tasks/${task.id}/assign`, {}, {
-                            preserveScroll: true,
-                            onFinish: () => setAssigningId(null),
-                          });
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-50 transition shadow-2xs"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        <span>{assigningId === task.id ? 'Assigning…' : 'Assign to Muse'}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={assigningId === task.id}
-                        onClick={() => {
-                          setAssigningId(task.id);
-                          router.post(`/issues/tasks/${task.id}/assign`, {}, {
-                            preserveScroll: true,
-                            onFinish: () => setAssigningId(null),
-                          });
-                        }}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-violet-700 hover:text-violet-900 underline"
-                      >
-                        <span>Open in Workbench</span>
-                      </button>
-                    )}
-                  </div>
+
                 </div>
               </div>
             ))}

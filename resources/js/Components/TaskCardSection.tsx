@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, router, useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ListPlus,
@@ -104,21 +104,9 @@ export interface CardPreview {
   context: { cardId: number; cardVersion: string; repository: string; title: string; description: string; path: string; commit: string; source: string; sourceSha256: string };
 }
 
-export interface CardProposalPreview {
-  cardId: number; destination: string; body: Record<string, unknown>; digest: string; estimatedMicros: number;
-}
-export interface CardProposalResult {
-  cardId: number; explanation: string; path: string; commit: string;
-  candidate: { source: string; applied: boolean; verified: boolean };
-}
-
-function CardPreviewForm({ task, preview, proposal, result }: { task: LocalTaskCard; preview: CardPreview | null; proposal: CardProposalPreview | null; result: CardProposalResult | null }) {
+function CardPreviewForm({ task, preview }: { task: LocalTaskCard; preview: CardPreview | null }) {
   const { data, setData, post, processing } = useForm({ path: '', commit: '' });
-  const [approved, setApproved] = useState(false);
-  const [sending, setSending] = useState(false);
   const current = preview?.context.cardId === Number(task.id) ? preview : null;
-  const currentProposal = proposal?.cardId === Number(task.id) ? proposal : null;
-  const currentResult = result?.cardId === Number(task.id) ? result : null;
   return (
     <details className="text-xs text-slate-600 border border-slate-200 rounded-lg p-3">
       <summary className="cursor-pointer font-medium text-slate-800">Preview task context</summary>
@@ -146,30 +134,6 @@ function CardPreviewForm({ task, preview, proposal, result }: { task: LocalTaskC
         <p className="font-mono break-all">{current.context.path} @ {current.context.commit}</p>
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2">{current.context.source}</pre>
         <details><summary className="cursor-pointer">Preview digest</summary><p className="font-mono break-all">{current.digest}</p></details>
-        <button type="button" className="rounded border border-violet-300 px-3 py-1.5 text-violet-800"
-          onClick={() => { setApproved(false); router.post(`/issues/tasks/${task.id}/model-preview`, {}, { preserveScroll: true }); }}>
-          Review Muse request
-        </button>
-      </div>}
-      {current && currentProposal && <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-        <p className="font-medium">Request to {currentProposal.destination}</p>
-        <p>Estimated reservation: ${(currentProposal.estimatedMicros / 1000000).toFixed(4)}. The provider sets actual charges.</p>
-        <p>This sends the task text and selected public source to Muse. Screenshots are not sent.</p>
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2">{JSON.stringify(currentProposal.body, null, 2)}</pre>
-        <label className="flex items-start gap-2"><input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} />
-          <span>I reviewed this exact request and approve sending it. The approved snapshot is fixed when the request starts.</span>
-        </label>
-        <button type="button" disabled={!approved || sending} className="rounded bg-violet-700 px-3 py-1.5 text-white disabled:opacity-50"
-          onClick={() => { setSending(true); router.post(`/issues/tasks/${task.id}/model-send`, { approved: true, digest: currentProposal.digest }, { preserveScroll: true, onFinish: () => { setSending(false); setApproved(false); } }); }}>
-          {sending ? 'Requesting…' : 'Request suggestion'}
-        </button>
-      </div>}
-      {currentResult && <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-        <p className="font-medium">Unverified suggestion from the approved snapshot</p>
-        <p>{currentResult.explanation}</p>
-        <p className="font-mono break-all">{currentResult.path} @ {currentResult.commit}</p>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2">{currentResult.candidate.source}</pre>
-        <p>Not applied or tested.</p>
       </div>}
     </details>
   );
@@ -178,8 +142,6 @@ function CardPreviewForm({ task, preview, proposal, result }: { task: LocalTaskC
 export interface TaskCardSectionProps {
   localTasks?: LocalTaskCard[];
   cardPreview?: CardPreview | null;
-  cardProposalPreview?: CardProposalPreview | null;
-  cardProposalResult?: CardProposalResult | null;
   githubConnection?: {
     isConnected?: boolean;
     repositories?: GitHubRepoOption[];
@@ -190,8 +152,6 @@ export interface TaskCardSectionProps {
 export function TaskCardSection({
   localTasks = [],
   cardPreview = null,
-  cardProposalPreview = null,
-  cardProposalResult = null,
   githubConnection = null,
 }: TaskCardSectionProps) {
   const allowedRepositories = githubConnection?.repositories || [];
@@ -329,7 +289,7 @@ export function TaskCardSection({
             </span>
           </div>
           <p className="mt-0.5 text-xs text-slate-500">
-            Review a suggested change for a task and a public file.
+            Tasks and screenshots stay on this computer. Muse cannot work on them yet.
           </p>
         </div>
 
@@ -508,7 +468,7 @@ export function TaskCardSection({
                     <p className="mt-2 whitespace-pre-wrap break-words">{task.description}</p>
                   </details>
                   <TaskImage task={task} />
-                  <CardPreviewForm task={task} preview={cardPreview} proposal={cardProposalPreview} result={cardProposalResult} />
+                  <CardPreviewForm task={task} preview={cardPreview} />
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 gap-2">

@@ -240,8 +240,6 @@ final class IssueWorkbenchController
             'tasks' => $tasks,
             'localTasks' => $localTasks,
             'cardPreview' => CardPreviewController::visiblePreview($request),
-            'cardProposalPreview' => CardProposalController::visible($request, 'card_proposal_preview'),
-            'cardProposalResult' => CardProposalController::visible($request, 'card_proposal_result'),
             'githubConnection' => $githubConnection,
             'modelContextAllowed' => $modelContextAllowed,
             'modelKeyAvailable' => $modelKeyAvailable,

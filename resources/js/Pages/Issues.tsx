@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '../Components/AppLayout';
-import { TaskCardSection, LocalTaskCard, CardPreview, CardProposalPreview, CardProposalResult } from '../Components/TaskCardSection';
+import { TaskCardSection, LocalTaskCard, CardPreview } from '../Components/TaskCardSection';
 import { KanbanBoard, KanbanTask } from '../Components/ui/KanbanBoard';
 import { ThinkingAnimation } from '../Components/ui/ThinkingAnimation';
 import { VerificationPipeline } from '../Components/ui/VerificationPipeline';
@@ -254,8 +254,6 @@ interface Props {
   tasks?: WorkbenchTaskData[];
   localTasks?: LocalTaskCard[];
   cardPreview?: CardPreview | null;
-  cardProposalPreview?: CardProposalPreview | null;
-  cardProposalResult?: CardProposalResult | null;
   githubConnection?: GitHubConnectionData | null;
   modelContextAllowed?: boolean;
   modelKeyAvailable?: boolean;
@@ -277,8 +275,6 @@ export default function Issues({
   tasks = [],
   localTasks = [],
   cardPreview = null,
-  cardProposalPreview = null,
-  cardProposalResult = null,
   githubConnection = null,
   modelContextAllowed = false,
   modelKeyAvailable = false,
@@ -560,8 +556,6 @@ export default function Issues({
         <TaskCardSection
           localTasks={localTasks}
           cardPreview={cardPreview}
-          cardProposalPreview={cardProposalPreview}
-          cardProposalResult={cardProposalResult}
           githubConnection={githubConnection}
         />
 

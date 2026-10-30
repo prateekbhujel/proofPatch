@@ -18,7 +18,7 @@ final class CardPreviewController
 
     public function store(Request $request, int $cardId): RedirectResponse
     {
-        $request->session()->forget(['card_preview', 'card_proposal_preview', 'card_proposal_result']);
+        $request->session()->forget('card_preview');
         $card = self::authorizedCard($request, $cardId);
         if ($card === null) {
             return redirect('/issues')->with('error', 'Task not found or access is unavailable.');
@@ -64,7 +64,7 @@ final class CardPreviewController
         }
     }
 
-    public static function authorizedCard(Request $request, int $cardId): ?LocalTaskCard
+    private static function authorizedCard(Request $request, int $cardId): ?LocalTaskCard
     {
         $access = $request->attributes->get('proofpatch_github_access');
         $userId = is_array($access) ? ($access['userId'] ?? null) : null;
@@ -76,7 +76,7 @@ final class CardPreviewController
         return $card !== null && isset($repos[strtolower($card->repository)]) ? $card : null;
     }
 
-    public static function snapshot(LocalTaskCard $card): array
+    private static function snapshot(LocalTaskCard $card): array
     {
         return ['id' => (int) $card->id, 'userId' => (int) $card->github_user_id,
             'repository' => $card->repository, 'title' => $card->title, 'description' => $card->description];

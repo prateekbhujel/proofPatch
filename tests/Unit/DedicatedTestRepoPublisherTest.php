@@ -479,6 +479,8 @@ final class DedicatedTestRepoPublisherTest extends TestCase
                 self::assertStringNotContainsString('Frontier Model', $payload['body']);
                 self::assertStringNotContainsString('baseten.co', $payload['body']);
                 self::assertStringNotContainsString('Meta Muse', $payload['body']);
+                self::assertStringNotContainsString('[bot]', $payload['body']);
+                self::assertStringNotContainsString('Verified_Co--Maintainer', $payload['body']);
                 return new MockResponse(json_encode([
                     'number' => 2,
                     'html_url' => 'https://github.com/example-owner/proofpatch-test/pull/2',

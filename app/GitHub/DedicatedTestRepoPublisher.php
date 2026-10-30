@@ -480,7 +480,7 @@ final readonly class DedicatedTestRepoPublisher
         return <<<COMMIT
 fix(order-total): correct zero-quantity item pricing (ProofPatcher #1)
 
-Verified proposal from ProofPatcher Engine.
+Bounded fixture checks completed.
 Run ID: {$report['id']}
 Receipt SHA-256: {$receiptSha}
 Integrity: VALID (5/5 Verification Gates Passed)
@@ -502,15 +502,9 @@ COMMIT;
         $targetRepository = DedicatedTestRepo::requireName();
 
         return <<<MARKDOWN
-[![ProofPatcher Bot](https://img.shields.io/badge/ProofPatcher_bot-Verified_Co--Maintainer-7c3aed?style=flat-square)](https://github.com/{$targetRepository})
-[![Category: Bug Fix](https://img.shields.io/badge/Category-Bug_Fix-0284c7?style=flat-square)](https://github.com/{$targetRepository}/issues)
-[![5-Gate Verification](https://img.shields.io/badge/5_Gate_Verification-PASSED-10b981?style=flat-square)](https://github.com/{$targetRepository})
+This draft was prepared by ProofPatcher for review. It does not merge automatically.
 
-> [!NOTE]
-> 🤖 **ProofPatcher [bot] — Autonomous Verification & Patching**
-> This draft pull request was prepared by **ProofPatcher**. The single-file candidate patch passed the local 5-gate verifier on the replicated baseline failure, negative control, static AST syntax rules, and allowlisted digests.
-> **No automatic merge.** Review and verification evidence attached below.
-> *Notice: Verification checks bounded replicated regression cases for OrderTotal boundary calculation; this does not claim the repository's full original test suite ran.*
+The checks below cover the bounded OrderTotal fixture, not the full repository test suite.
 
 ### Summary
 Fixes issue #1 (`Zero-quantity items inflate the order total`).

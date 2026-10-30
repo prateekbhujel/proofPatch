@@ -67,7 +67,7 @@ final readonly class PublicCardProposal
      *
      * @param callable(): ?array $loadAuthorizedCard
      */
-    public function propose(array $cardPreview, callable $loadAuthorizedCard, bool $approved, string $approvalToken, string $digest, string $key): array
+    public function propose(array $cardPreview, callable $loadAuthorizedCard, bool $approved, string $approvalToken, string $digest, string $key, callable $reserve, callable $finish): array
     {
         if (!$approved) {
             throw new \InvalidArgumentException('Review and approve the exact request first.');
@@ -84,14 +84,10 @@ final readonly class PublicCardProposal
             || str_contains(CanonicalJson::encode($payload['body']), $key)) {
             throw new \InvalidArgumentException('The provider key is invalid or appears in the request.');
         }
-        $this->publicFile->assertFresh($cardPreview, $card);
-        $current = $loadAuthorizedCard();
-        if (!is_array($current) || !hash_equals(PublicCardPreview::cardVersion($card), PublicCardPreview::cardVersion($current))) {
-            throw new \RuntimeException('The task or GitHub grant changed; review it again.');
-        }
-        $this->approvals->consume($approvalToken, $this->approvalScope($current), $current['id'], $cardPreview['context']['commit'], $digest);
         $context = $cardPreview['context'];
-        return $this->budget->run($payload['estimatedMicros'], function () use ($key, $payload, $context): array {
+        $reservationId = null;
+        try {
+            $answer = $this->budget->run($payload['estimatedMicros'], function () use ($key, $payload, $context): array {
             $response = $this->provider->request('POST', self::ENDPOINT, [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0, 'timeout' => 90, 'max_duration' => 120, 'json' => $payload['body'],
@@ -136,7 +132,23 @@ final readonly class PublicCardProposal
                 'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']],
                 'candidate' => ['status' => 'unverified_in_memory_preview', 'source' => $candidate,
                     'sha256' => hash('sha256', $candidate), 'applied' => false, 'verified' => false]];
-        });
+            }, function () use ($cardPreview, $card, $loadAuthorizedCard, $approvalToken, $digest, $reserve, $payload, &$reservationId): void {
+                $this->publicFile->assertFresh($cardPreview, $card);
+                $current = $loadAuthorizedCard();
+                if (!is_array($current) || !hash_equals(PublicCardPreview::cardVersion($card), PublicCardPreview::cardVersion($current))) {
+                    throw new \RuntimeException('The task or GitHub grant changed; review it again.');
+                }
+                $this->approvals->consume($approvalToken, $this->approvalScope($current), $current['id'], $cardPreview['context']['commit'], $digest);
+                $reservationId = $reserve($current, $payload, $approvalToken);
+            });
+            $finish($reservationId, 'completed');
+            return $answer;
+        } catch (\Throwable $error) {
+            if ($reservationId !== null) {
+                try { $finish($reservationId, 'uncertain'); } catch (\Throwable) {}
+            }
+            throw $error;
+        }
     }
 
     private function approvalScope(array $card): string

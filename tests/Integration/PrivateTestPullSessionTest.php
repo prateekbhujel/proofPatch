@@ -213,6 +213,7 @@ final class PrivateTestPullSessionTest extends TestCase
         ]);
         $previewResponse = $kernel->handle($preview);
         self::assertSame(200, $previewResponse->getStatusCode(), substr((string) $previewResponse->getContent(), 0, 300));
+        self::assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
         self::assertStringContainsString('json', (string) $previewResponse->headers->get('Content-Type'), substr((string) $previewResponse->getContent(), 0, 300));
         $page = json_decode((string) $previewResponse->getContent(), true, 64, JSON_THROW_ON_ERROR);
         self::assertNull($page['props']['reviewPreview']);

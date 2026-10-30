@@ -126,7 +126,12 @@ final class AuthorizeGithubTasks
             }
         }
 
-        return $next($request);
+        $response = $next($request);
+        if ($userId !== null) {
+            // Authenticated pages may contain private task or pull-request data.
+            $response->headers->set('Cache-Control', 'private, no-store');
+        }
+        return $response;
     }
 
     /** @param array<string, true> $allowed */

@@ -123,9 +123,8 @@ export default function Settings({
     router.post('/github/repositories/select', { repository: repoName });
   };
 
-  const spentDollars = budget ? ((budget.reservedMicros || 0) / 1000000).toFixed(4) : '0.0000';
-  const remainingDollars = budget ? ((budget.remainingMicros || 0) / 1000000).toFixed(4) : '0.2000';
-  const ceilingDollars = budget ? ((budget.limitMicros || 0) / 1000000).toFixed(2) : '0.20';
+  const remainingDollars = budget ? ((budget.remainingMicros || 0) / 1000000).toFixed(4) : '—';
+  const ceilingDollars = budget ? ((budget.limitMicros || 0) / 1000000).toFixed(2) : '—';
 
   return (
     <AppLayout activeNav="settings">
@@ -164,7 +163,7 @@ export default function Settings({
               </span>
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">GitHub Connection</h2>
-                <p className="text-xs text-slate-500">Connect to selected owned public repositories without pasting secret access tokens.</p>
+                <p className="text-xs text-slate-500">Connect a GitHub App to its selected repositories.</p>
               </div>
             </div>
 
@@ -383,33 +382,33 @@ export default function Settings({
               <DollarSign className="w-4 h-4" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Runtime Model Budget Ledger</h2>
-              <p className="text-xs text-slate-500">Strictly bounded local ledger for single public-PR review inference.</p>
+              <h2 className="text-sm font-semibold text-slate-900">Model usage</h2>
+              <p className="text-xs text-slate-500">Local estimates for model requests.</p>
             </div>
           </div>
 
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cumulative Ceiling</span>
-                <div className="text-xl font-bold text-slate-900 mt-1">${ceilingDollars}</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Max {budget?.maxAttempts ?? 10} attempts total</p>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Local limit</span>
+                <div className="text-xl font-bold text-slate-900 mt-1">{budget ? `$${ceilingDollars}` : 'Unavailable'}</div>
+                <p className="text-[11px] text-slate-500 mt-0.5">{budget ? `Max ${budget.maxAttempts} attempts` : 'Budget unavailable'}</p>
               </div>
 
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Attempts Consumed</span>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Requests used</span>
                 <div className="text-xl font-bold text-slate-900 mt-1">
-                  {budget?.attempts ?? 0} <span className="text-xs font-normal text-slate-400">/ {budget?.maxAttempts ?? 10}</span>
+                  {budget ? budget.attempts : '—'} <span className="text-xs font-normal text-slate-400">{budget ? `/ ${budget.maxAttempts}` : ''}</span>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  {budget ? Math.max(0, budget.maxAttempts - budget.attempts) : 0} remaining attempts
+                  {budget ? `${Math.max(0, budget.maxAttempts - budget.attempts)} remaining requests` : 'Budget unavailable'}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Remaining Balance</span>
-                <div className="text-xl font-bold text-emerald-700 mt-1">${remainingDollars}</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Personal spend: $0.00</p>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Estimated limit left</span>
+                <div className="text-xl font-bold text-emerald-700 mt-1">{budget ? `$${remainingDollars}` : 'Unavailable'}</div>
+                <p className="text-[11px] text-slate-500 mt-0.5">This is not your provider credit balance or a billing cap.</p>
               </div>
             </div>
 
@@ -434,8 +433,8 @@ export default function Settings({
               <Shield className="w-4 h-4" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Security Architecture & Review Policy</h2>
-              <p className="text-xs text-slate-500">Strict guarantees and boundary definitions for the local workbench.</p>
+              <h2 className="text-sm font-semibold text-slate-900">Review boundaries</h2>
+              <p className="text-xs text-slate-500">How the current review workflow handles code.</p>
             </div>
           </div>
 
@@ -444,26 +443,26 @@ export default function Settings({
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/30 space-y-2">
                 <div className="flex items-center gap-2 font-semibold text-slate-900">
                   <Layers className="w-4 h-4 text-violet-700" />
-                  <span>Worktree Execution Boundary</span>
+                  <span>Running code</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed text-[11px]">
-                  ProofPatcher operates on dedicated, isolated Git worktrees. Worktrees provide filesystem isolation from your primary branch, but are <strong>not security sandboxes</strong>. Untrusted repository code is never executed without container isolation.
+                  Worktrees keep changes separate from your branch, but they are <strong>not security sandboxes</strong>. Untrusted code needs an isolated runner.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/30 space-y-2">
                 <div className="flex items-center gap-2 font-semibold text-slate-900">
                   <Shield className="w-4 h-4 text-emerald-700" />
-                  <span>Public Repositories Only</span>
+                  <span>Repository access</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed text-[11px]">
-                  Private and unknown-visibility repository captures are disabled. ProofPatcher strictly limits captures, triage, and reviews to explicitly public repositories, and fails closed on local private artifacts.
+                  The GitHub App can list selected repositories. Model requests currently require public content; private content is not sent.
                 </p>
               </div>
             </div>
 
             <div className="border-t border-slate-200 pt-3 text-[11px] text-slate-500">
-              Active Policy (.proofpatchrc.json): Maximum diff length: {policy.maxDiffLines ?? 300} lines · Anti-slop checks enabled · Strict DOM & visual verifier gates.
+              Active Policy (.proofpatchrc.json): Maximum diff length: {policy.maxDiffLines ?? 300} lines · Other checks depend on the selected workflow.
             </div>
           </div>
         </section>

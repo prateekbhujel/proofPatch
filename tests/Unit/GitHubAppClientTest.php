@@ -79,6 +79,24 @@ final class GitHubAppClientTest extends TestCase
         $this->assertFalse($repos[1]['isPrivate']);
     }
 
+    public function testDeniedInstallationAccessNeverFallsBackToAllUserRepositories(): void
+    {
+        $calls = [];
+        $http = new MockHttpClient(function (string $method, string $url) use (&$calls): MockResponse {
+            $calls[] = $url;
+            return new MockResponse('Forbidden', ['http_code' => 403]);
+        });
+
+        $status = null;
+        $repositories = (new GitHubAppClient($http))->listSelectedRepositories('test_token', $status);
+
+        self::assertSame([], $repositories);
+        self::assertCount(1, $calls);
+        self::assertStringContainsString('/user/installations?', $calls[0]);
+        self::assertTrue($status['truncated']);
+        self::assertNotEmpty($status['errors']);
+    }
+
     public function testListOpenPullRequests(): void
     {
         $http = new MockHttpClient([

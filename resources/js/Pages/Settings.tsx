@@ -180,39 +180,6 @@ export default function Settings({
           <div className="p-5 space-y-6">
             {!githubConnection.isConnected && !githubConnection.deviceFlow && (
               <div className="max-w-xl space-y-5">
-                <div className="p-4 rounded-lg bg-violet-50/70 border border-violet-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-violet-950 flex items-center gap-1.5">
-                      <Key className="w-3.5 h-3.5 text-violet-700" />
-                      <span>Active Desktop GitHub Session</span>
-                    </span>
-                    <span className="text-[11px] font-mono bg-violet-100 text-violet-700 px-2 py-0.5 rounded font-medium">Local CLI</span>
-                  </div>
-                  <p className="text-xs text-violet-800 leading-relaxed">
-                    Connect immediately using host credentials to access authorized repositories and inspect pull requests.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => {
-                      setIsSubmitting(true);
-                      router.post('/github/local/connect', {}, {
-                        onFinish: () => setIsSubmitting(false),
-                      });
-                    }}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-md text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>{isSubmitting ? 'Connecting...' : 'Connect Active Account'}</span>
-                  </button>
-                </div>
-
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-slate-200"></div>
-                  <span className="flex-shrink mx-3 text-slate-400 text-[11px]">or configure GitHub App</span>
-                  <div className="flex-grow border-t border-slate-200"></div>
-                </div>
-
                 <form onSubmit={handleInitiate} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">

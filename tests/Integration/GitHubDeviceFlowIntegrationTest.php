@@ -45,6 +45,16 @@ final class GitHubDeviceFlowIntegrationTest extends TestCase
         @restore_exception_handler();
     }
 
+    public function testHostCliCredentialCannotBeConnectedThroughHttp(): void
+    {
+        $app = app();
+        $request = Request::create('/github/local/connect', 'POST');
+        $response = $app->make(\Illuminate\Contracts\Http\Kernel::class)->handle($request);
+
+        self::assertSame(404, $response->getStatusCode());
+        self::assertArrayNotHasKey('github_auth', $_SESSION);
+    }
+
     public function testInitiateFailsWhenNoClientIdProvided(): void
     {
         putenv('PROOFPATCH_GITHUB_CLIENT_ID');

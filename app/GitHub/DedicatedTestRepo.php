@@ -9,7 +9,7 @@ final class DedicatedTestRepo
 {
     public static function name(): ?string
     {
-        $value = self::setting('PROOFPATCH_TEST_REPO');
+        $value = self::setting('PROOFPATCHER_TEST_REPO') ?? self::setting('PROOFPATCH_TEST_REPO');
         if (!is_string($value) || !preg_match('/\A[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9_.-]{1,100}\z/D', $value)) {
             return null;
         }
@@ -24,7 +24,7 @@ final class DedicatedTestRepo
 
     public static function baseCommit(): ?string
     {
-        $value = self::setting('PROOFPATCH_TEST_BASE_COMMIT');
+        $value = self::setting('PROOFPATCHER_TEST_BASE_COMMIT') ?? self::setting('PROOFPATCH_TEST_BASE_COMMIT');
         return is_string($value) && preg_match('/\A[a-f0-9]{40}\z/D', $value) ? $value : null;
     }
 

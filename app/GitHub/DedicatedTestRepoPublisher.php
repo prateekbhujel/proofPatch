@@ -13,7 +13,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  *
  * Security & authorization constraints:
  * - Strictly allowlisted: only the configured dedicated test repository is allowed.
- * - Rejects any attempt to target prateekbhujel/php-terminal, proofPatch, or third-party repos.
+ * - Rejects any attempt to target unauthorized, private, or third-party repositories.
  * - Disconnected by default: Refuses external network connections until independent review approval.
  * - Mandatory server approval store: ServerHeldPublicationApproval is required; fail closed if missing.
  * - Unanchored local receipts do NOT authorize publication: requires a server-held, HMAC-signed
@@ -161,11 +161,11 @@ final readonly class DedicatedTestRepoPublisher
             );
         }
 
-        // Boundary 9: Resolve and validate GitHub authorization token before consuming approval
+        // Boundary 9: Require authorized GitHub session token before consuming approval
         $resolvedGithubToken = $githubToken ?: $this->resolveToken();
         if ($resolvedGithubToken === null || trim($resolvedGithubToken) === '') {
             throw new \RuntimeException(
-                'GitHub authorization token is required to publish draft PR. Provide a valid token or connect GitHub.'
+                'GitHub authorization token is required to publish draft PR. An authorized app session is required.'
             );
         }
 
@@ -504,14 +504,13 @@ COMMIT;
         return <<<MARKDOWN
 [![ProofPatcher Bot](https://img.shields.io/badge/ProofPatcher_bot-Verified_Co--Maintainer-7c3aed?style=flat-square)](https://github.com/{$targetRepository})
 [![Category: Bug Fix](https://img.shields.io/badge/Category-Bug_Fix-0284c7?style=flat-square)](https://github.com/{$targetRepository}/issues)
-[![5-Gate Isolated Verification](https://img.shields.io/badge/5_Gate_Verification-PASSED-10b981?style=flat-square)](https://github.com/{$targetRepository})
-[![Frontier Model: Meta Muse](https://img.shields.io/badge/Frontier_Model-Meta_Muse-f59e0b?style=flat-square)](https://baseten.co)
+[![5-Gate Verification](https://img.shields.io/badge/5_Gate_Verification-PASSED-10b981?style=flat-square)](https://github.com/{$targetRepository})
 
 > [!NOTE]
-> 🤖 **ProofPatcher [bot] — Autonomous Frontier Verification & Repair**
-> This pull request was prepared and cryptographically verified by the **ProofPatcher** co-maintainer bot using Meta's frontier model **Muse** and isolated 5-gate test oracle execution.
+> 🤖 **ProofPatcher [bot] — Autonomous Verification & Patching**
+> This draft pull request was prepared by **ProofPatcher**. The single-file candidate patch passed the local 5-gate verifier on the replicated baseline failure, negative control, static AST syntax rules, and allowlisted digests.
 > **No automatic merge.** Review and verification evidence attached below.
-> *Notice: Sandbox checks verify replicated bounded regression cases for OrderTotal boundary calculation; this does not claim the repository's full original test suite ran.*
+> *Notice: Verification checks bounded replicated regression cases for OrderTotal boundary calculation; this does not claim the repository's full original test suite ran.*
 
 ### Summary
 Fixes issue #1 (`Zero-quantity items inflate the order total`).
@@ -628,29 +627,18 @@ MARKDOWN;
 
     private function resolveToken(): ?string
     {
-        $env = getenv('GITHUB_TOKEN');
-        if (is_string($env) && trim($env) !== '') {
-            return trim($env);
-        }
-
-        try {
-            $descriptors = [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ];
-            $proc = @proc_open('gh auth token', $descriptors, $pipes);
-            if (is_resource($proc)) {
-                fclose($pipes[0]);
-                $token = trim((string) stream_get_contents($pipes[1]));
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                proc_close($proc);
-                if ($token !== '' && preg_match('/\A[a-zA-Z0-9_]{20,}\z/', $token)) {
-                    return $token;
+        // Require the authorized app session. Implicit host CLI or environment token fallbacks are forbidden.
+        if (function_exists('request')) {
+            try {
+                $req = request();
+                if ($req && $req->hasSession()) {
+                    $auth = $req->session()->get('github_auth');
+                    if (is_array($auth) && isset($auth['token']) && is_string($auth['token']) && trim($auth['token']) !== '') {
+                        return trim($auth['token']);
+                    }
                 }
+            } catch (\Throwable) {
             }
-        } catch (\Throwable) {
         }
 
         return null;

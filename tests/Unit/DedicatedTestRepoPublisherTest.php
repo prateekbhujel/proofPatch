@@ -472,11 +472,19 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             // 6. POST git/refs
             new MockResponse(json_encode(['ref' => 'refs/heads/proofpatch/issue-1-success'])),
             // 7. POST pulls
-            new MockResponse(json_encode([
-                'number' => 2,
-                'html_url' => 'https://github.com/example-owner/proofpatch-test/pull/2',
-                'draft' => true,
-            ])),
+            static function (string $method, string $url, array $options): MockResponse {
+                $payload = json_decode($options['body'], true, 32, JSON_THROW_ON_ERROR);
+                self::assertTrue($payload['draft']);
+                self::assertStringContainsString('ProofPatcher', $payload['body']);
+                self::assertStringNotContainsString('Frontier Model', $payload['body']);
+                self::assertStringNotContainsString('baseten.co', $payload['body']);
+                self::assertStringNotContainsString('Meta Muse', $payload['body']);
+                return new MockResponse(json_encode([
+                    'number' => 2,
+                    'html_url' => 'https://github.com/example-owner/proofpatch-test/pull/2',
+                    'draft' => true,
+                ]));
+            },
         ]);
 
         $publisher = new DedicatedTestRepoPublisher($this->approvalStore, $mockClient, disconnected: false);
@@ -679,5 +687,49 @@ final class DedicatedTestRepoPublisherTest extends TestCase
         self::assertSame('proofpatch/issue-1-' . $run1Id, $res1['branch']);
         self::assertSame('proofpatch/issue-1-' . $run2Id, $res2['branch']);
         self::assertNotSame($res1['branch'], $res2['branch']);
+    }
+
+    public function testRejectsPublishingWithoutAuthorizedAppSessionToken(): void
+    {
+        $evidence = $this->createValidEvidenceDirectory('missing-session-token');
+        $runId = $evidence['report']['id'];
+        $receiptSha = $evidence['receipt']['sha256'];
+        $baseSha = $evidence['report']['baseSha256'];
+        $candidateSha = $evidence['report']['candidateSha256'];
+        $testSha = $evidence['report']['testSha256'];
+
+        $token = $this->approvalStore->issue(
+            $runId,
+            $evidence['runDir'],
+            $receiptSha,
+            \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
+            \ProofPatch\GitHub\DedicatedTestRepo::name(),
+            1,
+            DedicatedTestRepoPublisher::AUTHORIZED_FILE_PATH,
+            $baseSha,
+            $candidateSha,
+            $testSha,
+            isSimulated: false
+        );
+
+        $publisher = new DedicatedTestRepoPublisher($this->approvalStore, disconnected: false);
+
+        $context = [
+            'repository' => \ProofPatch\GitHub\DedicatedTestRepo::name(),
+            'issueNumber' => 1,
+            'path' => DedicatedTestRepoPublisher::AUTHORIZED_FILE_PATH,
+        ];
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('GitHub authorization token is required to publish draft PR. An authorized app session is required.');
+
+        // Pass null for githubToken when no session is active - must fail closed without host CLI fallback
+        $publisher->publishDraftPr(
+            $context,
+            $evidence['runDir'],
+            $evidence['candidateSource'],
+            authorizationToken: $token,
+            githubToken: null
+        );
     }
 }

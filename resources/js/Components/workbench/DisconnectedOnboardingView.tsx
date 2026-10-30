@@ -1,8 +1,8 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { Copy, ExternalLink } from 'lucide-react';
+import { Copy, ExternalLink, GitBranch } from 'lucide-react';
 import { AppLayout } from '../AppLayout';
-import { PfLogo } from '../ui/PfLogo';
+import { BrandMark } from '../ui/BrandMark';
 import { GitHubConnectionData } from './types';
 
 interface DisconnectedOnboardingViewProps {
@@ -24,7 +24,7 @@ export function DisconnectedOnboardingView({ error, deviceClientIdInput, setDevi
       <Head title="Connect GitHub · ProofPatcher" />
       <div className="flex min-h-screen items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm dark:border-slate-800 dark:bg-[#141821]">
-          <PfLogo size={36} badge />
+          <BrandMark size={40} />
           <h1 className="mt-5 text-xl font-semibold tracking-tight">Connect GitHub</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">Connect your account to see your repositories, issues and pull requests.</p>
           {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200">{error}</p>}
@@ -41,9 +41,18 @@ export function DisconnectedOnboardingView({ error, deviceClientIdInput, setDevi
             </div>
           ) : (
             <form onSubmit={handleInitiateDeviceFlow} className="mt-6 space-y-4">
-              <label htmlFor="onboarding-client-id" className="block text-sm font-medium">GitHub App client ID</label>
-              <input id="onboarding-client-id" value={deviceClientIdInput} onChange={(e) => setDeviceClientIdInput(e.target.value)} placeholder={githubConnection?.isConfigured ? 'Configured on this server' : 'Enter client ID'} autoComplete="off" className="w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700" />
-              <button type="submit" disabled={isSubmittingDevice} className="w-full rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50">{isSubmittingDevice ? 'Connecting…' : 'Connect GitHub'}</button>
+              {!githubConnection?.isConfigured && (
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-500">This installation needs a GitHub App client ID.</p>
+                  <label htmlFor="onboarding-client-id" className="block text-sm font-medium">GitHub App client ID</label>
+                  <input id="onboarding-client-id" value={deviceClientIdInput} onChange={(e) => setDeviceClientIdInput(e.target.value)} placeholder="Enter client ID" autoComplete="off" className="w-full rounded-lg border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700" />
+                </div>
+              )}
+              <button type="submit" disabled={isSubmittingDevice || (!githubConnection?.isConfigured && !deviceClientIdInput.trim())} className="flex w-full items-center justify-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50">
+                <GitBranch className="h-4 w-4" />
+                {isSubmittingDevice ? 'Connecting…' : 'Continue with GitHub'}
+              </button>
+              <p className="text-xs text-slate-500">You’ll enter a short code on GitHub.</p>
             </form>
           )}
           <Link href="/settings" className="mt-5 inline-block text-sm text-slate-500 hover:text-violet-700 dark:hover:text-violet-300">Settings</Link>

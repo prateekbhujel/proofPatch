@@ -19,12 +19,12 @@ const inertia = {
   Head: ({ title }) => React.createElement('title', {}, title),
   router: { post() {} },
 };
-const logo = loadTsx('../../resources/js/Components/ui/PfLogo.tsx');
+const logo = loadTsx('../../resources/js/Components/ui/BrandMark.tsx');
 const layout = loadTsx('../../resources/js/Components/AppLayout.tsx', (id) => id === '@inertiajs/react' ? inertia : require(id));
 const onboarding = loadTsx('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', (id) => {
   if (id === '@inertiajs/react') return inertia;
   if (id === '../AppLayout') return layout;
-  if (id === '../ui/PfLogo') return logo;
+  if (id === '../ui/BrandMark') return logo;
   return require(id);
 });
 
@@ -42,12 +42,22 @@ test('the workspace has no duplicate global sidebar; other pages have a way back
   assert.match(settings, /href="\/issues"[^>]*>.*Back to workspace/s);
 });
 
-test('a disconnected user can start GitHub connection without fake balances or fixture shortcuts', () => {
+test('an unconfigured installation explains the missing GitHub App ID', () => {
   const html = renderToStaticMarkup(React.createElement(onboarding.DisconnectedOnboardingView, baseProps));
-  assert.match(html, /Connect GitHub/);
+  assert.match(html, /Continue with GitHub/);
   assert.match(html, /GitHub App client ID/);
+  assert.match(html, /<button[^>]*\sdisabled=""/);
   assert.match(html, /href="\/settings"/);
   assert.doesNotMatch(html, /\$15\.00|\$100\.00|Open OrderTotal|Launch Interactive/);
+});
+
+test('a configured installation offers sign-in without asking the user for an App ID', () => {
+  const html = renderToStaticMarkup(React.createElement(onboarding.DisconnectedOnboardingView, {
+    ...baseProps, githubConnection: { isConfigured: true },
+  }));
+  assert.match(html, /Continue with GitHub/);
+  assert.match(html, /short code on GitHub/);
+  assert.doesNotMatch(html, /GitHub App client ID|<button[^>]*\sdisabled=""/);
 });
 
 test('the repository sidebar shows tasks only for the selected repository', () => {
@@ -83,7 +93,7 @@ test('provider balances and inactive automation preferences are not presented as
   assert.doesNotMatch(sidebar, /Open OrderTotal Case|5-Gate Case/);
 });
 
-test('the original Pf logo remains available', () => {
-  const html = renderToStaticMarkup(React.createElement(logo.PfLogo, { size: 32, badge: true }));
-  assert.match(html, /<svg[^>]*width="32"[^>]*height="32"/);
+test('the app uses its shared PP icon', () => {
+  const html = renderToStaticMarkup(React.createElement(logo.BrandMark, { size: 32 }));
+  assert.match(html, /<img[^>]*src="\/icon\.svg"[^>]*width="32"[^>]*height="32"/);
 });

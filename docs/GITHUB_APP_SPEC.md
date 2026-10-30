@@ -1,9 +1,11 @@
-# ProofPatch GitHub App Architecture & Least-Privilege Specification
+# ProofPatcher GitHub App Architecture & Least-Privilege Specification
+
+This is a design proposal, not a description of features already deployed. The current prototype uses GitHub device sign-in; automatic reviews and webhook processing are not implemented. See the README for the current limits.
 
 ## 1. Executive Summary & Identity
-ProofPatch is a **Muse-powered co-maintainer** designed to evaluate pull requests, analyze patch triage, surface anchored code findings, and stage non-destructive maintainer review actions with verifiable evidence.
+ProofPatcher is a **Muse-powered co-maintainer** designed to evaluate pull requests, analyze patch triage, surface anchored code findings, and stage non-destructive maintainer review actions with verifiable evidence.
 
-ProofPatch operates on two fundamental operational modes:
+The proposed product has two operational modes:
 1. **Review First (Default Mode)**:
    - Evaluates incoming PR diffs as untrusted data.
    - Generates structured, line-anchored advisory findings.
@@ -21,12 +23,12 @@ ProofPatch operates on two fundamental operational modes:
 - **Granular Least Privilege**: Personal Access Tokens (PATs) and classic OAuth grants grant broad account-wide access. GitHub Apps grant repository-scoped, permission-isolated tokens.
 - **Short-Lived Installation Access Tokens (IAT)**: GitHub App tokens expire after **1 hour** automatically.
 - **Organization & Personal Support**: GitHub Apps install seamlessly across personal user accounts and organization repositories.
-- **Auditability**: All actions taken by the app appear in GitHub audit logs under the App identity (`proofpatch[bot]`), distinguishing bot activities from personal maintainer credentials.
+- **Auditability**: Installation tokens identify the app; user tokens identify the user and the app. The token used determines how GitHub attributes an action.
 
 ### 2.2 Token Minting Flow
 ```
 ┌─────────────────┐       1. Sign JWT (RS256, max 10m)      ┌──────────────────┐
-│ ProofPatch App  │ ──────────────────────────────────────> │  GitHub API      │
+│ ProofPatcher    │ ──────────────────────────────────────> │  GitHub API      │
 │ Private Key     │                                         │  /app            │
 └─────────────────┘                                         └──────────────────┘
          │                                                            │
@@ -75,10 +77,10 @@ All incoming GitHub webhooks (`pull_request.opened`, `pull_request.synchronize`,
        throw new UnauthorizedHttpException('Invalid webhook signature');
    }
    ```
-2. **Replay & Timestamp Protection**:
-   - Webhook events older than 300 seconds are rejected (`X-GitHub-Delivery` logged with idempotent deduplication in SQLite).
+2. **Replay Protection**:
+   - Record and deduplicate `X-GitHub-Delivery` IDs. The delivery ID is not a timestamp and does not by itself prove the age of an event.
 3. **Event Filtering**:
-   - ProofPatch ignores non-PR and non-check events.
+   - ProofPatcher should ignore non-PR and non-check events.
 
 ---
 

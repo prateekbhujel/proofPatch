@@ -36,6 +36,8 @@ Open **http://127.0.0.1:8000** in your browser.
 
 *(Alternatively, run `php artisan serve --port=8431`).*
 
+To enable GitHub sign-in, the operator sets `PROOFPATCH_GITHUB_CLIENT_ID` in `.env` to a GitHub App client ID with device flow enabled. Install that app on the repositories it should access. Users then select **Continue with GitHub** and enter the short code on GitHub; they do not need to enter the client ID themselves.
+
 For an existing installation, back up the SQLite database before running `php artisan migrate`. Rolling back the task-card migrations deletes the cards or their screenshots.
 
 ### Issue suggestions

@@ -23,6 +23,9 @@ final class WebRequestSecurityTest extends TestCase
                 'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)),
                 'APP_ENV' => 'local',
                 'APP_DEBUG' => 'false',
+                // The invalid device-flow test must not inherit a real local App ID.
+                'PROOFPATCH_GITHUB_CLIENT_ID' => '',
+                'GITHUB_APP_CLIENT_ID' => '',
             ],
         );
         $server->start();

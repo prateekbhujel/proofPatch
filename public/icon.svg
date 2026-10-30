@@ -1,14 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
   <defs>
-    <linearGradient id="pp-bg-a" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#5B21B6"/>
-      <stop offset="100%" stop-color="#3B0764"/>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#pp-bg-a)"/>
-  <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="13.25" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="1.5"/>
-  <!-- Upper patch loop of the P -->
-  <path d="M21 17H34.5C40.299 17 45 21.701 45 27.5C45 33.299 40.299 38 34.5 38H27V24H34C35.933 24 37.5 25.567 37.5 27.5C37.5 29.433 35.933 31 34 31H27V47H21V17Z" fill="#FFFFFF"/>
-  <!-- Precision verification check accent at lower-right -->
-  <path d="M33.5 41.5L37.5 45.5L46.5 36.5" stroke="#C4B5FD" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#brand)"/>
+  <g fill="none" stroke="#fff" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13.5 46V18h8a8 8 0 0 1 0 16h-8"/>
+    <path d="M35.5 46V18h8a8 8 0 0 1 0 16h-8"/>
+  </g>
 </svg>

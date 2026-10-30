@@ -1,96 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0b0f19" />
-      <stop offset="50%" stop-color="#111827" />
-      <stop offset="100%" stop-color="#070a12" />
+    <linearGradient id="pp-bg-a" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5B21B6"/>
+      <stop offset="100%" stop-color="#3B0764"/>
     </linearGradient>
-
-    <!-- Border Ring Gradient -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.8" />
-      <stop offset="45%" stop-color="#6366f1" stop-opacity="0.3" />
-      <stop offset="75%" stop-color="#10b981" stop-opacity="0.7" />
-      <stop offset="100%" stop-color="#059669" stop-opacity="0.9" />
-    </linearGradient>
-
-    <!-- Shield Face Gradient -->
-    <linearGradient id="shieldGrad" x1="20%" y1="0%" x2="80%" y2="100%">
-      <stop offset="0%" stop-color="#1e1b4b" stop-opacity="0.9" />
-      <stop offset="100%" stop-color="#064e3b" stop-opacity="0.7" />
-    </linearGradient>
-
-    <!-- Symbol Primary Violet Gradient -->
-    <linearGradient id="violetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c084fc" />
-      <stop offset="50%" stop-color="#8b5cf6" />
-      <stop offset="100%" stop-color="#6d28d9" />
-    </linearGradient>
-
-    <!-- Symbol Verified Emerald Gradient -->
-    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34d399" />
-      <stop offset="60%" stop-color="#10b981" />
-      <stop offset="100%" stop-color="#047857" />
-    </linearGradient>
-
-    <!-- Glow Filter -->
-    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-
-    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.7" />
-    </filter>
   </defs>
-
-  <!-- Squircle Base with Soft Shadow -->
-  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="3" filter="url(#softShadow)" />
-
-  <!-- Subtle Radial Inner Glow -->
-  <circle cx="256" cy="190" r="140" fill="#7c3aed" opacity="0.14" filter="url(#neonGlow)" />
-  <circle cx="280" cy="320" r="120" fill="#10b981" opacity="0.12" filter="url(#neonGlow)" />
-
-  <!-- Verification Shield Silhouette -->
-  <path d="M 256 96 
-           C 336 96, 384 128, 384 196
-           C 384 288, 320 368, 256 416
-           C 192 368, 128 288, 128 196
-           C 128 128, 176 96, 256 96 Z"
-        fill="url(#shieldGrad)"
-        stroke="rgba(255, 255, 255, 0.12)"
-        stroke-width="2" />
-
-  <!-- Interlocking Geometric "P" & Verification Checkmark -->
-  <!-- Vertical Stem of the "P" -->
-  <rect x="188" y="160" width="34" height="192" rx="12" fill="url(#violetGrad)" />
-
-  <!-- Upper Loop of the "P" -->
-  <path d="M 218 160 
-           H 290 
-           C 336 160, 344 236, 290 236 
-           H 218 
-           Z" 
-        fill="none" 
-        stroke="url(#violetGrad)" 
-        stroke-width="34" 
-        stroke-linejoin="round" 
-        stroke-linecap="round" />
-
-  <!-- Verified Patch / Circuit Checkmark Anchor -->
-  <path d="M 210 278 
-           L 260 328 
-           L 358 206" 
-        fill="none" 
-        stroke="url(#emeraldGrad)" 
-        stroke-width="32" 
-        stroke-linecap="round" 
-        stroke-linejoin="round" 
-        filter="url(#neonGlow)" />
-
-  <!-- Core Proof Node (Glowing Verification Dot) -->
-  <circle cx="358" cy="206" r="10" fill="#6ee7b7" />
-  <circle cx="260" cy="328" r="7" fill="#ffffff" />
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#pp-bg-a)"/>
+  <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="13.25" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="1.5"/>
+  <!-- Upper patch loop of the P -->
+  <path d="M21 17H34.5C40.299 17 45 21.701 45 27.5C45 33.299 40.299 38 34.5 38H27V24H34C35.933 24 37.5 25.567 37.5 27.5C37.5 29.433 35.933 31 34 31H27V47H21V17Z" fill="#FFFFFF"/>
+  <!-- Precision verification check accent at lower-right -->
+  <path d="M33.5 41.5L37.5 45.5L46.5 36.5" stroke="#C4B5FD" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

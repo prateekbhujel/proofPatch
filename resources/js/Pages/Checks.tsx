@@ -395,7 +395,7 @@ export default function Checks({
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   Model Ledger
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-mono text-slate-400">SQLite</span>
               </div>
 
               <div className="space-y-2.5 text-xs text-slate-600">

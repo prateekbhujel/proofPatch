@@ -151,6 +151,10 @@ export default function Docs() {
                   <p className="text-[11px] text-slate-500">Canonical SHA-256 manifests recording verified test logs, diffs, and gate outcomes.</p>
                 </div>
               </div>
+
+              <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/40 text-xs text-slate-600">
+                <strong className="text-slate-900">Future Potential Beyond GitHub:</strong> While ProofPatcher currently focuses on verified GitHub issues, pull requests, and bundled code fixtures, the same pinned-context preview, single-use approval, and cryptographic receipt architecture is designed to extend to structured enterprise workflows such as spreadsheet formula verification and data-pipeline change audits.
+              </div>
             </section>
 
             {/* Section 2: Workflow */}

@@ -4,11 +4,11 @@ import { AppLayout } from '../Components/AppLayout';
 import {
   GitPullRequest,
   ArrowRight,
-  CheckCircle2,
   Search,
   ChevronLeft,
   ChevronRight,
-  CheckSquare,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 
 interface PullItem {
@@ -72,125 +72,149 @@ export default function Overview({
 
   return (
     <AppLayout activeNav="overview">
-      <Head title="ProofPatcher - Maintainer Workbench" />
+      <Head title="Overview · ProofPatcher" />
 
       <div className="space-y-5 max-w-7xl mx-auto">
         <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">Overview</h1>
-              <p className="mt-1 text-sm text-slate-500">Review pull requests and work on issues in one place.</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Inspect pull requests, manage local tasks, and verify repairs with cryptographic receipts.
+              </p>
             </div>
-            <Link href="/issues" className="inline-flex w-fit items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-800">
-              Open issues <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link
+                href="/repositories"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 transition hover:bg-slate-50"
+              >
+                <GitPullRequest className="h-3.5 w-3.5 text-slate-600" />
+                <span>Review Pull Requests</span>
+              </Link>
+              <Link
+                href="/issues"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-violet-800"
+              >
+                <span>Open Issues &amp; Tasks</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
-          <dl className="mt-6 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-xs text-slate-500">Saved PR snapshots</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900">{totalSnapshots}</dd>
+
+          <dl className="mt-5 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
+              <dt className="text-xs font-medium text-slate-500">Saved PR snapshots</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{totalSnapshots}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-xs text-slate-500">Verification runs</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900">{totalRuns}</dd>
+            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
+              <dt className="text-xs font-medium text-slate-500">Verification runs</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{totalRuns}</dd>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-xs text-slate-500">Runs with verified results</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900">{verifiedRuns}</dd>
+            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
+              <dt className="text-xs font-medium text-slate-500">Runs with verified results</dt>
+              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{verifiedRuns}</dd>
             </div>
           </dl>
         </section>
 
-        {/* Core Workspaces Navigation (Compact 3-Column Row) */}
+        {/* Core Workspaces Navigation (3-Column Row) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Link
             href="/repositories"
-            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 transition group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
+                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-200/80 group-hover:bg-violet-700 group-hover:text-white transition">
                   <GitPullRequest className="w-4 h-4" />
                 </span>
-                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
+                <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-700 transition">
                   Pull Requests
                 </span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-700 transition" />
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Inspect public pull requests, review unified/split diffs, and draft inline comments.
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Capture pull request snapshots, inspect diffs, and post approved line-anchored review comments.
             </p>
           </Link>
 
           <Link
             href="/issues"
-            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 transition group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
-                  <CheckSquare className="w-4 h-4" />
+                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-200/80 group-hover:bg-violet-700 group-hover:text-white transition">
+                  <ClipboardList className="w-4 h-4" />
                 </span>
-                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
-                  Issues Workbench
+                <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-700 transition">
+                  Issues &amp; Tasks
                 </span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-700 transition" />
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Open an issue, request a proposal, and review its checks.
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Queue local tasks with voice or screenshots, preview public files, request Muse proposals, and run verification checks.
             </p>
           </Link>
 
           <Link
-            href="/issues"
-            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
+            href="/settings"
+            className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 transition group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-semibold text-xs border border-emerald-100 group-hover:bg-emerald-700 group-hover:text-white transition">
-                  <CheckCircle2 className="w-4 h-4" />
+                <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-semibold text-xs border border-slate-200 group-hover:bg-violet-700 group-hover:text-white transition">
+                  <Settings className="w-4 h-4" />
                 </span>
-                <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
-                  Verification Engine
+                <span className="text-xs font-semibold text-slate-900 group-hover:text-violet-700 transition">
+                  GitHub App &amp; Budget
                 </span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-700 transition" />
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              5-gate falsifiable verifier, cryptographic receipts, and isolated sandbox proofs.
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Connect your GitHub App via Device Flow, select repositories, and review local model request usage.
             </p>
           </Link>
         </div>
 
-        {/* Recent Pull Requests Datatable with Real Pagination */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        {/* Captured Pull Requests Datatable */}
+        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">Captured Pull Requests</h2>
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                  {recent.length} Total
+                <h2 id="captured-prs-heading" className="text-sm font-semibold text-slate-900">
+                  Captured Pull Requests
+                </h2>
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-700 border border-slate-200 tabular-nums">
+                  {recent.length}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Saved snapshots available for model-assisted review and code inspection.
+                Saved snapshots ready for diff inspection and line-anchored review comments.
               </p>
             </div>
 
-            {/* Quick Filter Search Input */}
+            {/* Filter Input */}
             <div className="relative w-full sm:w-64">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
+                id="global-search-input"
                 type="text"
-                placeholder="Search PRs by repo, title..."
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                aria-label="Filter captured pull requests"
+                placeholder="Filter by repo, title, or SHA…"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:border-transparent transition"
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white placeholder-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:border-transparent transition"
               />
             </div>
           </div>
@@ -198,7 +222,7 @@ export default function Overview({
           {filteredPulls.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <p className="text-xs text-slate-500">
-                {searchQuery ? 'No pull requests matched your search query.' : 'No pull request snapshots captured yet.'}
+                {searchQuery ? 'No pull requests matched your filter.' : 'No pull request snapshots captured yet.'}
               </p>
               {searchQuery && (
                 <button
@@ -212,15 +236,30 @@ export default function Overview({
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div
+                tabIndex={0}
+                role="region"
+                aria-labelledby="captured-prs-heading"
+                className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-600"
+              >
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="py-2.5 px-5">Repository & Pull Request</th>
-                      <th className="py-2.5 px-5">Commit SHA</th>
-                      <th className="py-2.5 px-5">State</th>
-                      <th className="py-2.5 px-5">Captured At</th>
-                      <th className="py-2.5 px-5 text-right">Actions</th>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+                      <th scope="col" className="sticky top-0 z-10 bg-slate-50 py-2.5 px-5">
+                        Repository &amp; Pull Request
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-slate-50 py-2.5 px-5">
+                        Commit SHA
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-slate-50 py-2.5 px-5">
+                        State
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-slate-50 py-2.5 px-5">
+                        Captured At
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-slate-50 py-2.5 px-5 text-right">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
@@ -231,7 +270,7 @@ export default function Overview({
                       return (
                         <tr
                           key={item.id}
-                          className="hover:bg-slate-50/60 transition-colors group"
+                          className="hover:bg-slate-50/70 transition-colors group"
                         >
                           <td className="py-3 px-5 max-w-sm">
                             <div className="flex items-center gap-2">
@@ -252,16 +291,16 @@ export default function Overview({
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
                                 isMerged
-                                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                  ? 'bg-violet-50 text-violet-800 border border-violet-200'
                                   : isOpen
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                                   : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}
                             >
                               {isMerged ? 'MERGED' : item.pull.state.toUpperCase()}
                             </span>
                           </td>
-                          <td className="py-3 px-5 text-slate-500 whitespace-nowrap">
+                          <td className="py-3 px-5 text-slate-500 whitespace-nowrap font-mono text-[11px]">
                             {formatTime(item.capturedAt)}
                           </td>
                           <td className="py-3 px-5 text-right whitespace-nowrap">
@@ -282,8 +321,8 @@ export default function Overview({
 
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="px-5 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 bg-slate-50/30">
-                  <span className="text-[11px] text-slate-500">
+                <div className="px-5 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 bg-slate-50/40">
+                  <span className="text-[11px] text-slate-500 tabular-nums">
                     Showing {(safeCurrentPage - 1) * pageSize + 1} to{' '}
                     {Math.min(safeCurrentPage * pageSize, filteredPulls.length)} of {filteredPulls.length} snapshots
                   </span>
@@ -293,7 +332,7 @@ export default function Overview({
                       type="button"
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={safeCurrentPage === 1}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
                       <span>Prev</span>
@@ -307,7 +346,7 @@ export default function Overview({
                           onClick={() => setCurrentPage(pageNum)}
                           className={`w-6 h-6 rounded text-xs font-medium flex items-center justify-center transition ${
                             pageNum === safeCurrentPage
-                              ? 'bg-violet-700 text-white shadow-2xs font-bold'
+                              ? 'bg-violet-700 text-white font-semibold'
                               : 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
                           }`}
                         >
@@ -320,7 +359,7 @@ export default function Overview({
                       type="button"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={safeCurrentPage === totalPages}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
                       <span>Next</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -330,7 +369,7 @@ export default function Overview({
               )}
             </>
           )}
-        </div>
+        </section>
       </div>
     </AppLayout>
   );

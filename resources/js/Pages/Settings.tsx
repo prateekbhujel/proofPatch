@@ -169,7 +169,7 @@ export default function Settings({
 
             {githubConnection.isConnected && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Connected as @{githubConnection.user?.login}</span>
               </span>
             )}
@@ -189,6 +189,9 @@ export default function Settings({
                       value={clientIdInput}
                       onChange={(e) => setClientIdInput(e.target.value)}
                       placeholder="e.g. Iv1.8f2a1b9c3d4e5f60"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:border-transparent"
                       required
                     />

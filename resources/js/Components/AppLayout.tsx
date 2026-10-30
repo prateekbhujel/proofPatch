@@ -13,7 +13,6 @@ import {
   Info,
   AlertTriangle,
   BookOpen,
-  Sparkles,
   ExternalLink,
 } from 'lucide-react';
 
@@ -56,11 +55,36 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
 
   const navItems = [
     { key: 'overview', href: '/', label: 'Overview', icon: LayoutGrid },
-    { key: 'repositories', href: '/repositories', label: 'Repositories', icon: GitPullRequest },
-    { key: 'issues', href: '/issues', label: 'Issues', icon: ClipboardList },
+    { key: 'repositories', href: '/repositories', label: 'Pull Requests', icon: GitPullRequest },
+    { key: 'issues', href: '/issues', label: 'Issues & Tasks', icon: ClipboardList },
     { key: 'settings', href: '/settings', label: 'Settings', icon: Settings },
     { key: 'docs', href: '/docs', label: 'Docs', icon: BookOpen },
   ];
+
+  // Global keyboard shortcut ('/' focuses primary input when not typing in an input/textarea)
+  useEffect(() => {
+    function onGlobalKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isEditable =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      if (!isEditable && event.key === '/') {
+        const focusEl =
+          document.getElementById('global-search-input') ||
+          document.getElementById('local-task-title') ||
+          document.querySelector<HTMLInputElement>('input[type="text"], input[type="url"]');
+        if (focusEl) {
+          event.preventDefault();
+          focusEl.focus();
+        }
+      }
+    }
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -102,34 +126,33 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 antialiased font-sans mesh-glow-violet">
-      {/* Top Glassmorphic Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
-        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 antialiased font-sans">
+      {/* Calm Top Navigation Bar */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xs border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 gap-4">
-            {/* Brand Logo with glowing accent */}
+            {/* Brand Logo */}
             <div className="flex items-center gap-3 shrink-0">
               <Link
                 href="/"
                 className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 rounded-lg"
               >
-                <div className="relative">
-                  <img
-                    src="/icon-192.png"
-                    alt="ProofPatcher Icon"
-                    className="w-8 h-8 rounded-lg shadow-md shadow-violet-500/20 group-hover:shadow-violet-500/30 transition object-cover"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-bold text-slate-900 tracking-tight text-sm">
-                    ProofPatcher
-                  </span>
-                </div>
+                <img
+                  src="/icon.svg"
+                  alt="ProofPatcher"
+                  className="w-7 h-7 rounded-lg shrink-0"
+                />
+                <span className="font-semibold text-slate-900 tracking-tight text-sm">
+                  ProofPatcher
+                </span>
               </Link>
             </div>
 
-            {/* Navigation Links with animated pills */}
-            <nav className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1">
+            {/* Navigation Links */}
+            <nav
+              aria-label="Primary"
+              className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-1"
+            >
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isCurrent = currentNav === item.key;
@@ -137,33 +160,44 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   <Link
                     key={item.key}
                     href={item.href}
-                    className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 whitespace-nowrap ${
+                    aria-current={isCurrent ? 'page' : undefined}
+                    className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 whitespace-nowrap ${
                       isCurrent
-                        ? 'bg-violet-50 text-violet-700 border border-violet-200/80 shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
+                        ? 'bg-violet-50 text-violet-800 border border-violet-200 font-semibold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-violet-600' : 'text-slate-400'}`} />
+                    <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-violet-700' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </Link>
                 );
               })}
             </nav>
 
-            {/* Right Actions: Notifications */}
+            {/* Right Actions: Shortcut Hint & Notifications */}
             <div className="flex items-center gap-2.5 relative">
+              <span
+                className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-slate-50 text-[11px] text-slate-500 font-mono"
+                title="Press / anywhere to focus the primary input"
+              >
+                <span>Press</span>
+                <kbd className="px-1 py-0.2 bg-white border border-slate-300 rounded text-[10px] text-slate-700">/</kbd>
+                <span>to focus</span>
+              </span>
+
               <div className="relative" ref={trayRef}>
                 <button
                   type="button"
                   onClick={() => setIsTrayOpen(!isTrayOpen)}
                   aria-label="View notifications"
+                  aria-expanded={isTrayOpen}
                   className={`p-2 rounded-lg border text-slate-600 hover:text-slate-900 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
-                    isTrayOpen ? 'bg-slate-100 border-slate-300' : 'border-slate-200/80 bg-white hover:bg-slate-50'
+                    isTrayOpen ? 'bg-slate-100 border-slate-300' : 'border-slate-200 bg-white hover:bg-slate-50'
                   }`}
                 >
                   <Bell className="w-4 h-4" />
                   {notifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-700 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                       {notifications.length > 9 ? '9+' : notifications.length}
                     </span>
                   )}
@@ -173,17 +207,17 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                 <AnimatePresence>
                   {isTrayOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden"
                     >
-                      <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+                      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          <Bell className="w-3.5 h-3.5 text-violet-600" />
-                          <span className="text-xs font-semibold text-slate-900">Notifications</span>
-                          <span className="text-[10px] text-slate-400 font-mono">({notifications.length})</span>
+                          <Bell className="w-3.5 h-3.5 text-violet-700" />
+                          <span className="text-xs font-semibold text-slate-900">Activity</span>
+                          <span className="text-[10px] text-slate-500 font-mono">({notifications.length})</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {notifications.length > 0 && (
@@ -193,12 +227,13 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                               className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
                             >
                               <Trash2 className="w-3 h-3" />
-                              <span>Clear all</span>
+                              <span>Clear</span>
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => setIsTrayOpen(false)}
+                            aria-label="Close notifications"
                             className="p-1 rounded text-slate-400 hover:text-slate-600"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -209,9 +244,9 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                       <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                         {notifications.length === 0 ? (
                           <div className="p-6 text-center text-xs text-slate-500 space-y-1">
-                            <p className="font-medium text-slate-700">No new notifications</p>
+                            <p className="font-medium text-slate-700">No recent activity</p>
                             <p className="text-[11px] text-slate-400">
-                              Workflow events and verifications appear here.
+                              Session events and verification runs appear here.
                             </p>
                           </div>
                         ) : (
@@ -224,13 +259,13 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                                 : Info;
                             const iconColor =
                               item.type === 'error'
-                                ? 'text-rose-500'
+                                ? 'text-rose-600'
                                 : item.type === 'success'
-                                ? 'text-emerald-500'
-                                : 'text-violet-600';
+                                ? 'text-emerald-600'
+                                : 'text-violet-700';
 
                             return (
-                              <div key={item.id} className="p-3 hover:bg-slate-50/70 text-xs space-y-0.5">
+                              <div key={item.id} className="p-3 hover:bg-slate-50 text-xs space-y-0.5">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-1.5 font-medium text-slate-900">
                                     <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
@@ -258,39 +293,27 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-[1500px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
 
-      {/* Clean Global Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-4">
-        <div className="max-w-[1500px] w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      {/* Minimal Global Footer */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-3.5">
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div className="flex items-center gap-2 text-slate-600">
-            <span>© 2026 ProofPatcher</span>
+            <img src="/icon.svg" alt="" className="w-4 h-4 rounded-xs" />
+            <span className="font-medium text-slate-700">ProofPatcher</span>
             <span className="text-slate-300">·</span>
-            <a
-              href="https://github.com/prateekbhujel"
-              target="_blank"
-              rel="noreferrer"
-              className="text-slate-600 hover:text-slate-900 font-medium transition"
-            >
-              by Pratik Bhujel
-            </a>
+            <span>Local GitHub Co-Maintainer Workbench</span>
           </div>
           <div className="flex items-center gap-3 text-slate-500">
             <Link href="/docs" className="hover:text-slate-800 transition font-medium">
-              Docs
+              Documentation
             </Link>
             <span className="text-slate-300">·</span>
-            <a
-              href="https://github.com/prateekbhujel/proofPatch"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-slate-800 transition font-medium flex items-center gap-1"
-            >
-              <span>GitHub</span>
-              <ExternalLink className="w-3 h-3 text-slate-400" />
-            </a>
+            <Link href="/settings" className="hover:text-slate-800 transition font-medium">
+              Settings
+            </Link>
           </div>
         </div>
       </footer>

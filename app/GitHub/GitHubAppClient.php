@@ -399,6 +399,8 @@ final readonly class GitHubAppClient
                 'name' => $name,
                 'status' => $patch !== null ? 'available' : 'missing',
                 'patch' => $patch,
+                'additions' => (int) ($file['additions'] ?? 0),
+                'deletions' => (int) ($file['deletions'] ?? 0),
             ];
         }
 
@@ -409,6 +411,7 @@ final readonly class GitHubAppClient
             'repository' => $repository,
             'number' => $number,
             'title' => (string) ($postPull['title'] ?? 'PR #'.$number),
+            'body' => (string) ($postPull['body'] ?? ''),
             'state' => $state,
             'isMerged' => $isMerged,
             'head' => (string) ($postPull['head']['ref'] ?? ''),

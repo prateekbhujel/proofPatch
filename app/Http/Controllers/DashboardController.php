@@ -960,6 +960,7 @@ final class DashboardController
                 'repository' => $repoName,
                 'number' => $number,
                 'title' => $patchPreview['title'],
+                'body' => $patchPreview['body'] ?? '',
                 'state' => $patchPreview['state'],
                 'isMerged' => $patchPreview['isMerged'] ?? false,
                 'head' => $patchPreview['head'],
@@ -973,8 +974,8 @@ final class DashboardController
                 'files' => array_map(static fn(array $f): array => [
                     'name' => $f['name'],
                     'status' => $f['status'],
-                    'additions' => 0,
-                    'deletions' => 0,
+                    'additions' => (int) ($f['additions'] ?? 0),
+                    'deletions' => (int) ($f['deletions'] ?? 0),
                 ], $patchPreview['files']),
             ];
 

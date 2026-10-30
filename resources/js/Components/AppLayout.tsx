@@ -114,9 +114,11 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                 className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 rounded-lg"
               >
                 <div className="relative">
-                  <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm tracking-tight shadow-md shadow-violet-500/20 group-hover:shadow-violet-500/30 transition">
-                    P
-                  </span>
+                  <img
+                    src="/icon-192.png"
+                    alt="ProofPatcher Icon"
+                    className="w-8 h-8 rounded-lg shadow-md shadow-violet-500/20 group-hover:shadow-violet-500/30 transition object-cover"
+                  />
                   <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
                 </div>
                 <div className="flex flex-col">

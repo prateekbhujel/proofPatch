@@ -11,7 +11,7 @@ final class CheckReceiptCommand extends Command
 {
     protected $signature = 'review:receipt {run : Run ID or path to evidence directory} {expected? : Optional expected SHA-256 digest}';
 
-    protected $description = 'Verify the cryptographic integrity of a ProofPatch evidence receipt';
+    protected $description = 'Verify the cryptographic integrity of a ProofPatcher evidence receipt';
 
     public function handle(): int
     {

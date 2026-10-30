@@ -9,7 +9,7 @@ use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * Dedicated publisher for verified ProofPatch draft pull requests.
+ * Dedicated publisher for verified ProofPatcher draft pull requests.
  *
  * Security & authorization constraints:
  * - Strictly allowlisted: only the configured dedicated test repository is allowed.

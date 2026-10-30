@@ -502,9 +502,14 @@ COMMIT;
         $targetRepository = DedicatedTestRepo::requireName();
 
         return <<<MARKDOWN
-> [!IMPORTANT]
-> **Automated Draft Co-Maintainer Proposal**
-> This pull request was prepared and cryptographically verified by the ProofPatcher engine.
+[![ProofPatcher Bot](https://img.shields.io/badge/ProofPatcher_bot-Verified_Co--Maintainer-7c3aed?style=flat-square)](https://github.com/{$targetRepository})
+[![Category: Bug Fix](https://img.shields.io/badge/Category-Bug_Fix-0284c7?style=flat-square)](https://github.com/{$targetRepository}/issues)
+[![5-Gate Isolated Verification](https://img.shields.io/badge/5_Gate_Verification-PASSED-10b981?style=flat-square)](https://github.com/{$targetRepository})
+[![Frontier Model: Meta Muse](https://img.shields.io/badge/Frontier_Model-Meta_Muse-f59e0b?style=flat-square)](https://baseten.co)
+
+> [!NOTE]
+> 🤖 **ProofPatcher [bot] — Autonomous Frontier Verification & Repair**
+> This pull request was prepared and cryptographically verified by the **ProofPatcher** co-maintainer bot using Meta's frontier model **Muse** and isolated 5-gate test oracle execution.
 > **No automatic merge.** Review and verification evidence attached below.
 > *Notice: Sandbox checks verify replicated bounded regression cases for OrderTotal boundary calculation; this does not claim the repository's full original test suite ran.*
 

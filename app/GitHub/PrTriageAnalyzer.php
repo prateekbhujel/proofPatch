@@ -207,6 +207,72 @@ final readonly class PrTriageAnalyzer
         return false;
     }
 
+    /**
+     * Triage an issue into one of three maintainer categories:
+     * 1. AI_SLOP_ISSUE: Generic/spam AI report without an actionable reproduction. Action: Close.
+     * 2. NEEDS_REPRO_COMMENT: Issue reports an issue but lacks reproduction steps, inputs, or test case. Action: Post diagnostic comment.
+     * 3. VERIFIABLE_FIX_CANDIDATE: Well-scoped issue with testable invariants ready for 5-gate verifier. Action: Generate & verify fix.
+     */
+    public function triageIssue(array $issue): array
+    {
+        $title = trim((string) ($issue['title'] ?? ''));
+        $body = trim((string) ($issue['body'] ?? $issue['description'] ?? ''));
+        $number = (int) ($issue['number'] ?? 0);
+        $labels = array_map(
+            static fn ($label): string => is_array($label) ? (string) ($label['name'] ?? '') : (string) $label,
+            $issue['labels'] ?? []
+        );
+
+        $combined = strtolower($title . ' ' . $body);
+        $isSlop = $this->isSlopIndicator($title) || $this->isSlopIndicator($body)
+            || (str_contains($combined, 'as an ai') || str_contains($combined, 'large language model') || str_contains($combined, 'automated summary'));
+
+        $hasRepro = str_contains($combined, 'reproduce') || str_contains($combined, 'steps')
+            || str_contains($combined, 'expected') || str_contains($combined, 'actual')
+            || str_contains($combined, 'code') || str_contains($combined, '<?php')
+            || str_contains($combined, 'order') || str_contains($combined, 'price') || str_contains($combined, 'quantity');
+
+        if ($isSlop && strlen($body) < 120) {
+            return [
+                'issueNumber' => $number,
+                'classification' => 'AI_SLOP_ISSUE',
+                'badge' => 'Slop / Close Recommended',
+                'category' => 'invalid',
+                'severity' => 'amber',
+                'headline' => 'Unreviewed AI slop or generic non-actionable issue',
+                'suggestedAction' => 'Recommend closing issue: does not contain an actionable defect report or reproduction.',
+                'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Closed as Incomplete / Slop`\n\nThank you for opening this issue. However, this submission appears to be generic or automated without concrete reproduction steps, expected behavior, or an actionable bug report. Closing per repository issue hygiene.",
+                'flags' => ['ai_slop_detected', 'no_reproduction'],
+            ];
+        }
+
+        if (!$hasRepro || strlen($body) < 35) {
+            return [
+                'issueNumber' => $number,
+                'classification' => 'NEEDS_REPRO_COMMENT',
+                'badge' => 'Needs Reproduction Steps',
+                'category' => 'needs-repro',
+                'severity' => 'amber',
+                'headline' => 'Issue lacks reproduction invariants or expected outcome',
+                'suggestedAction' => 'Address via comment: ask submitter for exact inputs, expected vs actual values, or a minimal test case before patching.',
+                'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Awaiting Reproduction Invariants`\n\nThanks for reporting this! Before ProofPatcher can verify an automated repair through the 5-gate isolated test oracle, we need concrete reproduction invariants:\n1. **Exact Inputs**: What arguments or data trigger this behavior?\n2. **Expected vs Actual**: What output was expected, and what was returned?\n3. **Test Case**: A minimal reproduction test snippet or assertion.\n\nOnce provided, ProofPatcher will synthesize and verify a candidate fix.",
+                'flags' => ['missing_reproduction_steps'],
+            ];
+        }
+
+        return [
+            'issueNumber' => $number,
+            'classification' => 'VERIFIABLE_FIX_CANDIDATE',
+            'badge' => 'Verifiable Fix Candidate',
+            'category' => 'bug',
+            'severity' => 'emerald',
+            'headline' => 'Actionable issue with reproducible boundary conditions',
+            'suggestedAction' => 'Ready for 5-gate isolated verification and Meta Muse patch synthesis.',
+            'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Verifiable Fix Candidate`\n\nThis issue contains concrete boundary invariants. Staging for Meta Muse candidate synthesis and isolated 5-gate test oracle execution.",
+            'flags' => [],
+        ];
+    }
+
     private function calculateTotalChanges(array $pull): int
     {
         $total = 0;

@@ -232,4 +232,64 @@ final class PrTriageAnalyzerTest extends TestCase
         self::assertStringContainsString('Update description to match the actual files', $result['summary']['suggestedComment']);
         self::assertStringContainsString("Retarget PR base branch to 'main' instead of 'develop'", $result['summary']['suggestedComment']);
     }
+
+    public function testTriagesAiSlopIssueAndSuggestsClosure(): void
+    {
+        $slopIssue = [
+            'number' => 88,
+            'title' => 'Automated fix and AI generated summary of repo',
+            'body' => 'As an AI language model, here is an automated summary of the repository.',
+            'labels' => [],
+        ];
+
+        $analyzer = new PrTriageAnalyzer();
+        $result = $analyzer->triageIssue($slopIssue);
+
+        self::assertSame('AI_SLOP_ISSUE', $result['classification']);
+        self::assertSame('invalid', $result['category']);
+        self::assertSame('Slop / Close Recommended', $result['badge']);
+        self::assertStringContainsString('Recommend closing issue', $result['suggestedAction']);
+        self::assertStringContainsString('Closed as Incomplete / Slop', $result['suggestedComment']);
+        self::assertContains('ai_slop_detected', $result['flags']);
+    }
+
+    public function testTriagesAmbiguousIssueAndRequestsReproductionSteps(): void
+    {
+        $vagueIssue = [
+            'number' => 89,
+            'title' => 'Checkout discount seems wrong sometimes',
+            'body' => 'Something is broken with discounts.',
+            'labels' => ['bug'],
+        ];
+
+        $analyzer = new PrTriageAnalyzer();
+        $result = $analyzer->triageIssue($vagueIssue);
+
+        self::assertSame('NEEDS_REPRO_COMMENT', $result['classification']);
+        self::assertSame('needs-repro', $result['category']);
+        self::assertSame('Needs Reproduction Steps', $result['badge']);
+        self::assertStringContainsString('Address via comment', $result['suggestedAction']);
+        self::assertStringContainsString('Awaiting Reproduction Invariants', $result['suggestedComment']);
+        self::assertContains('missing_reproduction_steps', $result['flags']);
+    }
+
+    public function testTriagesVerifiableBugIssueWithConcreteInvariants(): void
+    {
+        $verifiableIssue = [
+            'number' => 90,
+            'title' => 'Disallow negative unit prices in OrderTotal calculation',
+            'body' => 'When items have a negative unit price, OrderTotal::calculate adds negative amounts without validation. Steps to reproduce: pass unit price -50, expected exception or zero.',
+            'labels' => ['bug'],
+        ];
+
+        $analyzer = new PrTriageAnalyzer();
+        $result = $analyzer->triageIssue($verifiableIssue);
+
+        self::assertSame('VERIFIABLE_FIX_CANDIDATE', $result['classification']);
+        self::assertSame('bug', $result['category']);
+        self::assertSame('Verifiable Fix Candidate', $result['badge']);
+        self::assertStringContainsString('Ready for 5-gate isolated verification', $result['suggestedAction']);
+        self::assertStringContainsString('Staging for Meta Muse candidate synthesis', $result['suggestedComment']);
+        self::assertEmpty($result['flags']);
+    }
 }

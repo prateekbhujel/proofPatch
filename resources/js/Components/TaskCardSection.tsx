@@ -12,6 +12,9 @@ import {
   Sparkles,
   Upload,
   Image as ImageIcon,
+  Mic,
+  MicOff,
+  Volume2,
 } from 'lucide-react';
 
 export interface LocalTaskCard {
@@ -31,15 +34,20 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
 
   if (task.hasImage) {
     return (
-      <a
-        href={`/issues/tasks/${task.id}/image`}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5 text-xs text-violet-700 hover:text-violet-900 font-semibold underline"
-      >
-        <ImageIcon className="w-3.5 h-3.5" />
-        <span>View screenshot</span>
-      </a>
+      <div className="flex items-center gap-2 pt-1">
+        <a
+          href={`/issues/tasks/${task.id}/image`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-xs text-violet-700 hover:text-violet-900 font-semibold border border-violet-200 transition"
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>Screenshot Evidence</span>
+        </a>
+        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+          Local Multimodal
+        </span>
+      </div>
     );
   }
 
@@ -114,12 +122,70 @@ export function TaskCardSection({
   const [isFormOpen, setIsFormOpen] = useState(localTasks.length === 0);
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
   const [assigningId, setAssigningId] = useState<string | number | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   const { data, setData, post, processing, reset } = useForm({
     title: '',
     description: '',
     repository: defaultRepo,
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setSpeechSupported(true);
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              transcript += event.results[i][0].transcript;
+            }
+          }
+          if (transcript) {
+            setData((prev) => ({
+              ...prev,
+              description: prev.description ? `${prev.description} ${transcript.trim()}` : transcript.trim(),
+            }));
+          }
+        };
+
+        recognition.onerror = () => {
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch {
+        setIsListening(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!data.repository && defaultRepo) {
@@ -278,9 +344,31 @@ export function TaskCardSection({
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="local-task-description" className="block text-xs font-semibold text-slate-700">
-                Description <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="local-task-description" className="block text-xs font-semibold text-slate-700">
+                  Description <span className="text-rose-500">*</span>
+                </label>
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoiceInput}
+                    disabled={!hasGrantedRepos}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg transition ${
+                      isListening
+                        ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                    title="Dictate problem with voice input"
+                  >
+                    {isListening ? (
+                      <MicOff className="w-3.5 h-3.5 text-rose-600 animate-bounce" />
+                    ) : (
+                      <Mic className="w-3.5 h-3.5 text-slate-600" />
+                    )}
+                    <span>{isListening ? 'Listening… (speak)' : 'Voice Input'}</span>
+                  </button>
+                )}
+              </div>
               <textarea
                 id="local-task-description"
                 rows={3}

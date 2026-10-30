@@ -191,6 +191,17 @@ final class IssueWorkbenchController
         $connected = $verified && $this->resolveGitHubToken($request) !== null;
         $selectedRepo = $connected ? $request->session()->get('selected_github_repo') : null;
         $repoIssues = $connected ? ($request->session()->get('github_repo_issues') ?? []) : [];
+        $triageAnalyzer = new \ProofPatch\GitHub\PrTriageAnalyzer();
+        $triagedIssues = [];
+        if (is_array($repoIssues)) {
+            foreach ($repoIssues as $issue) {
+                if (is_array($issue)) {
+                    $triagedIssues[] = array_merge($issue, [
+                        'triage' => $triageAnalyzer->triageIssue($issue),
+                    ]);
+                }
+            }
+        }
         $repoPulls = $connected ? ($request->session()->get('github_repo_pulls') ?? []) : [];
         $repoListIncomplete = $connected && (bool) $request->session()->get('github_repo_list_incomplete', false);
         $clientIdConfigured = (bool) (getenv('PROOFPATCH_GITHUB_CLIENT_ID') || getenv('GITHUB_APP_CLIENT_ID'));
@@ -202,7 +213,7 @@ final class IssueWorkbenchController
             'user' => is_array($githubAuth) ? ($githubAuth['user'] ?? null) : null,
             'repositories' => is_array($githubAuth) ? ($githubAuth['repositories'] ?? []) : [],
             'selectedRepo' => $selectedRepo,
-            'repoIssues' => $repoIssues,
+            'repoIssues' => $triagedIssues,
             'repoPulls' => $repoPulls,
             'repoListIncomplete' => $repoListIncomplete,
             'deviceFlow' => is_array($deviceFlow) ? [

@@ -30,6 +30,8 @@ import {
   ChevronDown,
   ChevronUp,
   Sliders,
+  Bot,
+  BadgeCheck,
 } from 'lucide-react';
 
 /* ────────────────────────────────────────────── types ── */
@@ -38,6 +40,18 @@ interface GitHubRepo {
   defaultBranch?: string;
   isPrivate: boolean;
   installedRepo?: boolean;
+}
+
+export interface IssueTriage {
+  issueNumber: number;
+  classification: 'AI_SLOP_ISSUE' | 'NEEDS_REPRO_COMMENT' | 'VERIFIABLE_FIX_CANDIDATE';
+  badge: string;
+  category: 'invalid' | 'needs-repro' | 'bug';
+  severity: 'emerald' | 'amber' | 'rose';
+  headline: string;
+  suggestedAction: string;
+  suggestedComment: string;
+  flags: string[];
 }
 
 interface GitHubIssueItem {
@@ -49,6 +63,7 @@ interface GitHubIssueItem {
   createdAt: string;
   labels: string[];
   isPrivate: boolean;
+  triage?: IssueTriage;
 }
 
 interface GitHubPullItem {
@@ -276,6 +291,8 @@ export default function Issues({
   const [loadingIssueNum, setLoadingIssueNum] = useState<number | null>(null);
   const [issuePathMap, setIssuePathMap] = useState<Record<number, string>>({});
   const [intakeCollapsed, setIntakeCollapsed] = useState(false);
+  const [expandedCommentIssue, setExpandedCommentIssue] = useState<number | null>(null);
+  const [copiedIssueComment, setCopiedIssueComment] = useState<number | null>(null);
 
   useEffect(() => {
     if (
@@ -667,10 +684,14 @@ export default function Issues({
                       {githubConnection.repoIssues.map((issue) => {
                         const targetPath = issuePathMap[issue.number] ?? '';
                         const isLoadingThis = loadingIssueNum === issue.number;
+                        const triage = issue.triage;
+                        const isExpanded = expandedCommentIssue === issue.number;
+                        const isCommentCopied = copiedIssueComment === issue.number;
+
                         return (
                           <div
                             key={issue.number}
-                            className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 shadow-2xs hover:border-slate-300 transition"
+                            className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5 shadow-2xs hover:border-slate-300 transition"
                           >
                             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                               <div className="space-y-1">
@@ -687,13 +708,44 @@ export default function Issues({
                                     <span>{issue.title}</span>
                                     <ExternalLink className="w-3 h-3 text-slate-400 inline" />
                                   </a>
+                                  {triage && (
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                        triage.category === 'bug'
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                          : triage.category === 'needs-repro'
+                                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                          : 'bg-rose-50 text-rose-800 border-rose-200'
+                                      }`}
+                                    >
+                                      <Bot className="w-2.5 h-2.5" />
+                                      <span>{triage.badge}</span>
+                                    </span>
+                                  )}
                                 </div>
-                                <span className="text-[11px] text-slate-500">
-                                  Opened by @{issue.user}
-                                </span>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                  <span>Opened by @{issue.user}</span>
+                                  {triage && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-slate-600 font-medium">{triage.headline}</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
+                                {triage?.suggestedComment && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedCommentIssue(isExpanded ? null : issue.number)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                                    title="View bot comment template"
+                                  >
+                                    <MessageSquare className="w-3 h-3 text-slate-500" />
+                                    <span>{isExpanded ? 'Hide Comment' : 'Bot Comment'}</span>
+                                  </button>
+                                )}
                                 <input
                                   type="text"
                                   value={targetPath}
@@ -705,7 +757,7 @@ export default function Issues({
                                       ? 'src/OrderTotal.php'
                                       : 'Source file path'
                                   }
-                                  className="w-44 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
+                                  className="w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
                                 />
                                 <button
                                   type="button"
@@ -722,6 +774,48 @@ export default function Issues({
                                 </button>
                               </div>
                             </div>
+
+                            {/* Bot Suggested Comment Drawer */}
+                            {isExpanded && triage?.suggestedComment && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-2 mt-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                                    <Bot className="w-3.5 h-3.5 text-violet-600" />
+                                    ProofPatcher [bot] Recommended Response
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                        navigator.clipboard.writeText(triage.suggestedComment).then(() => {
+                                          setCopiedIssueComment(issue.number);
+                                          setTimeout(() => setCopiedIssueComment(null), 2000);
+                                        });
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+                                  >
+                                    {isCommentCopied ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3 text-slate-500" />
+                                    )}
+                                    <span>{isCommentCopied ? 'Copied!' : 'Copy Comment'}</span>
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-slate-600 italic">
+                                  Action: {triage.suggestedAction}
+                                </p>
+                                <pre className="text-[11px] text-slate-800 bg-white p-2.5 rounded border border-slate-200 whitespace-pre-wrap font-mono">
+                                  {triage.suggestedComment}
+                                </pre>
+                              </motion.div>
+                            )}
                           </div>
                         );
                       })}

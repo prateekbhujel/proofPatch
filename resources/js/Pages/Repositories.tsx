@@ -13,6 +13,8 @@ import { PrReviewCommentsTab } from '../Components/repositories/PrReviewComments
 import { PrChecksTab } from '../Components/repositories/PrChecksTab';
 import { PrReceiptTab } from '../Components/repositories/PrReceiptTab';
 import { PrInspectForm } from '../Components/repositories/PrInspectForm';
+import { PrDashboardView } from '../Components/repositories/PrDashboardView';
+import { DisconnectedOnboardingView } from '../Components/workbench/DisconnectedOnboardingView';
 import {
   FileText,
   AlertTriangle,
@@ -211,6 +213,30 @@ export default function Repositories({
   const passedChecks = checks.filter(
     (c) => (c.conclusion || c.status).toLowerCase() === 'success'
   ).length;
+
+  if (!githubConnection?.isConnected) {
+    return (
+      <AppLayout activeNav="repositories">
+        <Head title="Connect GitHub · ProofPatcher" />
+        <DisconnectedOnboardingView
+          error={error}
+          deviceClientIdInput={deviceFormData.client_id}
+          setDeviceClientIdInput={(val: string) => setDeviceFormData('client_id', val)}
+          isSubmittingDevice={deviceInitiateProcessing}
+          handleInitiateDeviceFlow={handleInitiateDeviceFlow}
+          handlePollDeviceFlow={handlePollDeviceFlow}
+          copyDeviceCode={(code: string) => {
+            navigator.clipboard.writeText(code);
+            setCopiedUserCode(true);
+            setTimeout(() => setCopiedUserCode(false), 2000);
+          }}
+          copiedDeviceCode={copiedUserCode}
+          githubConnection={githubConnection as any}
+          budget={budget as any}
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout activeNav="repositories">
@@ -446,13 +472,15 @@ export default function Repositories({
             )}
           </>
         ) : (
-          /* Empty / Initial Inspect Hero Card */
-          <PrInspectForm
-            url={data.url}
-            setUrl={(val) => setData('url', val)}
-            onSubmit={handleSubmit}
-            processing={processing}
-            isHero={true}
+          /* Automated GitHub Pull Requests Stream Dashboard */
+          <PrDashboardView
+            githubConnection={githubConnection}
+            handleSelectRepository={handleSelectRepository}
+            handleCaptureGitHubPull={handleCaptureGitHubPull}
+            inspectUrl={data.url}
+            setInspectUrl={(val) => setData('url', val)}
+            handleInspectSubmit={handleSubmit}
+            inspectProcessing={processing}
           />
         )}
       </div>

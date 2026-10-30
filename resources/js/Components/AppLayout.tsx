@@ -268,7 +268,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 6, scale: 0.98 }}
                 transition={{ duration: 0.12 }}
-                className="absolute left-0 bottom-full mb-2 w-72 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 overflow-hidden"
+                className="fixed md:left-64 bottom-14 left-4 right-4 md:right-auto md:ml-3 md:w-96 bg-white dark:bg-[#141821] border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden"
               >
                 <div className="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -298,7 +298,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   </div>
                 </div>
 
-                <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                   {notifications.length === 0 ? (
                     <div className="p-5 text-center text-xs text-slate-500 space-y-1">
                       <p className="font-medium text-slate-700 dark:text-slate-300">No recent activity</p>
@@ -322,19 +322,19 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                           : 'text-violet-700 dark:text-violet-400';
 
                       return (
-                        <div key={item.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-xs space-y-0.5">
+                        <div key={item.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-xs space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 font-medium text-slate-900 dark:text-slate-100">
+                            <div className="flex items-center gap-1.5 font-medium text-slate-900 dark:text-slate-100 truncate">
                               <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
-                              <span>{item.title}</span>
+                              <span className="truncate">{item.title}</span>
                             </div>
-                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">
                               {formatTimestamp(item.timestamp)}
                             </span>
                           </div>
-                          <p className="text-slate-600 dark:text-slate-400 pl-5 text-[11px] leading-relaxed break-words font-mono">
+                          <div className="pl-5 text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed break-all font-mono bg-slate-50 dark:bg-slate-800/50 p-2 rounded border border-slate-100 dark:border-slate-800">
                             {formatNotificationMessage(item.message)}
-                          </p>
+                          </div>
                         </div>
                       );
                     })

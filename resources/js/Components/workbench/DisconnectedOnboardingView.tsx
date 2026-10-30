@@ -19,19 +19,19 @@ import {
 import { GitHubConnectionData, BudgetData } from './types';
 
 interface DisconnectedOnboardingViewProps {
-  error: string | null;
+  error?: string | null;
   deviceClientIdInput: string;
   setDeviceClientIdInput: (value: string) => void;
   isSubmittingDevice: boolean;
-  handleInitiateDeviceFlow: (e?: React.FormEvent) => void;
-  handlePollDeviceFlow: (e?: React.FormEvent) => void;
+  handleInitiateDeviceFlow: (e?: any) => void;
+  handlePollDeviceFlow: (e?: any) => void;
   copyDeviceCode: (code: string) => void;
   copiedDeviceCode: boolean;
   githubConnection?: GitHubConnectionData | null;
   budget?: BudgetData | null;
-  onLaunchInteractiveFlow: (e: React.MouseEvent) => void;
-  onOpenTaskComposer: () => void;
-  loadingOwned: boolean;
+  onLaunchInteractiveFlow?: (e: React.MouseEvent) => void;
+  onOpenTaskComposer?: () => void;
+  loadingOwned?: boolean;
 }
 
 export function DisconnectedOnboardingView({

@@ -66,6 +66,7 @@ final class WebRequestSecurityTest extends TestCase
                 '/repositories/review',
                 '/repositories/review/clear',
                 '/repositories/review/draft',
+                '/repositories/review/comment',
                 '/repositories/review/draft/delete',
                 '/repositories/review/draft/clear',
                 '/github/device/initiate',

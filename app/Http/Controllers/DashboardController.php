@@ -21,6 +21,8 @@ use ProofPatch\GitHub\GitHubDeviceFlow;
 use ProofPatch\GitHub\PullRequestReader;
 use ProofPatch\GitHub\PullRequestSnapshot;
 use ProofPatch\GitHub\PublicPatchPreview;
+use ProofPatch\GitHub\DedicatedTestRepo;
+use ProofPatch\GitHub\ManualInlineCommentPublisher;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 use ProofPatch\Support\NotificationHelper;
@@ -305,6 +307,24 @@ final class DashboardController
         ];
         $this->forgetSession($request, 'github_status', 'github_error');
 
+        $commentApprovals = [];
+        $access = $request->attributes->get('proofpatch_github_access');
+        $repoName = is_array($pull) ? ($pull['repository'] ?? null) : null;
+        $configured = DedicatedTestRepo::name();
+        $drafts = $this->getSession($request, 'review_drafts', []);
+        if (is_array($access) && is_int($access['userId'] ?? null) && is_string($repoName)
+            && is_string($configured) && strcasecmp($repoName, $configured) === 0
+            && isset($access['repositories'][strtolower($repoName)]) && is_int($pull['number'] ?? null)
+            && is_string($pull['headSha'] ?? null) && is_string($pull['baseSha'] ?? null) && is_array($drafts)) {
+            foreach ($drafts as $draft) {
+                if (is_array($draft) && is_string($draft['id'] ?? null) && ($draft['commentable'] ?? false) === true) {
+                    $commentApprovals[$draft['id']] = ManualInlineCommentPublisher::digest(
+                        $access['userId'], $repoName, $pull['number'], $pull['headSha'], $pull['baseSha'], $draft
+                    );
+                }
+            }
+        }
+
         return Inertia::render('Repositories', [
             'pull' => $pull,
             'snapshot' => $snapshot,
@@ -315,6 +335,8 @@ final class DashboardController
             'review' => $review,
             'reviewError' => $reviewError,
             'drafts' => array_values($this->getSession($request, 'review_drafts', [])),
+            'commentApprovals' => $commentApprovals,
+            'commentPosted' => $this->getSession($request, 'comment_posted') === true,
             'budget' => $budget,
             'githubConnection' => $githubConnection,
             'error' => $error ?: null,

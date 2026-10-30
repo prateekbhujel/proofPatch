@@ -248,6 +248,8 @@ interface RepositoriesProps {
   reviewPreview?: ReviewPreviewData | null;
   reviewError?: string | null;
   drafts?: CommentDraft[];
+  commentApprovals?: Record<string, string>;
+  commentPosted?: boolean;
   budget?: BudgetData | null;
   githubConnection?: GitHubConnectionData | null;
   csrf?: string;
@@ -264,6 +266,8 @@ export default function Repositories({
   reviewPreview = null,
   reviewError = null,
   drafts = [],
+  commentApprovals = {},
+  commentPosted = false,
   budget = null,
   githubConnection = null,
 }: RepositoriesProps) {
@@ -277,6 +281,8 @@ export default function Repositories({
   const [copiedReviewDigest, setCopiedReviewDigest] = useState(false);
   const [copiedUserCode, setCopiedUserCode] = useState(false);
   const [reviewApproved, setReviewApproved] = useState(false);
+  const [commentToPost, setCommentToPost] = useState<string | null>(null);
+  const [postingComment, setPostingComment] = useState(false);
   const [privateConsentApproved, setPrivateConsentApproved] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<'comment' | 'approve' | 'request_changes'>('comment');
   const [gitHubSectionOpen, setGitHubSectionOpen] = useState(
@@ -1257,7 +1263,7 @@ export default function Repositories({
                   <div className="space-y-0.5">
                     <p className="font-semibold text-slate-900">Advisory Review Only</p>
                     <p className="text-slate-600 text-[11px] leading-relaxed">
-                      All repository diffs, commit metadata, and filenames are treated strictly as untrusted data. ProofPatcher does not post comments, submit GitHub reviews, or execute external repository test suites. Human verification is required.
+                      Review suggestions are advisory. Individual comments can be posted manually to the configured test repository. External repository tests are not run here.
                     </p>
                   </div>
                 </div>
@@ -1532,11 +1538,35 @@ export default function Repositories({
                     </label>
                   </div>
 
-                  {/* Honest Disclosure regarding GitHub Publishing */}
+                  {commentPosted && <p role="status" className="text-xs text-emerald-700">Comment posted on GitHub.</p>}
+                  {drafts.filter((draft) => commentApprovals[draft.id]).map((draft) => (
+                    <div key={draft.id} className="rounded-lg border border-slate-200 p-3 space-y-2 text-xs">
+                      <p className="font-semibold text-slate-800">{draft.path}:{draft.line} ({draft.side})</p>
+                      <p className="whitespace-pre-wrap break-words text-slate-700">{draft.comment}</p>
+                      <label className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" checked={commentToPost === commentApprovals[draft.id]}
+                          onChange={(event) => setCommentToPost(event.target.checked ? commentApprovals[draft.id] : null)} />
+                        <span>Post this comment to the configured test repository</span>
+                      </label>
+                      <button type="button" disabled={postingComment || commentToPost !== commentApprovals[draft.id]}
+                        onClick={() => {
+                          setPostingComment(true);
+                          router.post('/repositories/review/comment', {
+                            id: draft.id, digest: commentApprovals[draft.id], approved: true,
+                          }, { onFinish: () => { setPostingComment(false); setCommentToPost(null); } });
+                        }}
+                        className="px-3 py-1.5 rounded-md bg-violet-700 text-white font-semibold disabled:opacity-40">
+                        {postingComment && commentToPost === commentApprovals[draft.id] ? 'Posting…' : 'Post comment'}
+                      </button>
+                      <p className="text-slate-500">The PR can change between the final check and posting; check GitHub if the outcome is unclear.</p>
+                    </div>
+                  ))}
+
+                  {/* Review decisions remain local. */}
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
-                    <p className="font-semibold text-slate-800">GitHub Publishing Not Implemented</p>
+                    <p className="font-semibold text-slate-800">Review decisions stay local</p>
                     <p className="text-[11px] leading-relaxed">
-                      ProofPatcher operates in local-only read and advisory review mode. It does not submit comments, approvals, or change requests to GitHub.
+                      Approvals and change requests are not submitted to GitHub. Individual comments can be posted manually only to the configured test repository.
                     </p>
                   </div>
 

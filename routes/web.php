@@ -8,6 +8,7 @@ use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
 use ProofPatch\Http\Controllers\LocalTaskCardController;
 use ProofPatch\Http\Controllers\LocalTaskImageController;
+use ProofPatch\Http\Controllers\ManualInlineCommentController;
 
 Route::get('/', [DashboardController::class, 'overview']);
 Route::get('/issues', [IssueWorkbenchController::class, 'show']);
@@ -29,6 +30,7 @@ Route::match(['get', 'post'], '/repositories', [DashboardController::class, 'rep
 Route::post('/repositories/review', [DashboardController::class, 'reviewPullRequest']);
 Route::post('/repositories/review/clear', [DashboardController::class, 'clearReview']);
 Route::post('/repositories/review/draft', [DashboardController::class, 'saveDraftComment']);
+Route::post('/repositories/review/comment', [ManualInlineCommentController::class, 'store']);
 Route::post('/repositories/review/draft/delete', [DashboardController::class, 'deleteDraftComment']);
 Route::post('/repositories/review/draft/clear', [DashboardController::class, 'clearDraftComments']);
 

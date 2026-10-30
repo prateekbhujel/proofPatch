@@ -142,9 +142,16 @@ final readonly class SeparateProcessOracle implements IsolatedRunnerInterface
                 $oracleVerified = false;
                 $output = "[PROOFPATCH_ORACLE_ABORT: Test harness did not reach natural completion]\n";
             } else {
-                $finalExitCode = 0;
-                $oracleVerified = true;
-                $output = "All order total cases passed.\n";
+                $workerCheck = $this->verifyCasesInSeparateWorkers($tmpDir, $relativePath, $testHarness, $timeoutSeconds);
+                if (!$workerCheck['passed']) {
+                    $finalExitCode = 1;
+                    $oracleVerified = false;
+                    $output = $workerCheck['output'];
+                } else {
+                    $finalExitCode = 0;
+                    $oracleVerified = true;
+                    $output = "All order total cases passed.\n";
+                }
             }
 
             $durationMs = (int) ((hrtime(true) - $startTime) / 1_000_000);
@@ -169,6 +176,72 @@ final readonly class SeparateProcessOracle implements IsolatedRunnerInterface
             @unlink($harnessFile);
             $this->removeDirectory($tmpDir);
         }
+    }
+
+    /**
+     * @return array{passed: bool, output: string}
+     */
+    private function verifyCasesInSeparateWorkers(
+        string $tmpDir,
+        string $relativePath,
+        string $testHarness,
+        int $timeoutSeconds
+    ): array {
+        $workerFile = $tmpDir . '/_oracle_worker.php';
+        file_put_contents($workerFile, self::getWorkerScript());
+        $cases = $this->resolveTestCases($testHarness);
+        $failures = [];
+
+        try {
+            foreach ($cases as $name => [$items, $expected]) {
+                $cmd = [
+                    'php',
+                    '-n',
+                    '-d',
+                    'open_basedir=' . $tmpDir . ':/tmp',
+                    '_oracle_worker.php',
+                    $relativePath,
+                    json_encode($items, JSON_THROW_ON_ERROR),
+                ];
+
+                $proc = LocalProcess::create($cmd, $tmpDir, timeout: max(2, min(10, $timeoutSeconds)));
+                $proc->run();
+                $exitCode = (int) $proc->getExitCode();
+                $stdout = trim($proc->getOutput());
+                $stderr = trim($proc->getErrorOutput());
+
+                if ($exitCode !== 0 || $stderr !== '') {
+                    $reason = $stderr !== '' ? $stderr : "worker exited with code {$exitCode}";
+                    $failures[] = "{$name}: {$reason}";
+                    continue;
+                }
+
+                $decoded = json_decode($stdout, true);
+                if (!is_array($decoded) || !array_key_exists('order_total', $decoded) || !is_int($decoded['order_total'])) {
+                    $failures[] = "{$name}: invalid worker JSON output";
+                    continue;
+                }
+
+                $actual = $decoded['order_total'];
+                if ($actual !== $expected) {
+                    $failures[] = "{$name}: expected {$expected}, got {$actual}";
+                }
+            }
+        } finally {
+            @unlink($workerFile);
+        }
+
+        if ($failures !== []) {
+            return [
+                'passed' => false,
+                'output' => implode("\n", $failures) . "\n",
+            ];
+        }
+
+        return [
+            'passed' => true,
+            'output' => "All order total cases passed.\n",
+        ];
     }
 
     private function resolveTestCases(string $testHarness): array

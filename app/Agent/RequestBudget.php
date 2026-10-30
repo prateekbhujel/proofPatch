@@ -54,7 +54,7 @@ final readonly class RequestBudget
         }
     }
 
-    public function run(int $reserveMicros, callable $operation): mixed
+    public function run(int $reserveMicros, callable $operation, ?callable $preflight = null): mixed
     {
         if ($reserveMicros <= 0 || $reserveMicros > $this->limitMicros) {
             throw new \RuntimeException('Request exceeds the local credit budget.');
@@ -77,6 +77,9 @@ final readonly class RequestBudget
             $status = $this->summarize($ledger);
             if ($status['attempts'] >= $this->maxAttempts || $reserveMicros > $status['remainingMicros']) {
                 throw new \RuntimeException('The local request budget is exhausted.');
+            }
+            if ($preflight !== null) {
+                $preflight();
             }
             $index = count($ledger['attempts']);
             $ledger['attempts'][] = ['at' => gmdate(DATE_ATOM), 'reservedMicros' => $reserveMicros, 'status' => 'reserved'];

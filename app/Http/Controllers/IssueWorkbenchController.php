@@ -240,6 +240,8 @@ final class IssueWorkbenchController
             'tasks' => $tasks,
             'localTasks' => $localTasks,
             'cardPreview' => CardPreviewController::visiblePreview($request),
+            'cardProposalPreview' => CardProposalController::visible($request, 'card_proposal_preview'),
+            'cardProposalResult' => CardProposalController::visible($request, 'card_proposal_result'),
             'githubConnection' => $githubConnection,
             'modelContextAllowed' => $modelContextAllowed,
             'modelKeyAvailable' => $modelKeyAvailable,
@@ -276,6 +278,18 @@ final class IssueWorkbenchController
 
             PublicIssueContext::validateContext($context);
             $task = WorkbenchTask::recordIntake($context, false);
+            if ($request->boolean('reset') && $task->is_synthetic) {
+                $task->status = 'queued';
+                $task->candidate_source = null;
+                $task->candidate_sha256 = null;
+                $task->proposal_digest = null;
+                $task->is_offline_example = false;
+                $task->metadata = null;
+                $task->verification_report_id = null;
+                $task->verification_decision = null;
+                $task->version = ((int) $task->version) + 1;
+                $task->save();
+            }
             $this->hydrateTaskSession($request, $task);
 
             return redirect('/issues');
@@ -487,7 +501,7 @@ final class IssueWorkbenchController
                     $hasKey = false;
                 }
 
-                if ($hasKey && $budgetCanRequest) {
+                if ($hasKey && $budgetCanRequest && !$request->boolean('offline_reference')) {
                     if (!$this->canSendModelContext($request, $context)) {
                         throw new \RuntimeException('Private or unverified repository content stays local and cannot be sent to a model.');
                     }
@@ -551,7 +565,7 @@ final class IssueWorkbenchController
                     $hasKey = false;
                 }
 
-                if ($hasKey && $budgetCanRequest) {
+                if ($hasKey && $budgetCanRequest && !$request->boolean('offline_reference')) {
                     if (!$this->canSendModelContext($request, $context)) {
                         throw new \RuntimeException('Private or unverified repository content stays local and cannot be sent to a model.');
                     }

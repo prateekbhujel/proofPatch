@@ -148,6 +148,8 @@ interface TriageData {
     number: number;
     headSha: string;
     title: string;
+    base?: string;
+    head?: string;
     totalChanges: number;
     testPaths: string[];
     fileCount: number;
@@ -164,9 +166,15 @@ interface TriageData {
   };
   summary: {
     verdict: string;
+    classification?: 'AI_SLOP_REJECT' | 'CLEAN_PR' | 'NEEDS_CLEANUP' | 'UNVERIFIED_REVIEW';
+    badge?: string;
     headline: string;
     detail: string;
     severity: 'red' | 'amber' | 'emerald';
+    suggestedAction?: string;
+    suggestedComment?: string;
+    reasoning?: string;
+    flags?: string[];
   };
   comparisons: TriageComparison[];
 }
@@ -281,6 +289,7 @@ export default function Repositories({
   const [copiedDigest, setCopiedDigest] = useState(false);
   const [copiedReviewDigest, setCopiedReviewDigest] = useState(false);
   const [copiedUserCode, setCopiedUserCode] = useState(false);
+  const [copiedFeedback, setCopiedFeedback] = useState(false);
   const [reviewApproved, setReviewApproved] = useState(false);
   const [commentToPost, setCommentToPost] = useState<string | null>(null);
   const [postingComment, setPostingComment] = useState(false);
@@ -1013,6 +1022,128 @@ export default function Repositories({
               <div className="space-y-6">
                 {triage ? (
                   <>
+                    {/* Intelligent Triage & Anti-Slop Verdict Banner */}
+                    <div className={`rounded-xl border p-5 space-y-4 shadow-xs ${
+                      triage.summary.classification === 'AI_SLOP_REJECT'
+                        ? 'bg-rose-50/70 border-rose-200'
+                        : triage.summary.classification === 'CLEAN_PR'
+                        ? 'bg-emerald-50/70 border-emerald-200'
+                        : 'bg-amber-50/70 border-amber-200'
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`p-2 rounded-lg ${
+                            triage.summary.classification === 'AI_SLOP_REJECT'
+                              ? 'bg-rose-100 text-rose-700'
+                              : triage.summary.classification === 'CLEAN_PR'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {triage.summary.classification === 'AI_SLOP_REJECT' ? (
+                              <AlertTriangle className="w-5 h-5" />
+                            ) : triage.summary.classification === 'CLEAN_PR' ? (
+                              <CheckCircle2 className="w-5 h-5" />
+                            ) : (
+                              <Info className="w-5 h-5" />
+                            )}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className={`text-base font-bold ${
+                                triage.summary.classification === 'AI_SLOP_REJECT'
+                                  ? 'text-rose-900'
+                                  : triage.summary.classification === 'CLEAN_PR'
+                                  ? 'text-emerald-900'
+                                  : 'text-amber-900'
+                              }`}>
+                                {triage.summary.headline}
+                              </h3>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                triage.summary.classification === 'AI_SLOP_REJECT'
+                                  ? 'bg-rose-200/80 text-rose-800'
+                                  : triage.summary.classification === 'CLEAN_PR'
+                                  ? 'bg-emerald-200/80 text-emerald-800'
+                                  : 'bg-amber-200/80 text-amber-800'
+                              }`}>
+                                {triage.summary.badge || triage.summary.verdict}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-0.5">{triage.summary.detail}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          {triage.summary.classification === 'CLEAN_PR' ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('checks')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 shadow-xs transition-colors"
+                            >
+                              <Shield className="w-3.5 h-3.5" />
+                              <span>Verify 5 Gates</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (triage.summary.suggestedComment) {
+                                  navigator.clipboard?.writeText(triage.summary.suggestedComment);
+                                  setCopiedFeedback(true);
+                                  setTimeout(() => setCopiedFeedback(false), 2000);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
+                                triage.summary.classification === 'AI_SLOP_REJECT'
+                                  ? 'bg-rose-700 text-white hover:bg-rose-800'
+                                  : 'bg-amber-700 text-white hover:bg-amber-800'
+                              }`}
+                            >
+                              {copiedFeedback ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedFeedback ? 'Copied Response!' : 'Copy Review Response'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Reasoning & Flags */}
+                      {triage.summary.reasoning && (
+                        <div className="p-3 rounded-lg bg-white/80 border border-slate-200/80 text-xs text-slate-700 space-y-2">
+                          <div className="font-medium text-slate-900">Triage Analysis:</div>
+                          <p className="text-slate-600">{triage.summary.reasoning}</p>
+
+                          {triage.summary.flags && triage.summary.flags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {triage.summary.flags.map((flag) => (
+                                <span
+                                  key={flag}
+                                  className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                                >
+                                  {flag.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Suggested Response Preview */}
+                      {triage.summary.suggestedComment && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-slate-800">
+                              {triage.summary.classification === 'AI_SLOP_REJECT'
+                                ? 'Recommended Rejection Response (Close PR):'
+                                : 'Actionable Review Feedback for Contributor:'}
+                            </span>
+                            <span className="text-[11px] text-slate-500">Ready to post or use as maintainer feedback</span>
+                          </div>
+                          <pre className="p-3 rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-800 whitespace-pre-wrap leading-relaxed">
+                            {triage.summary.suggestedComment}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Policy Gate Summary */}
                     <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -1022,38 +1153,52 @@ export default function Repositories({
                         </div>
                         <span
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                            'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
+                            triage.summary.classification === 'CLEAN_PR'
+                              ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
+                              : triage.summary.classification === 'AI_SLOP_REJECT'
+                              ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20'
+                              : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
                           }`}
                         >
-                          <span>Human review needed</span>
+                          <span>{triage.summary.suggestedAction || 'Human review needed'}</span>
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
                           <div className="text-slate-500">Max Diff Lines</div>
                           <div className="text-sm font-bold font-mono text-slate-900">
                             {triage.target.filesTruncated ? 'At least ' : ''}{triage.policy.totalChanges} / {triage.policy.maxDiffLines} lines
                           </div>
                           <div className={`font-medium ${triage.policy.diffExceeded ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {triage.policy.diffExceeded ? 'Exceeded limit' : triage.target.filesTruncated ? 'Incomplete file list' : 'Within configured limit'}
+                            {triage.policy.diffExceeded ? 'Exceeded limit' : triage.target.filesTruncated ? 'Incomplete file list' : 'Within limit'}
                           </div>
                         </div>
 
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-                          <div className="text-slate-500">Test coverage</div>
-                          <div className="text-sm font-bold text-slate-900">
-                            Not assessed
+                          <div className="text-slate-500">Test Coverage</div>
+                          <div className={`text-sm font-bold ${triage.target.testPaths.length > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {triage.target.testPaths.length > 0 ? `${triage.target.testPaths.length} Test File(s)` : '0 Test Files'}
+                          </div>
+                          <div className="text-slate-500 truncate">
+                            {triage.target.testPaths.length > 0 ? triage.target.testPaths.join(', ') : 'No tests found in diff'}
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+                          <div className="text-slate-500">Target Base Branch</div>
+                          <div className={`text-sm font-bold font-mono ${triage.target.base && triage.target.base !== 'main' ? 'text-amber-600' : 'text-slate-900'}`}>
+                            {triage.target.base || 'main'}
                           </div>
                           <div className="text-slate-500">
-                            {triage.target.testPaths.length} test-like paths in captured files; no tests were run.
+                            {triage.target.base && triage.target.base !== 'main' ? 'Dev/custom branch' : 'Default main branch'}
                           </div>
                         </div>
 
                         <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
                           <div className="text-slate-500">Enforcement Mode</div>
                           <div className="text-sm font-bold text-slate-900">{triage.policy.mode}</div>
-                          <div className="text-slate-500">Advisory only; no action taken</div>
+                          <div className="text-slate-500 truncate">{triage.summary.badge || 'Advisory check'}</div>
                         </div>
                       </div>
                     </div>

@@ -159,4 +159,77 @@ final class PrTriageAnalyzerTest extends TestCase
         self::assertSame('unknown', $result['policy']['status']);
         self::assertStringNotContainsString('distinct line hunks', $result['comparisons'][0]['verdictBanner']);
     }
+
+    public function testDetectsAiSlopAndRecommendsClose(): void
+    {
+        $slopPr = [
+            'repository' => 'owner/repo',
+            'number' => 101,
+            'title' => 'Automated AI generated cleanup and refactoring',
+            'body' => 'quick fix',
+            'files' => [
+                ['name' => 'src/HeavyLogic.php', 'additions' => 160, 'deletions' => 20],
+            ],
+        ];
+
+        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50]);
+        $result = $analyzer->triage($slopPr, []);
+
+        self::assertSame('AI_SLOP_REJECT', $result['summary']['classification']);
+        self::assertSame('Slop / Close Recommended', $result['summary']['badge']);
+        self::assertStringContainsString('Recommend closing PR', $result['summary']['suggestedAction']);
+        self::assertStringContainsString('180 lines without accompanying test coverage', $result['summary']['suggestedComment']);
+        self::assertContains('missing_tests', $result['summary']['flags']);
+    }
+
+    public function testDetectsCleanPrWithTestsAndClearDescription(): void
+    {
+        $cleanPr = [
+            'repository' => 'owner/repo',
+            'number' => 102,
+            'title' => 'fix(order-total): correct zero-quantity item pricing',
+            'body' => 'Zero-quantity items now contribute 0 to the total order price instead of charging for 1 unit.',
+            'base' => 'main',
+            'files' => [
+                ['name' => 'src/OrderTotal.php', 'additions' => 1, 'deletions' => 1],
+                ['name' => 'tests/order_total.php', 'additions' => 10, 'deletions' => 0],
+            ],
+        ];
+
+        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50]);
+        $result = $analyzer->triage($cleanPr, []);
+
+        self::assertSame('CLEAN_PR', $result['summary']['classification']);
+        self::assertSame('Clean & Focused PR', $result['summary']['badge']);
+        self::assertSame('emerald', $result['summary']['severity']);
+        self::assertStringContainsString('Ready for maintainer review', $result['summary']['suggestedAction']);
+        self::assertStringContainsString('Queuing for isolated verification', $result['summary']['suggestedComment']);
+        self::assertEmpty($result['summary']['flags']);
+    }
+
+    public function testDetectsNeedsCleanupForDescriptionMismatchMissingTestsAndWrongBranch(): void
+    {
+        $mismatchPr = [
+            'repository' => 'owner/repo',
+            'number' => 103,
+            'title' => 'Update documentation and readme',
+            'body' => 'Updating readme docs only.',
+            'base' => 'develop',
+            'files' => [
+                ['name' => 'src/OrderTotal.php', 'additions' => 5, 'deletions' => 2],
+            ],
+        ];
+
+        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50, 'defaultBranch' => 'main']);
+        $result = $analyzer->triage($mismatchPr, []);
+
+        self::assertSame('NEEDS_CLEANUP', $result['summary']['classification']);
+        self::assertSame('Needs Standards Cleanup', $result['summary']['badge']);
+        self::assertContains('missing_tests', $result['summary']['flags']);
+        self::assertContains('description_mismatch', $result['summary']['flags']);
+        self::assertContains('wrong_target_branch', $result['summary']['flags']);
+        self::assertStringContainsString('Add an automated test', $result['summary']['suggestedComment']);
+        self::assertStringContainsString('Update description to match the actual files', $result['summary']['suggestedComment']);
+        self::assertStringContainsString("Retarget PR base branch to 'main' instead of 'develop'", $result['summary']['suggestedComment']);
+    }
 }

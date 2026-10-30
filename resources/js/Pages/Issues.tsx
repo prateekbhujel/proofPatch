@@ -480,21 +480,12 @@ export default function Issues({
       ]
     : null;
 
-  // Thinking steps for Muse proposal
   const museThinkingSteps = [
-    { label: 'Parsing issue target and AST tree', status: sending ? 'active' as const : 'waiting' as const },
-    { label: 'Synthesizing verified proposal via Muse', status: sending ? 'active' as const : 'waiting' as const },
-    { label: 'Enforcing boundary constraints', status: 'waiting' as const },
-    { label: 'Computing candidate SHA-256 digest', status: 'waiting' as const },
+    { label: 'Waiting for the proposal', status: sending ? 'active' as const : 'waiting' as const },
   ];
 
-  // Thinking steps for Verifier
   const verifierThinkingSteps = [
-    { label: 'Mounting sandboxed fixture root-owned read-only', status: verifying ? 'active' as const : 'done' as const },
-    { label: 'Executing baseline bug reproduction', status: verifying ? 'active' as const : 'waiting' as const },
-    { label: 'Evaluating adversarial negative control shortcut', status: verifying ? 'active' as const : 'waiting' as const },
-    { label: 'Checking candidate completion and exit code', status: verifying ? 'active' as const : 'waiting' as const },
-    { label: 'Anchoring cryptographic receipt manifest', status: 'waiting' as const },
+    { label: 'Running checks', status: verifying ? 'active' as const : 'waiting' as const },
   ];
 
   return (
@@ -1071,7 +1062,7 @@ export default function Issues({
                     className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50 shrink-0"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
-                    <span>{verifying ? 'Running 5-Gate Verifier…' : verificationReport ? 'Re-run Verifier' : 'Run ProofPatcher Verifier'}</span>
+                    <span>{verifying ? 'Running checks…' : verificationReport ? 'Re-run Verifier' : 'Run ProofPatcher Verifier'}</span>
                   </button>
                 </div>
 
@@ -1079,8 +1070,8 @@ export default function Issues({
                 <ThinkingAnimation
                   isActive={verifying}
                   steps={verifierThinkingSteps}
-                  title="Executing 5-Gate Isolation Pipeline"
-                  subtitle="Testing candidate against baseline reproduction, negative control, and allowlist integrity…"
+                  title="Running checks"
+                  subtitle="Results will appear when the checks finish."
                 />
               </div>
             )}

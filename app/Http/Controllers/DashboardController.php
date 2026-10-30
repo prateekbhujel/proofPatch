@@ -129,8 +129,7 @@ final class DashboardController
                 if (strlen($url) > 512 || trim($url) === '') {
                     throw new \InvalidArgumentException('Enter a GitHub pull request URL or shorthand.');
                 }
-                $token = getenv('GITHUB_TOKEN');
-                $pullRequest = (new PullRequestReader(HttpClient::create(), $token ?: null))->read($url);
+                $pullRequest = (new PullRequestReader(HttpClient::create()))->read($url);
                 if (($pullRequest['isPrivate'] ?? false) === true) {
                     throw new \InvalidArgumentException('Private repositories are not supported. ProofPatch operates strictly on public repositories to prevent proprietary code leakage.');
                 }

@@ -23,6 +23,7 @@ use ProofPatch\GitHub\PullRequestSnapshot;
 use ProofPatch\GitHub\PublicPatchPreview;
 use ProofPatch\GitHub\DedicatedTestRepo;
 use ProofPatch\GitHub\ManualInlineCommentPublisher;
+use ProofPatch\GitHub\PrivatePullSession;
 use ProofPatch\Patch\CssPatch;
 use ProofPatch\Support\LocalProcess;
 use ProofPatch\Support\NotificationHelper;
@@ -134,6 +135,7 @@ final class DashboardController
                     throw new \InvalidArgumentException('Private repositories are not supported. ProofPatch operates strictly on public repositories to prevent proprietary code leakage.');
                 }
                 $snapshot = (new PullRequestSnapshot($this->snapshotsDir))->capture($pullRequest);
+                $this->forgetSession($request, ...PrivatePullSession::KEYS);
                 $this->putSession($request, 'pullRequest', $pullRequest);
                 $this->putSession($request, 'pullRequestSnapshot', $snapshot);
                 $this->forgetSession($request, 'pr_review', 'review_drafts');
@@ -146,8 +148,17 @@ final class DashboardController
         }
 
         $pull = $this->getSession($request, 'pullRequest');
+        if (is_array($pull) && ($pull['isPrivate'] ?? false) === true && !PrivatePullSession::allows($request, $pull)) {
+            PrivatePullSession::clear($request);
+            $pull = null;
+        }
         $snapshot = $this->getSession($request, 'pullRequestSnapshot');
         if ($request->has('snapshot')) {
+            if (is_array($pull) && ($pull['isPrivate'] ?? false) === true) {
+                PrivatePullSession::clear($request);
+                $pull = null;
+                $snapshot = null;
+            }
             try {
                 $snapshotId = (string) $request->query('snapshot');
                 $previousSnapshotId = is_array($snapshot) ? ($snapshot['id'] ?? null) : null;
@@ -233,7 +244,8 @@ final class DashboardController
         } catch (\Throwable) {}
 
         $reviewPreview = null;
-        if ($patchPreview !== null && is_array($pull)) {
+        if ($patchPreview !== null && ($patchPreview['isPrivate'] ?? true) === false
+            && is_array($pull) && ($pull['isPrivate'] ?? true) === false) {
             try {
                 $reviewAgent = new PullRequestReview(HttpClient::create(), $this->budget());
                 $reviewPreview = $reviewAgent->preview($pull, $patchPreview);
@@ -294,6 +306,13 @@ final class DashboardController
             'repositories' => is_array($githubAuth) ? ($githubAuth['repositories'] ?? []) : [],
             'repositoriesStatus' => is_array($githubAuth) ? ($githubAuth['repositoriesStatus'] ?? null) : null,
             'selectedRepo' => $this->getSession($request, 'selected_github_repo'),
+            'canCapturePrivateTestRepo' => is_array($request->attributes->get('proofpatch_github_access'))
+                && is_int($request->attributes->get('proofpatch_github_access')['userId'] ?? null)
+                && DedicatedTestRepo::name() !== null
+                && is_string($this->getSession($request, 'selected_github_repo'))
+                && strcasecmp((string) $this->getSession($request, 'selected_github_repo'), (string) DedicatedTestRepo::name()) === 0
+                && isset($request->attributes->get('proofpatch_github_access')['repositories'][strtolower((string) DedicatedTestRepo::name())])
+                && PrivatePullSession::usesServerSession(),
             'repoPulls' => $this->getSession($request, 'github_repo_pulls') ?? [],
             'repoPullsStatus' => $this->getSession($request, 'github_repo_pulls_status') ?? null,
             'deviceFlow' => is_array($deviceFlow) ? [
@@ -509,6 +528,9 @@ final class DashboardController
     public function reviewPullRequest(Request $request): \Illuminate\Http\RedirectResponse
     {
         $pull = $this->getSession($request, 'pullRequest');
+        if (is_array($pull) && ($pull['isPrivate'] ?? true) !== false) {
+            return redirect('/repositories')->with('error', 'Private pull request content cannot be sent to a model.');
+        }
         $snapshot = $this->getSession($request, 'pullRequestSnapshot');
         if (!is_array($pull) || !is_array($snapshot)) {
             return redirect('/repositories')->with('error', 'Capture or load a pull request before requesting a review.');
@@ -548,6 +570,9 @@ final class DashboardController
                 $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
                 $this->putSession($request, 'patch_preview', $patchPreview);
             }
+            if (($patchPreview['isPrivate'] ?? true) !== false) {
+                throw new \RuntimeException('Private pull request content cannot be sent to a model.');
+            }
             $reviewAgent = new PullRequestReview(HttpClient::create(), $this->budget());
             $key = Credentials::baseten();
             $privateConsent = (bool) $request->input('private_consent', false);
@@ -570,6 +595,10 @@ final class DashboardController
     public function saveDraftComment(Request $request): \Illuminate\Http\RedirectResponse
     {
         $pull = $this->getSession($request, 'pullRequest');
+        if (is_array($pull) && ($pull['isPrivate'] ?? false) === true && !PrivatePullSession::allows($request, $pull)) {
+            PrivatePullSession::clear($request);
+            return redirect('/repositories')->with('error', 'Connect GitHub and grant access to this repository.');
+        }
         if (!is_array($pull)) {
             return redirect('/repositories')->with('error', 'Capture or load a pull request before drafting comments.');
         }
@@ -598,7 +627,7 @@ final class DashboardController
 
             $cachedPreview = $this->getSession($request, 'patch_preview');
             $snapshot = $this->getSession($request, 'pullRequestSnapshot');
-            $diskPreviewFile = is_array($snapshot) && isset($snapshot['id']) ? $this->snapshotsDir.'/'.$snapshot['id'].'-preview.json' : null;
+            $diskPreviewFile = ($pull['isPrivate'] ?? false) !== true && is_array($snapshot) && isset($snapshot['id']) ? $this->snapshotsDir.'/'.$snapshot['id'].'-preview.json' : null;
             if (!is_array($cachedPreview) && $diskPreviewFile && is_file($diskPreviewFile)) {
                 try {
                     $diskData = json_decode((string) file_get_contents($diskPreviewFile), true, 64, JSON_THROW_ON_ERROR);
@@ -612,6 +641,9 @@ final class DashboardController
             if (is_array($cachedPreview) && hash_equals($cachedPreview['headSha'] ?? '', (string) ($pull['headSha'] ?? ''))) {
                 $patchPreview = $cachedPreview;
             } else {
+                if (($pull['isPrivate'] ?? false) === true) {
+                    throw new \RuntimeException('Open the private pull request again before adding comments.');
+                }
                 $patchPreview = (new PublicPatchPreview(HttpClient::create()))->fetch($pull);
                 $this->putSession($request, 'patch_preview', $patchPreview);
             }
@@ -648,15 +680,18 @@ final class DashboardController
                 'updatedAt' => gmdate(DATE_ATOM),
             ];
             $this->putSession($request, 'review_drafts', $drafts);
-            $this->addNotification($request, 'success', 'Draft Saved', "Draft comment saved on {$path}".($line ? ":{$line}" : ''));
+            $message = ($pull['isPrivate'] ?? false) === true
+                ? 'Draft comment saved.' : "Draft comment saved on {$path}".($line ? ":{$line}" : '');
+            $this->addNotification($request, 'success', 'Draft Saved', $message);
 
             $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
             return redirect('/repositories?preview=1'.$snapshotQuery);
         } catch (\Throwable $exception) {
             $snapshot = $this->getSession($request, 'pullRequestSnapshot');
             $snapshotQuery = is_array($snapshot) && isset($snapshot['id']) ? '&snapshot='.$snapshot['id'] : '';
-            $this->putSession($request, 'review_error', $exception->getMessage());
-            return redirect('/repositories?preview=1'.$snapshotQuery)->with('review_error', $exception->getMessage());
+            $message = ($pull['isPrivate'] ?? false) === true ? 'Could not save this draft. Check the selected line.' : $exception->getMessage();
+            $this->putSession($request, 'review_error', $message);
+            return redirect('/repositories?preview=1'.$snapshotQuery)->with('review_error', $message);
         }
     }
 
@@ -787,6 +822,11 @@ final class DashboardController
         }
     }
 
+    public function disconnectDeviceFlowRequest(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        return $this->disconnectDeviceFlow($request);
+    }
+
     public function disconnectDeviceFlow(?Request $request = null): \Illuminate\Http\RedirectResponse
     {
         $currentPull = $this->getSession($request, 'pullRequest');
@@ -797,7 +837,9 @@ final class DashboardController
                 'pullRequestSnapshot',
                 'patch_preview',
                 'pr_review',
-                'review_drafts'
+                'review_drafts',
+                'private_pull_owner',
+                'review_approval_token'
             );
         }
 
@@ -887,8 +929,14 @@ final class DashboardController
             return redirect('/repositories')->with('github_error', 'Selected repository is not authorized for this installation.');
         }
 
-        // Fail closed immediately if repository is private:
-        if ($foundRepo['isPrivate'] ?? false) {
+        $private = ($foundRepo['isPrivate'] ?? true) !== false;
+        $access = $request->attributes->get('proofpatch_github_access');
+        $configured = DedicatedTestRepo::name();
+        if ($private && (!PrivatePullSession::usesServerSession() || !is_array($access)
+            || !is_int($access['userId'] ?? null) || $access['userId'] < 1
+            || ($auth['user']['id'] ?? null) !== $access['userId']
+            || !is_array($access['repositories'] ?? null) || !isset($access['repositories'][strtolower($repoName)])
+            || !is_string($configured) || strcasecmp($configured, $repoName) !== 0)) {
             $msg = 'Private repository capture is disabled. ProofPatch operates strictly on public repositories to prevent proprietary code leakage in shared local snapshot stores.';
             $this->putSession($request, 'github_error', $msg);
             return redirect('/repositories')->with('github_error', $msg);
@@ -900,9 +948,9 @@ final class DashboardController
 
             $patchPreview = $client->fetchPullRequestPatch($token, $repoName, $number);
 
-            // Fail closed: private repository capture is explicitly disabled to prevent proprietary code leakage
-            if (($foundRepo['isPrivate'] ?? false) || ($patchPreview['isPrivate'] ?? false)) {
-                $msg = 'Private repository capture is disabled. ProofPatch operates strictly on public repositories to prevent proprietary code leakage in shared local snapshot stores.';
+            // A visibility change during capture must not fall through to public storage.
+            if (($patchPreview['isPrivate'] ?? true) !== $private) {
+                $msg = 'Repository visibility changed. Select the repository again.';
                 $this->putSession($request, 'github_error', $msg);
                 return redirect('/repositories')->with('github_error', $msg);
             }
@@ -920,7 +968,7 @@ final class DashboardController
                 'baseSha' => $patchPreview['baseSha'],
                 'url' => $patchPreview['url'],
                 'user' => $patchPreview['user'] ?? 'unknown',
-                'isPrivate' => false,
+                'isPrivate' => $private,
                 'changedFiles' => $patchPreview['changedFiles'],
                 'files' => array_map(static fn(array $f): array => [
                     'name' => $f['name'],
@@ -930,7 +978,16 @@ final class DashboardController
                 ], $patchPreview['files']),
             ];
 
+            if ($private) {
+                $this->forgetSession($request, ...PrivatePullSession::KEYS);
+                $this->putSession($request, 'private_pull_owner', $access['userId']);
+                $this->putSession($request, 'pullRequest', $pull);
+                $this->putSession($request, 'patch_preview', $patchPreview);
+                return redirect('/repositories?preview=1');
+            }
+
             $snapshot = (new PullRequestSnapshot($this->snapshotsDir))->capture($pull);
+            $this->forgetSession($request, ...PrivatePullSession::KEYS);
             $this->putSession($request, 'pullRequest', $pull);
             $this->putSession($request, 'pullRequestSnapshot', $snapshot);
             $this->putSession($request, 'patch_preview', $patchPreview);
@@ -942,7 +999,7 @@ final class DashboardController
 
             return redirect('/repositories?preview=1&snapshot='.$snapshot['id']);
         } catch (\Throwable $e) {
-            return redirect('/repositories')->with('github_error', 'Failed to capture pull request: '.$e->getMessage());
+            return redirect('/repositories')->with('github_error', $private ? 'Unable to load the private pull request.' : 'Failed to capture pull request: '.$e->getMessage());
         }
     }
 

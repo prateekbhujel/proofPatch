@@ -7,6 +7,7 @@ namespace ProofPatch\Http\Controllers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use ProofPatch\GitHub\ManualInlineCommentPublisher;
+use ProofPatch\GitHub\PrivatePullSession;
 use Symfony\Component\HttpClient\HttpClient;
 
 final class ManualInlineCommentController
@@ -22,6 +23,11 @@ final class ManualInlineCommentController
         $id = $request->input('id');
         $digest = $request->input('digest');
         $draft = is_string($id) && is_array($drafts) ? ($drafts[$id] ?? null) : null;
+
+        if (is_array($pull) && ($pull['isPrivate'] ?? false) === true && !PrivatePullSession::allows($request, $pull)) {
+            PrivatePullSession::clear($request);
+            return redirect('/repositories')->with('review_error', 'Connect GitHub and grant access to this repository.');
+        }
 
         if ($request->input('approved') !== true || !is_array($access) || !is_int($access['userId'] ?? null)
             || !is_array($auth) || !is_string($auth['token'] ?? null) || !is_array($pull)

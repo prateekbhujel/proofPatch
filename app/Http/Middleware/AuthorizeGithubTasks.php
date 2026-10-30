@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use ProofPatch\GitHub\DedicatedTestRepoFetcher;
 use ProofPatch\GitHub\GitHubAppClient;
+use ProofPatch\GitHub\PrivatePullSession;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
 use ProofPatch\Models\WorkbenchTask;
 use Symfony\Component\HttpClient\HttpClient;
@@ -63,6 +64,11 @@ final class AuthorizeGithubTasks
             }
         }
         $request->attributes->set('proofpatch_github_access', ['userId' => $userId, 'repositories' => $allowed]);
+
+        $pull = $session->get('pullRequest');
+        if (is_array($pull) && ($pull['isPrivate'] ?? false) === true && !PrivatePullSession::allows($request, $pull)) {
+            PrivatePullSession::clear($request);
+        }
 
         $notifications = $session->get('notifications', []);
         if (is_array($notifications)) {

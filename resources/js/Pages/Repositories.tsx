@@ -76,6 +76,7 @@ interface GitHubStatusMetadata {
 }
 
 interface GitHubConnectionData {
+  canCapturePrivateTestRepo?: boolean;
   isConfigured: boolean;
   clientId: string | null;
   isConnected: boolean;
@@ -323,7 +324,7 @@ export default function Repositories({
 
   const handleCaptureGitHubPull = (pullItem: GitHubPull) => {
     if (!githubConnection?.selectedRepo) return;
-    if (pullItem.isPrivate) return;
+    if (pullItem.isPrivate && !githubConnection.canCapturePrivateTestRepo) return;
     router.post('/github/pulls/capture', {
       repository: githubConnection.selectedRepo,
       number: pullItem.number,
@@ -664,7 +665,7 @@ export default function Repositories({
                                 </div>
                               </div>
 
-                              {pr.isPrivate ? (
+                              {pr.isPrivate && !githubConnection.canCapturePrivateTestRepo ? (
                                 <span className="inline-flex items-center px-2 py-1 rounded text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200">
                                   Private PR capture disabled
                                 </span>
@@ -1376,7 +1377,7 @@ export default function Repositories({
                             <span>Private Repository Review Unsupported</span>
                           </div>
                           <p className="text-[11px] leading-relaxed text-amber-900">
-                            Private repository capture and model review is explicitly unsupported. Proprietary source code from <strong>{pull?.repository}</strong> will not be transmitted to external providers. Only public repositories and authorized test repositories may be reviewed.
+                            Private pull requests stay in this session and are not sent to a model.
                           </p>
                         </div>
                       )}

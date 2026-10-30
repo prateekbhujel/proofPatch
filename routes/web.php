@@ -37,7 +37,7 @@ Route::post('/repositories/review/draft/clear', [DashboardController::class, 'cl
 // GitHub App Device Flow (Local Desktop Connection per RFC 8628)
 Route::post('/github/device/initiate', [DashboardController::class, 'initiateDeviceFlow']);
 Route::post('/github/device/poll', [DashboardController::class, 'pollDeviceFlow']);
-Route::post('/github/device/disconnect', [DashboardController::class, 'disconnectDeviceFlow']);
+Route::post('/github/device/disconnect', [DashboardController::class, 'disconnectDeviceFlowRequest']);
 Route::post('/github/repositories/select', [DashboardController::class, 'selectInstalledRepository']);
 Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);

@@ -121,11 +121,8 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                   <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-bold text-slate-900 tracking-tight text-sm flex items-center gap-1.5">
+                  <span className="font-bold text-slate-900 tracking-tight text-sm">
                     ProofPatcher
-                    <span className="text-[10px] font-semibold text-violet-700 bg-violet-50 px-1.5 py-0.2 rounded border border-violet-200">
-                      v2.0
-                    </span>
                   </span>
                   <span className="text-[10px] text-slate-500 hidden sm:block leading-none">
                     Falsifiable AI Verification Engine

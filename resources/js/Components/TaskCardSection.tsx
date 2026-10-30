@@ -2,16 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useForm, router } from '@inertiajs/react';
 import {
   FolderGit2,
-  Upload,
+  Plus,
   Image as ImageIcon,
-  Mic,
-  MicOff,
   FileCode,
   ShieldAlert,
   Check,
   Sparkles,
   Clock,
 } from 'lucide-react';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 export interface LocalTaskCard {
   id: string | number;
@@ -84,11 +83,11 @@ export interface CardProposalResult {
 
 function TaskImage({ task }: { task: LocalTaskCard }) {
   const input = useRef<HTMLInputElement>(null);
-  const { data, setData, post, processing, reset } = useForm<{ image: File | null }>({ image: null });
+  const [uploading, setUploading] = useState(false);
 
   if (task.hasImage) {
     return (
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex flex-wrap items-center gap-2 pt-1">
         <a
           href={`/issues/tasks/${task.id}/image`}
           target="_blank"
@@ -99,53 +98,53 @@ function TaskImage({ task }: { task: LocalTaskCard }) {
           <span>Open attached screenshot</span>
         </a>
         <span className="text-[11px] text-slate-500">
-          Saved on this machine · never sent to model
+          Saved locally on this machine · not sent to or interpreted by Muse
         </span>
       </div>
     );
   }
 
+  function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    router.post(
+      `/issues/tasks/${task.id}/image`,
+      { image: file },
+      {
+        forceFormData: true,
+        preserveScroll: true,
+        onFinish: () => {
+          setUploading(false);
+          if (input.current) input.current.value = '';
+        },
+      }
+    );
+  }
+
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!data.image) return;
-        post(`/issues/tasks/${task.id}/image`, {
-          preserveScroll: true,
-          onSuccess: (page) => {
-            const props = page.props as Record<string, unknown>;
-            const flash = props.flash as Record<string, unknown> | undefined;
-            if (!props.error && !flash?.error) {
-              reset();
-              if (input.current) input.current.value = '';
-            }
-          },
-        });
-      }}
-      className="flex flex-wrap items-center gap-2 pt-1"
-    >
-      <label htmlFor={`task-image-${task.id}`} className="text-xs font-medium text-slate-600">
-        Screenshot (optional, kept local):
-      </label>
+    <div className="flex flex-wrap items-center gap-2 pt-1">
       <input
         ref={input}
         id={`task-image-${task.id}`}
         type="file"
         accept="image/png,image/jpeg"
-        onChange={(event) => setData('image', event.target.files?.[0] ?? null)}
-        className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border file:border-slate-200 file:text-xs file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100"
+        onChange={handleFileSelected}
+        className="sr-only"
       />
-      {data.image && (
-        <button
-          type="submit"
-          disabled={processing}
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 transition disabled:opacity-50"
-        >
-          <Upload className="w-3 h-3" />
-          <span>{processing ? 'Saving…' : 'Attach'}</span>
-        </button>
-      )}
-    </form>
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => input.current?.click()}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100 transition disabled:opacity-50"
+      >
+        <Plus className="w-3.5 h-3.5 text-violet-700" />
+        <span>{uploading ? 'Saving screenshot…' : 'Attach screenshot'}</span>
+      </button>
+      <span className="text-[11px] text-slate-500">
+        PNG/JPEG under 2 MB · kept local only, not interpreted by Muse
+      </span>
+    </div>
   );
 }
 
@@ -164,24 +163,35 @@ export function FocusedLocalTaskView({
   modelKeyAvailable?: boolean;
   budgetCanRequest?: boolean;
 }) {
-  const { data, setData, post, processing } = useForm({
-    path: preview?.context.cardId === Number(task.id) ? preview.context.path : '',
-    commit: preview?.context.cardId === Number(task.id) ? preview.context.commit : '',
-  });
-  const [publicTextConfirmed, setPublicTextConfirmed] = useState(false);
-  const [preparingProposal, setPreparingProposal] = useState(false);
-  const [sendingProposal, setSendingProposal] = useState(false);
-
   const currentPreview = preview?.context.cardId === Number(task.id) ? preview : null;
   const currentProposalPreview =
     proposalPreview?.cardId === Number(task.id) && currentPreview ? proposalPreview : null;
   const currentProposalResult =
     proposalResult?.cardId === Number(task.id) && currentPreview ? proposalResult : null;
 
+  const { data, setData, post, processing } = useForm({
+    path: currentPreview ? currentPreview.context.path : '',
+    commit: currentPreview ? currentPreview.context.commit : '',
+  });
+  const [publicTextConfirmed, setPublicTextConfirmed] = useState<boolean>(() => Boolean(currentProposalPreview));
+  const [preparingProposal, setPreparingProposal] = useState(false);
+  const [sendingProposal, setSendingProposal] = useState(false);
+
+  useEffect(() => {
+    setData({
+      path: currentPreview ? currentPreview.context.path : '',
+      commit: currentPreview ? currentPreview.context.commit : '',
+    });
+  }, [task.id, currentPreview?.digest]);
+
+  useEffect(() => {
+    setPublicTextConfirmed(Boolean(currentProposalPreview));
+  }, [task.id, currentProposalPreview?.digest]);
+
   return (
     <div className="space-y-5">
       {/* Task Header Card */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      <div className="rounded-xl border border-slate-200 border-t-2 border-t-violet-600/80 bg-white p-5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
@@ -304,8 +314,8 @@ export function FocusedLocalTaskView({
             <div className="space-y-0.5">
               <h3 className="text-xs font-semibold text-slate-900">
                 {currentProposalPreview
-                  ? 'Muse Spark Open wants to read this public task & file'
-                  : 'Prepare single-file model request'}
+                  ? '2. Muse Spark Open wants to read this public task & file'
+                  : '2. Prepare single-file model request'}
               </h3>
               <p className="text-[11px] text-slate-600">
                 Nothing is sent until you confirm the task text is public and approve this exact snapshot.
@@ -482,16 +492,9 @@ export function NewTaskComposer({
   } | null;
   onCreated?: () => void;
 }) {
-  const allowedRepositories = githubConnection?.repositories || [];
-  const hasGrantedRepos = allowedRepositories.length > 0;
-  const defaultRepo =
-    githubConnection?.selectedRepo || (hasGrantedRepos ? allowedRepositories[0].fullName : '');
-
-  const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
-  const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
-  const recognitionRef = useRef<any>(null);
-
+  const repositories = githubConnection?.repositories ?? [];
+  const defaultRepo = githubConnection?.selectedRepo || repositories[0]?.fullName || '';
+  const canCreate = Boolean(githubConnection?.isConnected && repositories.length > 0);
   const { data, setData, post, processing, reset } = useForm({
     title: '',
     description: '',
@@ -499,99 +502,20 @@ export function NewTaskComposer({
   });
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        setSpeechSupported(true);
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onresult = (event: any) => {
-          let transcript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              transcript += event.results[i][0].transcript;
-            }
-          }
-          if (transcript) {
-            setData((prev) => ({
-              ...prev,
-              description: prev.description
-                ? `${prev.description} ${transcript.trim()}`
-                : transcript.trim(),
-            }));
-          }
-        };
-
-        recognition.onerror = () => setIsListening(false);
-        recognition.onend = () => setIsListening(false);
-        recognitionRef.current = recognition;
-      }
-    }
-  }, []);
-
-  const toggleVoiceInput = () => {
-    if (!recognitionRef.current) return;
-    if (isListening) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch {
-        setIsListening(false);
-      }
-    }
-  };
-
-  useEffect(() => {
     if (!data.repository && defaultRepo) {
       setData('repository', defaultRepo);
     }
   }, [defaultRepo]);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!hasGrantedRepos) return;
-
-    const errors: Record<string, string> = {};
-    const trimmedTitle = data.title.trim();
-    if (!trimmedTitle) {
-      errors.title = 'Title is required.';
-    } else if (new TextEncoder().encode(trimmedTitle).length > 180) {
-      errors.title = 'Title must be 180 bytes or fewer.';
-    }
-
-    const trimmedDesc = data.description.trim();
-    if (!trimmedDesc) {
-      errors.description = 'Description is required.';
-    } else if (new TextEncoder().encode(trimmedDesc).length > 6000) {
-      errors.description = 'Description must be 6,000 bytes or fewer.';
-    }
-
-    if (!data.repository) {
-      errors.repository = 'Select an authorized repository.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setClientErrors(errors);
-      return;
-    }
-    setClientErrors({});
-
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!canCreate) return;
     post('/issues/tasks', {
       preserveScroll: true,
       onSuccess: (page) => {
-        const pageProps = page.props as Record<string, unknown>;
-        const flash = pageProps.flash as Record<string, unknown> | undefined;
-        const hasError = Boolean(pageProps.error || flash?.error);
-        if (!hasError) {
+        const props = page.props as Record<string, unknown>;
+        const flash = props.flash as Record<string, unknown> | undefined;
+        if (!props.error && !flash?.error) {
           reset('title', 'description');
           onCreated?.();
         }
@@ -602,12 +526,14 @@ export function NewTaskComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs space-y-3"
+      className="rounded-2xl border border-slate-200 border-t-2 border-t-violet-600/80 bg-white shadow-xs p-4 space-y-3"
     >
-      {!hasGrantedRepos && (
+      {!canCreate && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-2">
-          <span>Connect GitHub in Settings to create local repository tasks, or use the verified fixtures below.</span>
-          <Link href="/settings" className="font-semibold underline hover:text-amber-950 shrink-0">
+          <span>
+            Draft a task or test voice input below. Connect GitHub in Settings to save repository tasks, or use the verified cases below.
+          </span>
+          <Link href="/settings" className="font-semibold underline shrink-0">
             Connect GitHub
           </Link>
         </div>
@@ -623,48 +549,33 @@ export function NewTaskComposer({
             type="text"
             required
             maxLength={180}
-            disabled={!hasGrantedRepos}
-            aria-invalid={Boolean(clientErrors.title)}
-            aria-describedby={clientErrors.title ? 'local-task-title-error' : undefined}
-            placeholder="Task title — e.g. Fix zero-quantity order total calculation"
             value={data.title}
-            onChange={(e) => setData('title', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs font-medium text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-50"
+            onChange={(event) => setData('title', event.target.value)}
+            placeholder="Task title — e.g. Fix zero-quantity order total calculation"
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600"
           />
-          {clientErrors.title && (
-            <p id="local-task-title-error" className="mt-1 text-[11px] text-rose-600">
-              {clientErrors.title}
-            </p>
-          )}
         </div>
-
         <div>
-          <label htmlFor="local-task-repo" className="sr-only">
+          <label htmlFor="local-task-repository" className="sr-only">
             Repository
           </label>
           <select
-            id="local-task-repo"
+            id="local-task-repository"
             required
-            disabled={!hasGrantedRepos}
+            disabled={!canCreate}
             value={data.repository}
-            onChange={(e) => setData('repository', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-50"
+            onChange={(event) => setData('repository', event.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-60"
           >
-            {!hasGrantedRepos ? (
-              <option value="" disabled>
-                No connected repo
-              </option>
+            {repositories.length === 0 ? (
+              <option value="">No connected repo</option>
             ) : (
-              <>
-                <option value="" disabled>
-                  Select repository
+              repositories.map((repo) => (
+                <option key={repo.fullName} value={repo.fullName}>
+                  {repo.fullName}
+                  {repo.isPrivate ? ' (private)' : ''}
                 </option>
-                {allowedRepositories.map((repo) => (
-                  <option key={repo.fullName} value={repo.fullName}>
-                    {repo.fullName} {repo.isPrivate ? '(Private)' : ''}
-                  </option>
-                ))}
-              </>
+              ))
             )}
           </select>
         </div>
@@ -678,54 +589,39 @@ export function NewTaskComposer({
           id="local-task-description"
           rows={3}
           required
-          maxLength={6000}
-          disabled={!hasGrantedRepos}
-          aria-invalid={Boolean(clientErrors.description)}
-          aria-describedby={clientErrors.description ? 'local-task-desc-error' : undefined}
-          placeholder="Describe a change, a bug reproduction, or a question about a file…"
+          maxLength={10000}
           value={data.description}
-          onChange={(e) => setData('description', e.target.value)}
-          className="w-full rounded-lg border border-slate-200 bg-slate-50/40 px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-50"
+          onChange={(event) => setData('description', event.target.value)}
+          placeholder="Describe a change, a bug reproduction, or a question about a file… (Attach a local screenshot after saving)"
+          className="w-full rounded-lg border border-slate-200 bg-slate-50/40 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600"
         />
-        {clientErrors.description && (
-          <p id="local-task-desc-error" className="mt-1 text-[11px] text-rose-600">
-            {clientErrors.description}
-          </p>
-        )}
       </div>
 
-      {/* Helicon-style bottom pill bar inside composer */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-500">
+      {/* Bottom Composer Pill Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px]">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 text-slate-700 border border-slate-200">
             <Sparkles className="w-3 h-3 text-violet-700" />
-            muse-spark-open-1026
+            <span>muse-spark-open-1026</span>
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/80 font-medium text-[10px]">
-            Ask first
+
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+            <span>Ask first</span>
           </span>
-          {speechSupported && (
-            <button
-              type="button"
-              onClick={toggleVoiceInput}
-              disabled={!hasGrantedRepos}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition ${
-                isListening
-                  ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-              title="Dictate task description with voice"
-            >
-              {isListening ? <MicOff className="w-3 h-3 text-rose-600" /> : <Mic className="w-3 h-3" />}
-              <span>{isListening ? 'Listening…' : 'Voice'}</span>
-            </button>
-          )}
+
+          <VoiceDictationButton
+            label="Voice"
+            onTranscript={(transcript) => {
+              const current = data.description.trim();
+              setData('description', current ? `${current} ${transcript}` : transcript);
+            }}
+          />
         </div>
 
         <button
           type="submit"
-          disabled={!hasGrantedRepos || processing || !data.title.trim() || !data.description.trim()}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 transition disabled:opacity-40"
+          disabled={!canCreate || processing || !data.title.trim() || !data.description.trim() || !data.repository}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-40 transition"
         >
           <span>{processing ? 'Saving…' : 'Save task'}</span>
         </button>
@@ -734,23 +630,6 @@ export function NewTaskComposer({
   );
 }
 
-export function TaskCardSection({
-  localTasks = [],
-  cardPreview = null,
-  githubConnection = null,
-}: TaskCardSectionProps) {
-  return (
-    <div className="space-y-4">
-      <NewTaskComposer githubConnection={githubConnection} />
-      {localTasks.map((task) => (
-        <FocusedLocalTaskView
-          key={task.id}
-          task={task}
-          preview={cardPreview}
-          proposalPreview={null}
-          proposalResult={null}
-        />
-      ))}
-    </div>
-  );
+export function TaskCardSection(props: TaskCardSectionProps) {
+  return <NewTaskComposer githubConnection={props.githubConnection} onCreated={props.onCreated} />;
 }

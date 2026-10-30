@@ -13,8 +13,8 @@ import {
   Info,
   AlertTriangle,
   BookOpen,
-  ExternalLink,
 } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
 
 interface NotificationItem {
   id: string;
@@ -126,11 +126,11 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 antialiased font-sans">
-      {/* Calm Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xs border-b border-slate-200">
+    <div className="min-h-screen flex flex-col bg-[#f7f6f2] dark:bg-[#0e1117] text-slate-900 dark:text-slate-100 antialiased font-sans">
+      {/* Top Navigation Bar */}
+      <header className="sticky top-0 z-40 bg-white dark:bg-[#141821] border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 gap-4">
+          <div className="flex items-center justify-between h-14 gap-3">
             {/* Brand Logo */}
             <div className="flex items-center gap-3 shrink-0">
               <Link
@@ -140,9 +140,9 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
                 <img
                   src="/icon.svg"
                   alt="ProofPatcher"
-                  className="w-7 h-7 rounded-lg shrink-0"
+                  className="w-7 h-7 rounded-lg shrink-0 aspect-square"
                 />
-                <span className="font-semibold text-slate-900 tracking-tight text-sm">
+                <span className="font-semibold text-slate-900 dark:text-slate-100 tracking-tight text-sm">
                   ProofPatcher
                 </span>
               </Link>
@@ -174,10 +174,12 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
               })}
             </nav>
 
-            {/* Right Actions: Shortcut Hint & Notifications */}
-            <div className="flex items-center gap-2.5 relative">
+            {/* Right Actions: Theme Switcher, Shortcut Hint & Notifications */}
+            <div className="flex items-center gap-2 relative shrink-0">
+              <ThemeToggle compact />
+
               <span
-                className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-slate-50 text-[11px] text-slate-500 font-mono"
+                className="hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-200 bg-slate-50 text-[11px] text-slate-500 font-mono"
                 title="Press / anywhere to focus the primary input"
               >
                 <span>Press</span>
@@ -301,7 +303,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
       <footer className="mt-auto border-t border-slate-200 bg-white py-3.5">
         <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div className="flex items-center gap-2 text-slate-600">
-            <img src="/icon.svg" alt="" className="w-4 h-4 rounded-xs" />
+            <img src="/icon.svg" alt="" className="w-4 h-4 rounded-xs aspect-square" />
             <span className="font-medium text-slate-700">ProofPatcher</span>
             <span className="text-slate-300">·</span>
             <span>Local GitHub Co-Maintainer Workbench</span>
@@ -310,7 +312,7 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
             <Link href="/docs" className="hover:text-slate-800 transition font-medium">
               Documentation
             </Link>
-            <span className="text-slate-300">·</span>
+            <span>·</span>
             <Link href="/settings" className="hover:text-slate-800 transition font-medium">
               Settings
             </Link>

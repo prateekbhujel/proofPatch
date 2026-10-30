@@ -31,7 +31,10 @@ import {
   Plus,
   Search,
   Bot,
+  User,
+  Settings as SettingsIcon,
 } from 'lucide-react';
+import { VoiceDictationButton } from '../Components/VoiceDictationButton';
 
 interface GitHubRepo {
   fullName: string;
@@ -740,21 +743,68 @@ export default function Issues({
             </div>
           </div>
 
-          {/* Bottom Sidebar Status Bar (Helicon style) */}
-          <div className="p-3 border-t border-slate-200/80 bg-[#f0f0ed] flex items-center justify-between text-[11px] text-slate-600">
-            <div className="flex items-center gap-1.5 truncate">
-              <Sparkles className="w-3.5 h-3.5 text-violet-700 shrink-0" />
-              <span className="font-medium truncate">
-                {modelKeyAvailable ? 'Muse ready' : 'Offline mode'}
+          {/* Bottom Sidebar Compact User/Account & Runtime Control */}
+          <div className="sticky bottom-0 p-3 border-t border-slate-200/80 bg-[#e9e6dc] space-y-2 text-[11px] text-slate-700">
+            {githubConnection?.isConnected && githubConnection.user ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {githubConnection.user.avatarUrl ? (
+                    <img
+                      src={githubConnection.user.avatarUrl}
+                      alt={`@${githubConnection.user.login}`}
+                      className="w-6 h-6 rounded-full border border-slate-300 aspect-square shrink-0"
+                    />
+                  ) : (
+                    <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-800 border border-violet-200 flex items-center justify-center font-bold text-[10px] shrink-0">
+                      {githubConnection.user.login.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 truncate">
+                      @{githubConnection.user.login}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">
+                      {githubConnection.selectedRepo || 'GitHub connected'}
+                    </div>
+                  </div>
+                </div>
+                <Link
+                  href="/settings"
+                  aria-label="Account and GitHub settings"
+                  title="Account & GitHub settings"
+                  className="p-1.5 rounded-md border border-slate-300/80 bg-white text-slate-600 hover:text-slate-900 shrink-0"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-6 h-6 rounded-full bg-slate-200/90 text-slate-600 border border-slate-300 flex items-center justify-center shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-800 truncate">Not signed in</div>
+                    <div className="text-[10px] text-slate-500 truncate">Local fixture mode</div>
+                  </div>
+                </div>
+                <Link
+                  href="/settings"
+                  className="px-2 py-1 rounded-md border border-slate-300 bg-white text-[11px] font-medium text-slate-800 hover:bg-slate-50 shrink-0"
+                >
+                  Sign in →
+                </Link>
+              </div>
+            )}
+
+            <div className="pt-1.5 border-t border-slate-300/60 flex items-center justify-between text-[10px] text-slate-600">
+              <span className="inline-flex items-center gap-1 truncate">
+                <Sparkles className="w-3 h-3 text-violet-700 shrink-0" />
+                <span>{modelKeyAvailable ? 'Muse ready' : 'Offline mode'}</span>
               </span>
-            </div>
-            <div className="flex items-center gap-2 font-mono text-[10px] text-slate-500 shrink-0">
-              <span>
+              <span className="font-mono">
                 {budget ? `${budget.attempts}/${budget.maxAttempts} req` : '0 req'}
               </span>
-              <Link href="/settings" className="hover:text-slate-900 underline">
-                Budget
-              </Link>
             </div>
           </div>
         </aside>
@@ -1555,12 +1605,19 @@ export default function Issues({
                     placeholder="Record a local review note or observation for this task…"
                     className="w-full text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
                   />
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 pt-1 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[10px]">
                         <MessageSquare className="w-3 h-3 text-slate-500" />
                         Local session note
                       </span>
+                      <VoiceDictationButton
+                        label="Voice"
+                        onTranscript={(transcript) => {
+                          const current = draftForm.data.comment.trim();
+                          draftForm.setData('comment', current ? `${current} ${transcript}` : transcript);
+                        }}
+                      />
                       {draft && (
                         <span className="font-mono text-[10px] text-slate-500">
                           Saved {draft.savedAt.replace('T', ' ').slice(0, 16)}

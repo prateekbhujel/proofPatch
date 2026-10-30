@@ -1,0 +1,235 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { transformSync } from 'esbuild';
+
+const require = createRequire(import.meta.url);
+
+function loadTsxModule(relativePath, customRequire = require) {
+  const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+  const { code } = transformSync(source, { loader: 'tsx', format: 'cjs' });
+  const mod = { exports: {} };
+  new Function('exports', 'require', 'module', code)(mod.exports, customRequire, mod);
+  return { exports: mod.exports, source };
+}
+
+const { exports: themeModule } = loadTsxModule('../../resources/js/Components/ThemeToggle.tsx');
+const { exports: voiceModule, source: voiceSource } = loadTsxModule('../../resources/js/Components/VoiceDictationButton.tsx');
+const { exports: thinkingModule } = loadTsxModule('../../resources/js/Components/ui/ThinkingAnimation.tsx');
+
+// Mock @inertiajs/react for SSR rendering of TaskCardSection
+const inertiaMock = {
+  Link: ({ children, href, ...rest }) => React.createElement('a', { href, ...rest }, children),
+  useForm: (initial) => ({
+    data: initial,
+    setData: () => {},
+    post: () => {},
+    processing: false,
+    reset: () => {},
+  }),
+  router: {
+    post: () => {},
+  },
+};
+
+const { exports: taskCardModule, source: taskCardSource } = loadTsxModule(
+  '../../resources/js/Components/TaskCardSection.tsx',
+  (id) => {
+    if (id === '@inertiajs/react') return inertiaMock;
+    if (id === './VoiceDictationButton') return voiceModule;
+    return require(id);
+  }
+);
+
+test('applyThemePreference and readStoredThemePreference default cleanly to light and resolve system scheme', () => {
+  assert.equal(themeModule.readStoredThemePreference(), 'light');
+  assert.equal(themeModule.resolveSystemScheme(), 'light');
+  assert.equal(themeModule.applyThemePreference('light'), 'light');
+  assert.equal(themeModule.applyThemePreference('dark'), 'dark');
+  assert.equal(themeModule.applyThemePreference('system'), 'light');
+});
+
+test('ThemeToggle renders accessible radiogroup with Light, Dark, and System options', () => {
+  const html = renderToStaticMarkup(React.createElement(themeModule.ThemeToggle, { compact: true }));
+  assert.match(html, /role="radiogroup"/);
+  assert.match(html, /aria-label="Color theme"/);
+  assert.match(html, />Light</);
+  assert.match(html, />Dark</);
+  assert.match(html, />System</);
+  assert.match(html, /role="radio"[^>]*aria-checked="true"[^>]*title="Light theme"/);
+});
+
+test('app.blade.php includes color-scheme meta and synchronous FOUC prevention script defaulting to light', () => {
+  const blade = readFileSync(new URL('../../resources/views/app.blade.php', import.meta.url), 'utf8');
+  assert.match(blade, /<meta name="color-scheme" content="light dark">/);
+  assert.match(blade, /localStorage\.getItem\('proofpatch-theme'\)/);
+  assert.match(blade, /if \(pref !== 'light' && pref !== 'dark' && pref !== 'system'\)/);
+  assert.match(blade, /pref = 'light';/);
+});
+
+test('VoiceDictationButton does not request microphone permission on render and uses neutral network fallback wording', () => {
+  let speechRecognitionConstructed = false;
+  globalThis.window = {
+    SpeechRecognition: class {
+      constructor() {
+        speechRecognitionConstructed = true;
+      }
+    },
+  };
+
+  try {
+    const html = renderToStaticMarkup(
+      React.createElement(voiceModule.VoiceDictationButton, {
+        onTranscript: () => {},
+      })
+    );
+    assert.equal(speechRecognitionConstructed, false, 'SpeechRecognition must only be instantiated on user click');
+    assert.match(html, /aria-label="Start voice dictation"/);
+    assert.match(html, /aria-pressed="false"/);
+    assert.match(html, />Voice</);
+    assert.match(
+      voiceSource,
+      /Speech recognition service is currently unavailable\. Click Voice to retry or type directly\./
+    );
+    assert.doesNotMatch(voiceSource, /Brave blocks/i);
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('ThinkingAnimation uses honest status text without fake terminal logs or space/nebula glow orbs', () => {
+  const html = renderToStaticMarkup(
+    React.createElement(thinkingModule.ThinkingAnimation, {
+      isActive: true,
+      steps: [{ label: 'Executing browser & DOM assertions', status: 'active' }],
+      title: 'Running isolated verifier checks…',
+      subtitle: 'Waiting for verifier response…',
+    })
+  );
+  assert.match(html, /role="status"/);
+  assert.match(html, /Running isolated verifier checks…/);
+  assert.match(html, /Executing browser &amp; DOM assertions/);
+  assert.doesNotMatch(html, /codex-evaluator|sandboxed-oracle|120Hz|mesh-glow|animate-shimmer/i);
+});
+
+test('TaskCardSection includes + Attach screenshot control with explicit local-only privacy disclosure', () => {
+  assert.match(taskCardSource, /Attach screenshot/);
+  assert.match(taskCardSource, /\/issues\/tasks\/\$\{task\.id\}\/image/);
+  assert.match(taskCardSource, /kept local only, not interpreted by Muse/);
+  assert.match(taskCardSource, /Saved locally on this machine · not sent to or interpreted by Muse/);
+});
+
+test('FocusedLocalTaskView renders actual task preview, single-use approval step, and unverified mocked proposal diff', () => {
+  const task = {
+    id: 7,
+    title: 'Fix zero-quantity order total calculation',
+    description: 'Ensure zero-quantity line items contribute 0 instead of unit_price * 1.',
+    repository: 'prateekbhujel/proofPatch-test-sandbox',
+    status: 'queued',
+    updatedAt: '2026-10-30T12:00:00Z',
+    hasImage: false,
+  };
+
+  const preview = {
+    status: 'local_preview_not_sent',
+    digest: 'a'.repeat(64),
+    context: {
+      cardId: 7,
+      cardVersion: 'b'.repeat(64),
+      repository: 'prateekbhujel/proofPatch-test-sandbox',
+      title: task.title,
+      description: task.description,
+      path: 'src/OrderTotal.php',
+      commit: '676e73d674aca9ba711aa10877ffd7287e1f25b3',
+      source: "<?php\n$total += $item['unit_price'] * max(1, $item['quantity']);\n",
+      sourceSha256: 'c'.repeat(64),
+    },
+  };
+
+  // Stage 1: Preview ready, waiting for public-text confirmation & model-preview preparation
+  const stage1Html = renderToStaticMarkup(
+    React.createElement(taskCardModule.FocusedLocalTaskView, {
+      task,
+      preview,
+      proposalPreview: null,
+      proposalResult: null,
+      modelKeyAvailable: true,
+      budgetCanRequest: true,
+    })
+  );
+  assert.match(stage1Html, /Local preview ready · not sent to any model/);
+  assert.match(stage1Html, /src\/OrderTotal\.php @ 676e73d6/);
+  assert.match(stage1Html, /2\. Prepare single-file model request/);
+  assert.match(stage1Html, /Review exact request/);
+
+  // Stage 2: Single-use approval prepared (proposalPreview present)
+  const proposalPreview = {
+    cardId: 7,
+    cardVersion: 'b'.repeat(64),
+    previewDigest: 'a'.repeat(64),
+    destination: 'https://inference.baseten.co/v1/chat/completions',
+    body: { model: 'meta-models/muse-spark-open-1026', messages: [] },
+    digest: 'd'.repeat(64),
+    estimatedMicros: 15900,
+  };
+
+  const stage2Html = renderToStaticMarkup(
+    React.createElement(taskCardModule.FocusedLocalTaskView, {
+      task,
+      preview,
+      proposalPreview,
+      proposalResult: null,
+      modelKeyAvailable: true,
+      budgetCanRequest: true,
+    })
+  );
+  assert.match(stage2Html, /2\. Muse Spark Open wants to read this public task &amp; file/);
+  assert.match(stage2Html, /POST https:\/\/inference\.baseten\.co\/v1\/chat\/completions · src\/OrderTotal\.php/);
+  assert.match(stage2Html, />Allow once</);
+  assert.match(stage2Html, /Single-use approval · Digest pinned/);
+
+  // Stage 3: Mocked proposal received -> renders inline diff, hides approval prompt, marks unverified in-memory preview
+  const proposalResult = {
+    status: 'unverified_suggestion',
+    cardId: 7,
+    cardVersion: 'b'.repeat(64),
+    previewDigest: 'a'.repeat(64),
+    repository: task.repository,
+    commit: preview.context.commit,
+    path: 'src/OrderTotal.php',
+    sourceSha256: 'c'.repeat(64),
+    find: "max(1, $item['quantity'])",
+    replace: "$item['quantity']",
+    explanation: 'Multiply unit price directly by item quantity so zero-quantity items add zero.',
+    model: 'meta-models/muse-spark-open-1026',
+    requestDigest: 'd'.repeat(64),
+    usage: { prompt_tokens: 180, completion_tokens: 45 },
+    candidate: {
+      status: 'unverified_in_memory_preview',
+      source: "<?php\n$total += $item['unit_price'] * $item['quantity'];\n",
+      sha256: 'e'.repeat(64),
+      applied: false,
+      verified: false,
+    },
+  };
+
+  const stage3Html = renderToStaticMarkup(
+    React.createElement(taskCardModule.FocusedLocalTaskView, {
+      task,
+      preview,
+      proposalPreview: null,
+      proposalResult,
+      modelKeyAvailable: true,
+      budgetCanRequest: true,
+    })
+  );
+  assert.match(stage3Html, /Unverified In-Memory Preview/);
+  assert.match(stage3Html, /max\(1, \$item\[&#x27;quantity&#x27;\]\)/);
+  assert.match(stage3Html, /\$item\[&#x27;quantity&#x27;\]/);
+  assert.match(stage3Html, /Allowed once · meta-models\/muse-spark-open-1026 \(225 tokens\)/);
+  assert.match(stage3Html, /not written to disk/);
+  assert.doesNotMatch(stage3Html, />Allow once</);
+});

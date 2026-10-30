@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
+import { ThemeToggle } from '../Components/ThemeToggle';
 import {
   Shield,
   Key,
@@ -153,6 +154,19 @@ export default function Settings({
             <span>{errorMessage || githubConnection.errorMessage}</span>
           </div>
         )}
+
+        {/* Section 0: Appearance & Color Theme */}
+        <section className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Appearance &amp; Theme</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Choose Light, Dark, or follow your operating system preference. Saved locally in this browser.
+              </p>
+            </div>
+            <ThemeToggle compact={false} />
+          </div>
+        </section>
 
         {/* Section 1: GitHub App Connection */}
         <section className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">

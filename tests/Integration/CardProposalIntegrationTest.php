@@ -287,4 +287,57 @@ final class CardProposalIntegrationTest extends TestCase
         $controller->send($request, (int) $card->id);
         self::assertCount(1, array_filter($calls, static fn ($call) => $call[0] === 'POST'));
     }
+
+    public function testIssueWorkbenchInertiaPropsThroughPreviewPrepareAndMockedProposalFlow(): void
+    {
+        $card = $this->card();
+        $request = $this->request($card, '/issues');
+        $this->setupPreview($card, $request);
+        $calls = [];
+        $client = $this->client($calls);
+        $proposalController = $this->controller($client);
+        $workbenchController = new \ProofPatch\Http\Controllers\IssueWorkbenchController(
+            $client,
+            new RequestBudget($this->dir, 100000, 2)
+        );
+
+        $extractProps = static function (\Inertia\Response $response): array {
+            $ref = new \ReflectionProperty($response, 'props');
+            $ref->setAccessible(true);
+            return $ref->getValue($response);
+        };
+
+        // 1. After preview: cardPreview is populated in Issues page props
+        $propsAfterPreview = $extractProps($workbenchController->show($request));
+        self::assertIsArray($propsAfterPreview['cardPreview']);
+        self::assertSame('local_preview_not_sent', $propsAfterPreview['cardPreview']['status']);
+        self::assertSame((int) $card->id, $propsAfterPreview['cardPreview']['context']['cardId']);
+        self::assertSame('src/chart.js', $propsAfterPreview['cardPreview']['context']['path']);
+        self::assertNull($propsAfterPreview['cardProposalPreview']);
+        self::assertNull($propsAfterPreview['cardProposalResult']);
+
+        // 2. After prepare: cardProposalPreview is populated (without raw approvalToken exposed in visible props)
+        $request->merge(['public_text_confirmed' => true]);
+        $proposalController->prepare($request, (int) $card->id);
+        $propsAfterPrepare = $extractProps($workbenchController->show($request));
+        self::assertIsArray($propsAfterPrepare['cardProposalPreview']);
+        self::assertArrayNotHasKey('approvalToken', $propsAfterPrepare['cardProposalPreview']);
+        self::assertSame((int) $card->id, $propsAfterPrepare['cardProposalPreview']['cardId']);
+
+        // 3. After single-use approval & mocked proposal: cardProposalResult is populated and cardProposalPreview is cleared
+        $request->merge([
+            'approved' => true,
+            'public_text_confirmed' => true,
+            'digest' => $propsAfterPrepare['cardProposalPreview']['digest'],
+        ]);
+        $proposalController->send($request, (int) $card->id);
+        $propsAfterSend = $extractProps($workbenchController->show($request));
+        self::assertNull($propsAfterSend['cardProposalPreview']);
+        self::assertIsArray($propsAfterSend['cardProposalResult']);
+        self::assertSame('unverified_suggestion', $propsAfterSend['cardProposalResult']['status']);
+        self::assertSame('quantity = 1', $propsAfterSend['cardProposalResult']['find']);
+        self::assertSame('quantity = 2', $propsAfterSend['cardProposalResult']['replace']);
+        self::assertFalse($propsAfterSend['cardProposalResult']['candidate']['applied']);
+        self::assertFalse($propsAfterSend['cardProposalResult']['candidate']['verified']);
+    }
 }

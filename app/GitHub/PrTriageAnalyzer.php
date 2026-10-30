@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace ProofPatch\GitHub;
 
 /**
- * Triage pull requests against maintainer policies, anti-slop rules, and repo standards.
- * Pure deterministic analysis based on captured pull metadata and files.
+ * Summarize captured pull request metadata for maintainer review.
+ * File names and descriptions do not establish quality, authorship or coverage.
  */
 final readonly class PrTriageAnalyzer
 {
     private const DEFAULT_MAX_DIFF = 50;
-    private const SLOP_SIZE_THRESHOLD = 150;
     private const MIN_BODY_LENGTH = 25;
 
     public function __construct(private array $policy = []) {}
@@ -31,7 +30,7 @@ final readonly class PrTriageAnalyzer
         $comparisons = $this->buildComparisons($targetPull, $candidatePulls, $files, $truncated);
         $withShared = array_filter($comparisons, static fn (array $c): bool => $c['sharedFilesCount'] > 0);
 
-        $evaluation = $this->evaluatePullStandards($targetPull, $files, $testPaths, $total, $limit, $truncated, !empty($withShared));
+        $evaluation = $this->evaluatePullStandards($targetPull, $testPaths, $total, $limit, $truncated, !empty($withShared));
 
         return [
             'target' => [
@@ -73,203 +72,72 @@ final readonly class PrTriageAnalyzer
 
     private function evaluatePullStandards(
         array $targetPull,
-        array $files,
         array $testPaths,
         int $total,
         int $limit,
         bool $truncated,
         bool $hasSharedFiles
     ): array {
-        $title = trim((string) ($targetPull['title'] ?? ''));
         $body = trim((string) ($targetPull['body'] ?? $targetPull['description'] ?? ''));
-        $baseBranch = (string) ($targetPull['base'] ?? 'main');
-        $expectedBranch = (string) ($this->policy['defaultBranch'] ?? 'main');
-
-        $hasTests = count($testPaths) > 0;
         $exceeded = $total > $limit;
-        $isSlopTitle = $this->isSlopIndicator($title);
-        $isShortBody = strlen($body) < self::MIN_BODY_LENGTH;
-        $isMismatch = $this->isDescriptionMismatch($title, $body, $files);
-        $isWrongBranch = $baseBranch !== '' && strcasecmp($baseBranch, $expectedBranch) !== 0;
-
         $flags = [];
-        if (!$hasTests) {
-            $flags[] = 'missing_tests';
-        }
-        if ($isShortBody) {
-            $flags[] = 'short_description';
-        }
-        if ($isMismatch) {
-            $flags[] = 'description_mismatch';
-        }
-        if ($isWrongBranch) {
-            $flags[] = 'wrong_target_branch';
-        }
         if ($exceeded) {
             $flags[] = 'diff_exceeded';
         }
-
-        if (($exceeded && !$hasTests) || ($total > self::SLOP_SIZE_THRESHOLD && $isShortBody) || ($isSlopTitle && !$hasTests)) {
-            return [
-                'classification' => 'AI_SLOP_REJECT',
-                'badge' => 'Slop / Close Recommended',
-                'headline' => $exceeded ? 'Changed lines exceed the configured limit' : 'High likelihood of unreviewed AI slop or unverified bulk changes',
-                'detail' => 'Large diff without automated test coverage and minimal description. Recommended action: Close or request focused minimal reproduction.',
-                'severity' => 'amber',
-                'suggestedAction' => 'Recommend closing PR: ask contributor for a minimal reproducible test.',
-                'suggestedComment' => "Thank you for the contribution. However, this pull request modifies {$total} lines without accompanying test coverage or detailed reproduction steps. Per repository standards, please scope changes to a minimal, verifiable unit with automated tests before resubmitting.",
-                'reasoning' => "PR modifies {$total} lines without test coverage (" . count($testPaths) . " test files found) and lacks sufficient verification context.",
-                'flags' => $flags,
-            ];
+        if (strlen($body) < self::MIN_BODY_LENGTH) {
+            $flags[] = 'short_description';
+        }
+        if ($testPaths === []) {
+            $flags[] = 'no_test_paths_observed';
+        }
+        if ($truncated) {
+            $flags[] = 'files_truncated';
+        }
+        if (isset($this->policy['defaultBranch']) && ($targetPull['base'] ?? '') !== ''
+            && strcasecmp((string) $targetPull['base'], (string) $this->policy['defaultBranch']) !== 0) {
+            $flags[] = 'different_target_branch';
         }
 
-        if (!$exceeded && $hasTests && strlen($title) >= 10 && strlen($body) >= self::MIN_BODY_LENGTH && !$isMismatch && !$isWrongBranch && !$truncated) {
-            return [
-                'classification' => 'CLEAN_PR',
-                'badge' => 'Clean & Focused PR',
-                'headline' => 'Clean, well-scoped pull request',
-                'detail' => "Focused change of {$total} lines within configured limit ({$limit} max) with dedicated test coverage.",
-                'severity' => 'emerald',
-                'suggestedAction' => 'Ready for maintainer review and isolated verification.',
-                'suggestedComment' => "Looks clean, focused ({$total} lines), and includes tests. Queuing for isolated verification.",
-                'reasoning' => "PR stays within the {$limit}-line diff limit, includes dedicated test files (" . implode(', ', $testPaths) . "), targets {$expectedBranch}, and has a matching description.",
-                'flags' => $flags,
-            ];
-        }
-
-        // Needs Standards Cleanup
-        $cleanItems = [];
-        if (!$hasTests) {
-            $cleanItems[] = '1) Add an automated test in tests/ verifying the intended behavior.';
-        }
-        if ($isMismatch) {
-            $cleanItems[] = '2) Update description to match the actual files changed in this PR.';
-        } elseif ($isShortBody) {
-            $cleanItems[] = '2) Elaborate in the description on the bug reproduction and expected outcome.';
-        }
-        if ($isWrongBranch) {
-            $cleanItems[] = "3) Retarget PR base branch to '{$expectedBranch}' instead of '{$baseBranch}'.";
-        }
-        if ($exceeded) {
-            $cleanItems[] = "4) Reduce diff size to within {$limit} lines.";
-        }
-
-        $suggestedComment = "Thanks for the contribution! The change looks promising, but per repo standards:\n" . implode("\n", $cleanItems);
-        $reasoning = 'PR needs standards cleanup: ' . implode(', ', str_replace('_', ' ', $flags)) . '.';
-
-        $headline = $exceeded ? 'Changed lines exceed the configured limit' : ($hasSharedFiles ? 'Shared file paths found' : 'Review needs more evidence');
-        $detail = $exceeded ? 'Review the size threshold; this is not an automatic merge decision.' : ($hasSharedFiles ? 'Compare the captured PRs manually; file overlap does not establish duplicate changes.' : 'Only captured PRs were compared. Test coverage and code quality have not been assessed.');
+        $headline = $exceeded ? 'Changed lines exceed the configured limit'
+            : ($hasSharedFiles ? 'Shared file paths found' : 'Review pull request');
+        $detail = $truncated
+            ? 'The captured file list is incomplete. Review the changes and test results on GitHub.'
+            : 'File names and descriptions cannot establish test coverage or code quality.';
 
         return [
-            'classification' => 'NEEDS_CLEANUP',
-            'badge' => 'Needs Standards Cleanup',
+            'classification' => 'UNVERIFIED_REVIEW',
+            'badge' => 'Needs review',
             'headline' => $headline,
             'detail' => $detail,
             'severity' => 'amber',
-            'suggestedAction' => 'Request changes: contributor should address test coverage, branch targeting, or description clarity.',
-            'suggestedComment' => $suggestedComment,
-            'reasoning' => $reasoning,
+            'suggestedAction' => 'Review the changes and test results.',
+            'suggestedComment' => '',
+            'reasoning' => $hasSharedFiles
+                ? 'Some captured file paths overlap with other pull requests; this does not establish duplicate work.'
+                : 'Only captured metadata and file names were compared.',
             'flags' => $flags,
         ];
     }
 
-    private function isSlopIndicator(string $title): bool
-    {
-        return (bool) preg_match('/\b(?:ai\s*generated|gpt|copilot\s*auto|automated\s*fix|bot\s*patch|unreviewed\s*slop)\b/i', $title);
-    }
-
-    private function isDescriptionMismatch(string $title, string $body, array $files): bool
-    {
-        $hasDocFiles = false;
-        $hasCodeFiles = false;
-        foreach ($files as $file) {
-            if ((bool) preg_match('/\.(?:md|rst|txt)$/i', $file) || str_starts_with($file, 'docs/')) {
-                $hasDocFiles = true;
-            }
-            if ((bool) preg_match('/\.(?:php|js|ts|jsx|tsx|py|go|rb|rs)$/i', $file) && !str_starts_with($file, 'tests/')) {
-                $hasCodeFiles = true;
-            }
-        }
-
-        $combinedText = strtolower($title . ' ' . $body);
-        $claimsDocOnly = (str_contains($combinedText, 'readme') || str_contains($combinedText, 'docs') || str_contains($combinedText, 'documentation'))
-            && !str_contains($combinedText, 'fix') && !str_contains($combinedText, 'logic') && !str_contains($combinedText, 'code');
-
-        if ($claimsDocOnly && $hasCodeFiles && !$hasDocFiles) {
-            return true;
-        }
-
-        $claimsCodeFix = str_contains($combinedText, 'order total') || str_contains($combinedText, 'pricing calculation') || str_contains($combinedText, 'bug fix');
-        if ($claimsCodeFix && !$hasCodeFiles && $hasDocFiles) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Triage an issue into one of three maintainer categories:
-     * 1. AI_SLOP_ISSUE: Generic/spam AI report without an actionable reproduction. Action: Close.
-     * 2. NEEDS_REPRO_COMMENT: Issue reports an issue but lacks reproduction steps, inputs, or test case. Action: Post diagnostic comment.
-     * 3. VERIFIABLE_FIX_CANDIDATE: Well-scoped issue with testable invariants ready for 5-gate verifier. Action: Generate & verify fix.
-     */
+    /** Summarize an issue without inferring that it can be reproduced or automatically fixed. */
     public function triageIssue(array $issue): array
     {
-        $title = trim((string) ($issue['title'] ?? ''));
-        $body = trim((string) ($issue['body'] ?? $issue['description'] ?? ''));
         $number = (int) ($issue['number'] ?? 0);
-        $labels = array_map(
-            static fn ($label): string => is_array($label) ? (string) ($label['name'] ?? '') : (string) $label,
-            $issue['labels'] ?? []
-        );
-
-        $combined = strtolower($title . ' ' . $body);
-        $isSlop = $this->isSlopIndicator($title) || $this->isSlopIndicator($body)
-            || (str_contains($combined, 'as an ai') || str_contains($combined, 'large language model') || str_contains($combined, 'automated summary'));
-
-        $hasRepro = str_contains($combined, 'reproduce') || str_contains($combined, 'steps')
-            || str_contains($combined, 'expected') || str_contains($combined, 'actual')
-            || str_contains($combined, 'code') || str_contains($combined, '<?php')
-            || str_contains($combined, 'order') || str_contains($combined, 'price') || str_contains($combined, 'quantity');
-
-        if ($isSlop && strlen($body) < 120) {
-            return [
-                'issueNumber' => $number,
-                'classification' => 'AI_SLOP_ISSUE',
-                'badge' => 'Slop / Close Recommended',
-                'category' => 'invalid',
-                'severity' => 'amber',
-                'headline' => 'Unreviewed AI slop or generic non-actionable issue',
-                'suggestedAction' => 'Recommend closing issue: does not contain an actionable defect report or reproduction.',
-                'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Closed as Incomplete / Slop`\n\nThank you for opening this issue. However, this submission appears to be generic or automated without concrete reproduction steps, expected behavior, or an actionable bug report. Closing per repository issue hygiene.",
-                'flags' => ['ai_slop_detected', 'no_reproduction'],
-            ];
-        }
-
-        if (!$hasRepro || strlen($body) < 35) {
-            return [
-                'issueNumber' => $number,
-                'classification' => 'NEEDS_REPRO_COMMENT',
-                'badge' => 'Needs Reproduction Steps',
-                'category' => 'needs-repro',
-                'severity' => 'amber',
-                'headline' => 'Issue lacks reproduction invariants or expected outcome',
-                'suggestedAction' => 'Address via comment: ask submitter for exact inputs, expected vs actual values, or a minimal test case before patching.',
-                'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Awaiting Reproduction Invariants`\n\nThanks for reporting this! Before ProofPatcher can verify an automated repair through the 5-gate isolated test oracle, we need concrete reproduction invariants:\n1. **Exact Inputs**: What arguments or data trigger this behavior?\n2. **Expected vs Actual**: What output was expected, and what was returned?\n3. **Test Case**: A minimal reproduction test snippet or assertion.\n\nOnce provided, ProofPatcher will synthesize and verify a candidate fix.",
-                'flags' => ['missing_reproduction_steps'],
-            ];
-        }
+        $body = trim((string) ($issue['body'] ?? $issue['description'] ?? ''));
+        $short = strlen($body) < self::MIN_BODY_LENGTH;
 
         return [
             'issueNumber' => $number,
-            'classification' => 'VERIFIABLE_FIX_CANDIDATE',
-            'badge' => 'Verifiable Fix Candidate',
-            'category' => 'bug',
-            'severity' => 'emerald',
-            'headline' => 'Actionable issue with reproducible boundary conditions',
-            'suggestedAction' => 'Ready for 5-gate isolated verification and Meta Muse patch synthesis.',
-            'suggestedComment' => "> 🤖 **ProofPatcher Co-Maintainer [Bot]**\n> **Triage Status**: `Verifiable Fix Candidate`\n\nThis issue contains concrete boundary invariants. Staging for Meta Muse candidate synthesis and isolated 5-gate test oracle execution.",
-            'flags' => [],
+            'classification' => 'ISSUE_REVIEW',
+            'badge' => 'Needs review',
+            'category' => 'needs-repro',
+            'severity' => 'amber',
+            'headline' => $short ? 'Issue description is brief' : 'Review issue details',
+            'suggestedAction' => 'Review the issue and confirm how to reproduce it.',
+            'suggestedComment' => $short
+                ? 'Thanks for the report. Could you share the steps to reproduce this, along with the expected and actual results?'
+                : '',
+            'flags' => $short ? ['short_description'] : [],
         ];
     }
 

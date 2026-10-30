@@ -160,136 +160,81 @@ final class PrTriageAnalyzerTest extends TestCase
         self::assertStringNotContainsString('distinct line hunks', $result['comparisons'][0]['verdictBanner']);
     }
 
-    public function testDetectsAiSlopAndRecommendsClose(): void
+    public function testLargePullDoesNotInferAiAuthorshipOrMissingCoverage(): void
     {
-        $slopPr = [
-            'repository' => 'owner/repo',
-            'number' => 101,
-            'title' => 'Automated AI generated cleanup and refactoring',
+        $result = (new PrTriageAnalyzer(['maxDiffLines' => 50]))->triage([
+            'title' => 'Automated AI generated cleanup',
             'body' => 'quick fix',
-            'files' => [
-                ['name' => 'src/HeavyLogic.php', 'additions' => 160, 'deletions' => 20],
-            ],
-        ];
+            'files' => [['name' => 'src/Large.php', 'additions' => 160, 'deletions' => 20]],
+        ], []);
 
-        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50]);
-        $result = $analyzer->triage($slopPr, []);
-
-        self::assertSame('AI_SLOP_REJECT', $result['summary']['classification']);
-        self::assertSame('Slop / Close Recommended', $result['summary']['badge']);
-        self::assertStringContainsString('Recommend closing PR', $result['summary']['suggestedAction']);
-        self::assertStringContainsString('180 lines without accompanying test coverage', $result['summary']['suggestedComment']);
-        self::assertContains('missing_tests', $result['summary']['flags']);
+        self::assertSame('UNVERIFIED_REVIEW', $result['summary']['classification']);
+        self::assertSame('unknown', $result['policy']['coverage']);
+        self::assertContains('diff_exceeded', $result['summary']['flags']);
+        self::assertContains('no_test_paths_observed', $result['summary']['flags']);
+        self::assertStringNotContainsString('clos', strtolower($result['summary']['headline'] . $result['summary']['detail'] . $result['summary']['suggestedAction'] . $result['summary']['suggestedComment']));
+        self::assertStringNotContainsString('slop', strtolower($result['summary']['headline']));
     }
 
-    public function testDetectsCleanPrWithTestsAndClearDescription(): void
+    public function testTestFileNameDoesNotEstablishCoverageOrReadiness(): void
     {
-        $cleanPr = [
-            'repository' => 'owner/repo',
-            'number' => 102,
-            'title' => 'fix(order-total): correct zero-quantity item pricing',
-            'body' => 'Zero-quantity items now contribute 0 to the total order price instead of charging for 1 unit.',
-            'base' => 'main',
+        $result = (new PrTriageAnalyzer())->triage([
+            'title' => 'Fix broken calculation',
+            'body' => 'The calculation now returns the correct expected result.',
             'files' => [
-                ['name' => 'src/OrderTotal.php', 'additions' => 1, 'deletions' => 1],
-                ['name' => 'tests/order_total.php', 'additions' => 10, 'deletions' => 0],
+                ['name' => 'src/Total.php', 'additions' => 1, 'deletions' => 1],
+                ['name' => 'tests/TotalTest.php', 'additions' => 1, 'deletions' => 0],
             ],
-        ];
+        ], []);
 
-        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50]);
-        $result = $analyzer->triage($cleanPr, []);
-
-        self::assertSame('CLEAN_PR', $result['summary']['classification']);
-        self::assertSame('Clean & Focused PR', $result['summary']['badge']);
-        self::assertSame('emerald', $result['summary']['severity']);
-        self::assertStringContainsString('Ready for maintainer review', $result['summary']['suggestedAction']);
-        self::assertStringContainsString('Queuing for isolated verification', $result['summary']['suggestedComment']);
-        self::assertEmpty($result['summary']['flags']);
+        self::assertSame('unknown', $result['policy']['coverage']);
+        self::assertSame('UNVERIFIED_REVIEW', $result['summary']['classification']);
+        self::assertSame(['tests/TotalTest.php'], $result['target']['testPaths']);
+        self::assertStringNotContainsString('verification', strtolower($result['summary']['suggestedAction']));
+        self::assertSame('', $result['summary']['suggestedComment']);
     }
 
-    public function testDetectsNeedsCleanupForDescriptionMismatchMissingTestsAndWrongBranch(): void
+    public function testTargetBranchIsOnlyComparedWhenConfigured(): void
     {
-        $mismatchPr = [
-            'repository' => 'owner/repo',
-            'number' => 103,
-            'title' => 'Update documentation and readme',
-            'body' => 'Updating readme docs only.',
-            'base' => 'develop',
-            'files' => [
-                ['name' => 'src/OrderTotal.php', 'additions' => 5, 'deletions' => 2],
-            ],
-        ];
-
-        $analyzer = new PrTriageAnalyzer(['maxDiffLines' => 50, 'defaultBranch' => 'main']);
-        $result = $analyzer->triage($mismatchPr, []);
-
-        self::assertSame('NEEDS_CLEANUP', $result['summary']['classification']);
-        self::assertSame('Needs Standards Cleanup', $result['summary']['badge']);
-        self::assertContains('missing_tests', $result['summary']['flags']);
-        self::assertContains('description_mismatch', $result['summary']['flags']);
-        self::assertContains('wrong_target_branch', $result['summary']['flags']);
-        self::assertStringContainsString('Add an automated test', $result['summary']['suggestedComment']);
-        self::assertStringContainsString('Update description to match the actual files', $result['summary']['suggestedComment']);
-        self::assertStringContainsString("Retarget PR base branch to 'main' instead of 'develop'", $result['summary']['suggestedComment']);
+        $target = ['base' => 'develop', 'body' => 'A sufficiently detailed description.', 'files' => []];
+        $unconfigured = (new PrTriageAnalyzer())->triage($target, []);
+        $configured = (new PrTriageAnalyzer(['defaultBranch' => 'main']))->triage($target, []);
+        self::assertNotContains('different_target_branch', $unconfigured['summary']['flags']);
+        self::assertContains('different_target_branch', $configured['summary']['flags']);
     }
 
-    public function testTriagesAiSlopIssueAndSuggestsClosure(): void
+    public function testIssueTriageDoesNotInferAuthorshipOrRecommendClosure(): void
     {
-        $slopIssue = [
+        $result = (new PrTriageAnalyzer())->triageIssue([
             'number' => 88,
-            'title' => 'Automated fix and AI generated summary of repo',
+            'title' => 'AI generated summary',
             'body' => 'As an AI language model, here is an automated summary of the repository.',
-            'labels' => [],
-        ];
-
-        $analyzer = new PrTriageAnalyzer();
-        $result = $analyzer->triageIssue($slopIssue);
-
-        self::assertSame('AI_SLOP_ISSUE', $result['classification']);
-        self::assertSame('invalid', $result['category']);
-        self::assertSame('Slop / Close Recommended', $result['badge']);
-        self::assertStringContainsString('Recommend closing issue', $result['suggestedAction']);
-        self::assertStringContainsString('Closed as Incomplete / Slop', $result['suggestedComment']);
-        self::assertContains('ai_slop_detected', $result['flags']);
+        ]);
+        self::assertSame('ISSUE_REVIEW', $result['classification']);
+        self::assertSame('Needs review', $result['badge']);
+        self::assertStringNotContainsString('clos', strtolower($result['suggestedAction'] . $result['suggestedComment']));
+        self::assertNotContains('ai_slop_detected', $result['flags']);
     }
 
-    public function testTriagesAmbiguousIssueAndRequestsReproductionSteps(): void
+    public function testIssueKeywordsDoNotPromiseCandidateFixOrVerification(): void
     {
-        $vagueIssue = [
-            'number' => 89,
-            'title' => 'Checkout discount seems wrong sometimes',
-            'body' => 'Something is broken with discounts.',
-            'labels' => ['bug'],
-        ];
-
-        $analyzer = new PrTriageAnalyzer();
-        $result = $analyzer->triageIssue($vagueIssue);
-
-        self::assertSame('NEEDS_REPRO_COMMENT', $result['classification']);
-        self::assertSame('needs-repro', $result['category']);
-        self::assertSame('Needs Reproduction Steps', $result['badge']);
-        self::assertStringContainsString('Address via comment', $result['suggestedAction']);
-        self::assertStringContainsString('Awaiting Reproduction Invariants', $result['suggestedComment']);
-        self::assertContains('missing_reproduction_steps', $result['flags']);
-    }
-
-    public function testTriagesVerifiableBugIssueWithConcreteInvariants(): void
-    {
-        $verifiableIssue = [
+        $result = (new PrTriageAnalyzer())->triageIssue([
             'number' => 90,
-            'title' => 'Disallow negative unit prices in OrderTotal calculation',
-            'body' => 'When items have a negative unit price, OrderTotal::calculate adds negative amounts without validation. Steps to reproduce: pass unit price -50, expected exception or zero.',
-            'labels' => ['bug'],
-        ];
+            'title' => 'Order quantity price problem',
+            'body' => 'The order price is wrong. Steps to reproduce: quantity is one and expected price is two.',
+        ]);
+        self::assertSame('ISSUE_REVIEW', $result['classification']);
+        self::assertSame('Review issue details', $result['headline']);
+        self::assertStringNotContainsString('verif', strtolower($result['suggestedAction'] . $result['suggestedComment']));
+        self::assertSame('', $result['suggestedComment']);
+    }
 
-        $analyzer = new PrTriageAnalyzer();
-        $result = $analyzer->triageIssue($verifiableIssue);
-
-        self::assertSame('VERIFIABLE_FIX_CANDIDATE', $result['classification']);
-        self::assertSame('bug', $result['category']);
-        self::assertSame('Verifiable Fix Candidate', $result['badge']);
-        self::assertStringContainsString('Ready for 5-gate isolated verification', $result['suggestedAction']);
-        self::assertStringContainsString('Staging for Meta Muse candidate synthesis', $result['suggestedComment']);
-        self::assertEmpty($result['flags']);
+    public function testShortIssueMayAskForDetailsWithoutPromisingAFix(): void
+    {
+        $result = (new PrTriageAnalyzer())->triageIssue(['number' => 89, 'body' => 'Broken.']);
+        self::assertSame('ISSUE_REVIEW', $result['classification']);
+        self::assertContains('short_description', $result['flags']);
+        self::assertStringContainsString('steps to reproduce', $result['suggestedComment']);
+        self::assertStringNotContainsString('will', strtolower($result['suggestedComment']));
     }
 }

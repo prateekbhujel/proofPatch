@@ -44,7 +44,7 @@ interface GitHubRepo {
 
 export interface IssueTriage {
   issueNumber: number;
-  classification: 'AI_SLOP_ISSUE' | 'NEEDS_REPRO_COMMENT' | 'VERIFIABLE_FIX_CANDIDATE';
+  classification: 'ISSUE_REVIEW';
   badge: string;
   category: 'invalid' | 'needs-repro' | 'bug';
   severity: 'emerald' | 'amber' | 'rose';

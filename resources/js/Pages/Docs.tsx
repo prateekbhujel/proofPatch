@@ -62,16 +62,16 @@ export default function Docs() {
     <AppLayout activeNav="docs">
       <Head title="Documentation · ProofPatcher" />
 
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 w-full">
         {/* Docs Header */}
-        <div className="border-b border-slate-200 pb-4">
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <span className="p-1 rounded bg-violet-100 text-violet-700">
+            <span className="p-1 rounded bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
               <BookOpen className="w-4 h-4" />
             </span>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">ProofPatcher Documentation</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">ProofPatcher Documentation</h1>
           </div>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Continuous reference guide for autonomous co-maintainer review, falsifiable verification gates, and cryptographic receipts.
           </p>
         </div>

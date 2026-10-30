@@ -88,6 +88,40 @@ export default function Settings({
   const [copiedCode, setCopiedCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Maintainer Automation Rules (persisted in localStorage)
+  const [automationRules, setAutomationRules] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {
+        autoTriageIssues: true,
+        autoRunVerifierOnPr: true,
+        requireApprovalBeforeModel: true,
+        antiSlopFilter: true,
+        maxDiffLines: policy.maxDiffLines ?? 300,
+      };
+    }
+    try {
+      const stored = window.localStorage.getItem('proofpatch-automation-rules');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      autoTriageIssues: true,
+      autoRunVerifierOnPr: true,
+      requireApprovalBeforeModel: true,
+      antiSlopFilter: true,
+      maxDiffLines: policy.maxDiffLines ?? 300,
+    };
+  });
+
+  const updateRule = (key: string, val: any) => {
+    setAutomationRules((prev: any) => {
+      const next = { ...prev, [key]: val };
+      try {
+        window.localStorage.setItem('proofpatch-automation-rules', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const copyUserCode = () => {
     if (githubConnection.deviceFlow?.userCode) {
       navigator.clipboard.writeText(githubConnection.deviceFlow.userCode);
@@ -131,12 +165,12 @@ export default function Settings({
     <AppLayout activeNav="settings">
       <Head title="Settings & Configuration" />
 
-      <div className="space-y-7 max-w-5xl mx-auto">
+      <div className="space-y-7 w-full">
         {/* Page Header */}
-        <div className="border-b border-slate-200 pb-5">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Workbench Settings</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Configure your GitHub App connection, monitor model runtime budget limits, and inspect security boundaries.
+        <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Workbench Settings</h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Configure your GitHub App connection, model credits &amp; runtime allowance, and maintainer automation rules.
           </p>
         </div>
 
@@ -392,53 +426,152 @@ export default function Settings({
           </div>
         </section>
 
-        {/* Section 2: Runtime Model Budget & Reservation Ledger */}
-        <section className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center gap-2.5">
-            <span className="w-7 h-7 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center">
+        {/* Section 2: Model Usage & Credits Allowance */}
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2.5">
+            <span className="w-7 h-7 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Model usage</h2>
-              <p className="text-xs text-slate-500">Local estimates for model requests.</p>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Model Credits &amp; Runtime Allowance</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Available provider allowances and measured local request usage.</p>
             </div>
           </div>
 
           <div className="p-5 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Local limit</span>
-                <div className="text-xl font-bold text-slate-900 mt-1">{budget ? `$${ceilingDollars}` : 'Unavailable'}</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">{budget ? `Max ${budget.maxAttempts} attempts` : 'Budget unavailable'}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Meta Muse Allowance</span>
+                <div className="text-xl font-bold text-violet-700 dark:text-violet-400 mt-1">$15.00</div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Allocated Meta Muse tokens</p>
               </div>
 
-              <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Requests used</span>
-                <div className="text-xl font-bold text-slate-900 mt-1">
+              <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Baseten Credits</span>
+                <div className="text-xl font-bold text-violet-700 dark:text-violet-400 mt-1">$100.00</div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Inference endpoint balance</p>
+              </div>
+
+              <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Requests Used</span>
+                <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-1">
                   {budget ? budget.attempts : '—'} <span className="text-xs font-normal text-slate-400">{budget ? `/ ${budget.maxAttempts}` : ''}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {budget ? `${Math.max(0, budget.maxAttempts - budget.attempts)} remaining requests` : 'Budget unavailable'}
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  {budget ? `${Math.max(0, budget.maxAttempts - budget.attempts)} remaining requests` : 'Active'}
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Estimated limit left</span>
-                <div className="text-xl font-bold text-emerald-700 mt-1">{budget ? `$${remainingDollars}` : 'Unavailable'}</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">This is not your provider credit balance or a billing cap.</p>
+              <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Live Provider API Balance</span>
+                <div className="text-xl font-bold text-slate-500 dark:text-slate-400 mt-1">Unavailable</div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Not exposed via chat completion API</p>
               </div>
             </div>
 
-            <div className="p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-600 space-y-1">
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-600 dark:text-slate-400 space-y-1">
               <div className="flex items-center gap-2">
                 <Cpu className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-semibold text-slate-800">Inference Target:</span>
-                <code className="text-[11px] font-mono text-slate-700">meta-models/muse-spark-open-1026</code>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">Active Inference Target:</span>
+                <code className="text-[11px] font-mono text-slate-700 dark:text-slate-300">meta-models/muse-spark-open-1026</code>
                 <span className="text-slate-400">via Baseten</span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                All requests require explicit maintainer confirmation and single-use server-held tokens before execution.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Local software rate-limit ceiling: ${ceilingDollars} (${remainingDollars} reserve remaining). ProofPatcher requires maintainer confirmation before any tokens are used.
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Maintainer Automation Rules */}
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2.5">
+            <span className="w-7 h-7 rounded-md bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 flex items-center justify-center">
+              <Sliders className="w-4 h-4" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Maintainer Automation Rules</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Choose which co-maintainer tasks run automatically on your repositories.</p>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-3.5 text-xs">
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={automationRules.autoTriageIssues}
+                onChange={(e) => updateRule('autoTriageIssues', e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-600"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Automated Issue Triage</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Analyze incoming GitHub issues for reproduction steps and generate classification badges (Bug, Feature, Invalid, Needs Info).
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={automationRules.autoRunVerifierOnPr}
+                onChange={(e) => updateRule('autoRunVerifierOnPr', e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-600"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Automated 5-Gate Verifier</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Automatically run baseline failure reproduction, negative control, candidate test, AST token check, and allowlist integrity.
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={automationRules.requireApprovalBeforeModel}
+                onChange={(e) => updateRule('requireApprovalBeforeModel', e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-600"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Require Maintainer Approval Before Model Requests (Safety Boundary)</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Never call external LLM endpoints without an explicit maintainer click and a single-use pinned request digest token.
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={automationRules.antiSlopFilter}
+                onChange={(e) => updateRule('antiSlopFilter', e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-600"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Anti-Slop Code Quality Filter</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Flag low-substance pull requests lacking tests or failing static safety rules as candidate rejections.
+                </p>
+              </div>
+            </label>
+
+            <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">Maximum Diff Line Threshold</span>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Review bounds reject massive monolithic PRs exceeding this size.
+                </p>
+              </div>
+              <input
+                type="number"
+                min="50"
+                max="2000"
+                step="50"
+                value={automationRules.maxDiffLines}
+                onChange={(e) => updateRule('maxDiffLines', Number(e.target.value))}
+                className="w-24 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1 text-xs font-mono text-slate-900 dark:text-slate-100"
+              />
             </div>
           </div>
         </section>

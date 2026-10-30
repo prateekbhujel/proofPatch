@@ -74,12 +74,12 @@ export default function Overview({
     <AppLayout activeNav="overview">
       <Head title="Overview · ProofPatcher" />
 
-      <div className="space-y-5 max-w-7xl mx-auto">
-        <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div className="space-y-5 w-full">
+        <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight text-slate-900">Overview</h1>
-              <p className="mt-1 text-sm text-slate-600">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Overview</h1>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 Inspect pull requests, manage local tasks, and verify repairs with cryptographic receipts.
               </p>
             </div>

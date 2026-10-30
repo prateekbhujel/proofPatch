@@ -44,8 +44,8 @@ final readonly class PublicCardPreview
         ];
     }
 
-    /** Recheck card identity and exact public file before using an existing preview. */
-    public function assertFresh(array $preview, array $card): void
+    /** Check that the local preview still represents the exact card and source. */
+    public function validateSnapshot(array $preview, array $card): void
     {
         $context = $preview['context'] ?? null;
         $digest = $preview['digest'] ?? null;
@@ -66,6 +66,13 @@ final readonly class PublicCardPreview
             || !hash_equals(hash('sha256', $context['source']), $context['sourceSha256'])) {
             throw new \RuntimeException('The task preview changed; create a new preview.');
         }
+    }
+
+    /** Recheck card identity and exact public file before using an existing preview. */
+    public function assertFresh(array $preview, array $card): void
+    {
+        $this->validateSnapshot($preview, $card);
+        $context = $preview['context'];
         $current = $this->fetchPublicFile($card['repository'], $context['path'], $context['commit']);
         if (!hash_equals($context['sourceSha256'], hash('sha256', $current))) {
             throw new \RuntimeException('The public file changed; create a new preview.');

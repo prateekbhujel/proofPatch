@@ -93,7 +93,7 @@ final readonly class PullRequestReader
 
     private function get(string $url): array
     {
-        $headers = ['Accept' => 'application/vnd.github+json', 'User-Agent' => 'ProofPatch', 'X-GitHub-Api-Version' => '2022-11-28'];
+        $headers = ['Accept' => 'application/vnd.github+json', 'User-Agent' => 'ProofPatcher', 'X-GitHub-Api-Version' => '2022-11-28'];
         if ($this->token !== null) {
             $headers['Authorization'] = 'Bearer '.$this->token;
         }

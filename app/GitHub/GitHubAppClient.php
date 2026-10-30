@@ -457,7 +457,7 @@ final readonly class GitHubAppClient
             'headers' => [
                 'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer '.$token,
-                'User-Agent' => 'ProofPatch-CoMaintainer',
+                'User-Agent' => 'ProofPatcher',
                 'X-GitHub-Api-Version' => '2022-11-28',
             ],
             'timeout' => 15,

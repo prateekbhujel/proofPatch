@@ -102,7 +102,7 @@ final readonly class DedicatedTestRepoPublisher
         $repo = trim((string) ($context['repository'] ?? ''));
         if ($repo !== DedicatedTestRepo::requireName()) {
             throw new \InvalidArgumentException(
-                "Repository '{$repo}' is not authorized. ProofPatch GitHub publishing is strictly restricted to " . DedicatedTestRepo::requireName() . '.'
+                "Repository '{$repo}' is not authorized. ProofPatcher GitHub publishing is strictly restricted to " . DedicatedTestRepo::requireName() . '.'
             );
         }
 
@@ -396,7 +396,7 @@ final readonly class DedicatedTestRepoPublisher
         ]);
 
         // 7. Create Draft Pull Request
-        $prTitle = 'fix(order-total): correct zero-quantity item pricing (ProofPatch #1)';
+        $prTitle = 'fix(order-total): correct zero-quantity item pricing (ProofPatcher #1)';
         $prRes = $this->apiCall($client, 'POST', "{$repoApi}/pulls", $token, [
             'title' => $prTitle,
             'head' => $branchName,
@@ -478,9 +478,9 @@ final readonly class DedicatedTestRepoPublisher
         $baseCommit = substr(DedicatedTestRepo::requireBaseCommit(), 0, 7);
 
         return <<<COMMIT
-fix(order-total): correct zero-quantity item pricing (ProofPatch #1)
+fix(order-total): correct zero-quantity item pricing (ProofPatcher #1)
 
-Verified proposal from ProofPatch Co-Maintainer Engine.
+Verified proposal from ProofPatcher Engine.
 Run ID: {$report['id']}
 Receipt SHA-256: {$receiptSha}
 Integrity: VALID (5/5 Verification Gates Passed)
@@ -504,7 +504,7 @@ COMMIT;
         return <<<MARKDOWN
 > [!IMPORTANT]
 > **Automated Draft Co-Maintainer Proposal**
-> This pull request was prepared and cryptographically verified by the ProofPatch co-maintainer engine.
+> This pull request was prepared and cryptographically verified by the ProofPatcher engine.
 > **No automatic merge.** Review and verification evidence attached below.
 > *Notice: Sandbox checks verify replicated bounded regression cases for OrderTotal boundary calculation; this does not claim the repository's full original test suite ran.*
 
@@ -595,7 +595,7 @@ MARKDOWN;
             'headers' => [
                 'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $token,
-                'User-Agent' => 'ProofPatch-CoMaintainer',
+                'User-Agent' => 'ProofPatcher',
                 'X-GitHub-Api-Version' => '2022-11-28',
             ],
             'timeout' => 15,

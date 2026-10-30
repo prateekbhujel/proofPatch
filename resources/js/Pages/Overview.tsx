@@ -144,22 +144,22 @@ export default function Overview({
           </Link>
 
           <Link
-            href="/checks?tab=visual"
+            href="/issues"
             className="p-4 rounded-xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-xs transition group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center font-semibold text-xs border border-violet-100 group-hover:bg-violet-700 group-hover:text-white transition">
+                <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-semibold text-xs border border-emerald-100 group-hover:bg-emerald-700 group-hover:text-white transition">
                   <CheckCircle2 className="w-4 h-4" />
                 </span>
                 <span className="text-xs font-bold text-slate-900 group-hover:text-violet-700 transition">
-                  Checks
+                  Verification Engine
                 </span>
               </div>
               <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-600 transition" />
             </div>
             <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Review verification results and visual comparisons.
+              5-gate falsifiable verifier, cryptographic receipts, and isolated sandbox proofs.
             </p>
           </Link>
         </div>

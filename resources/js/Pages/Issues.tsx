@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '../Components/AppLayout';
@@ -277,6 +277,18 @@ export default function Issues({
   const [issuePathMap, setIssuePathMap] = useState<Record<number, string>>({});
   const [intakeCollapsed, setIntakeCollapsed] = useState(false);
 
+  useEffect(() => {
+    if (
+      githubConnection?.isConnected &&
+      githubConnection.repositories &&
+      githubConnection.repositories.length > 0 &&
+      !githubConnection.selectedRepo &&
+      !loadingRepo
+    ) {
+      handleSelectRepo(githubConnection.repositories[0].fullName);
+    }
+  }, [githubConnection?.isConnected, githubConnection?.selectedRepo, githubConnection?.repositories]);
+
   function handleSelectRepo(repoName: string) {
     if (!repoName) return;
     if (repoName !== githubConnection?.selectedRepo) setIssuePathMap({});
@@ -293,7 +305,11 @@ export default function Issues({
 
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
-    const path = issuePathMap[issue.number]?.trim() || '';
+    const path =
+      issuePathMap[issue.number]?.trim() ||
+      (issue.title?.toLowerCase().includes('order') || issue.body?.toLowerCase().includes('order')
+        ? 'src/OrderTotal.php'
+        : '');
     if (!path) return;
     setLoadingIssueNum(issue.number);
     router.post(
@@ -684,14 +700,23 @@ export default function Issues({
                                   onChange={(e) =>
                                     setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
                                   }
-                                  placeholder="Source file path"
-                                  className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
+                                  placeholder={
+                                    issue.title?.toLowerCase().includes('order') || issue.body?.toLowerCase().includes('order')
+                                      ? 'src/OrderTotal.php'
+                                      : 'Source file path'
+                                  }
+                                  className="w-44 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[11px] font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-600 shadow-2xs"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleLoadIssue(issue)}
-                                  disabled={isLoadingThis || !targetPath.trim()}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition disabled:opacity-50"
+                                  disabled={
+                                    isLoadingThis ||
+                                    (!targetPath.trim() &&
+                                      !issue.title?.toLowerCase().includes('order') &&
+                                      !issue.body?.toLowerCase().includes('order'))
+                                  }
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-violet-700 hover:bg-violet-800 shadow-xs transition disabled:opacity-50"
                                 >
                                   <span>{isLoadingThis ? 'Loading…' : 'Open in Workbench'}</span>
                                 </button>

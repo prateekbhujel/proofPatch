@@ -1,6 +1,6 @@
 {
-    "name": "prateekbhujel/proofpatch",
-    "description": "Independent browser evidence for bounded visual UI repairs.",
+    "name": "prateekbhujel/proofpatcher",
+    "description": "Falsifiable AI verification engine and GitHub co-maintainer workbench.",
     "type": "project",
     "license": "MIT",
     "require": {

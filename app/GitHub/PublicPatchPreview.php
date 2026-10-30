@@ -101,7 +101,7 @@ final readonly class PublicPatchPreview
     private function get(string $url): array
     {
         $response = $this->http->request('GET', $url, [
-            'headers' => ['Accept' => 'application/vnd.github+json', 'User-Agent' => 'ProofPatch', 'X-GitHub-Api-Version' => '2022-11-28'],
+            'headers' => ['Accept' => 'application/vnd.github+json', 'User-Agent' => 'ProofPatcher', 'X-GitHub-Api-Version' => '2022-11-28'],
             'max_redirects' => 0, 'timeout' => 15, 'max_duration' => 20,
         ]);
         if ($response->getStatusCode() !== 200) {

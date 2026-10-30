@@ -36,7 +36,7 @@ final readonly class GitHubDeviceFlow
         $response = $this->http->request('POST', self::DEVICE_CODE_URL, [
             'headers' => [
                 'Accept' => 'application/json',
-                'User-Agent' => 'ProofPatch-CoMaintainer',
+                'User-Agent' => 'ProofPatcher',
             ],
             'json' => [
                 'client_id' => $clientId,
@@ -79,7 +79,7 @@ final readonly class GitHubDeviceFlow
         $response = $this->http->request('POST', self::ACCESS_TOKEN_URL, [
             'headers' => [
                 'Accept' => 'application/json',
-                'User-Agent' => 'ProofPatch-CoMaintainer',
+                'User-Agent' => 'ProofPatcher',
             ],
             'json' => [
                 'client_id' => $clientId,

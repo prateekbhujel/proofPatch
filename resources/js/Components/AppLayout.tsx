@@ -58,7 +58,6 @@ export function AppLayout({ activeNav, children }: AppLayoutProps) {
     { key: 'overview', href: '/', label: 'Overview', icon: LayoutGrid },
     { key: 'repositories', href: '/repositories', label: 'Repositories', icon: GitPullRequest },
     { key: 'issues', href: '/issues', label: 'Issues', icon: ClipboardList },
-    { key: 'checks', href: '/checks', label: 'Checks', icon: CheckCircle2 },
     { key: 'settings', href: '/settings', label: 'Settings', icon: Settings },
     { key: 'docs', href: '/docs', label: 'Docs', icon: BookOpen },
   ];

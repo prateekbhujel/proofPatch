@@ -21,6 +21,9 @@ export function IssueHeaderCard({
   isOwnedFixture,
   detectedIssueMedia,
 }: IssueHeaderCardProps) {
+  const cleanTitle = context.title;
+  const cleanBody = context.body || '(No description)';
+
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -28,15 +31,15 @@ export function IssueHeaderCard({
           {isDedicatedTestRepo
             ? 'Dedicated Test Repository'
             : isOwnedFixture || context.isSynthetic
-            ? 'Bundled Fixture'
+            ? 'Offline example'
             : 'Public GitHub Issue'}
         </span>
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-violet-50 dark:bg-violet-950/50 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
-          {detectedIssueMedia.length > 0
-            ? `${detectedIssueMedia.length} Visual Media / GIF Detected`
-            : 'Text-Only Issue · 0 External Media'}
-        </span>
-        {context.issueUrl && (
+        {detectedIssueMedia.length > 0 ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-violet-50 dark:bg-violet-950/50 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+            {`${detectedIssueMedia.length} Visual Media / GIF Detected`}
+          </span>
+        ) : null}
+        {context.issueUrl ? (
           <a
             href={context.issueUrl}
             target="_blank"
@@ -48,16 +51,28 @@ export function IssueHeaderCard({
             </span>
             <ExternalLink className="w-3 h-3" />
           </a>
+        ) : (
+          <span className="text-xs font-mono text-slate-500">
+            {context.repository}#{context.issueNumber}
+          </span>
         )}
       </div>
 
       <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
-        {context.title}
+        {cleanTitle}
       </h1>
 
-      <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-slate-50/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
-        {context.body || '(No description)'}
-      </p>
+      <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-3.5 space-y-2">
+        <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+          {cleanBody}
+        </p>
+        {context.isSynthetic && (
+          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+            <span>Verified test oracle: tests/order_total.php</span>
+            <span>Target: {context.path}</span>
+          </div>
+        )}
+      </div>
 
       {detectedIssueMedia.length > 0 && (
         <div className="rounded-xl border border-violet-200 dark:border-violet-800/70 bg-violet-50/30 dark:bg-violet-950/20 p-3 space-y-2">

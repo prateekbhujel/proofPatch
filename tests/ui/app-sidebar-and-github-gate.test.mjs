@@ -7,177 +7,83 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformSync } from 'esbuild';
 
 const require = createRequire(import.meta.url);
-
-function loadTsxModule(relativePath, customRequire = require) {
+function loadTsx(relativePath, resolve = require) {
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
   const { code } = transformSync(source, { loader: 'tsx', format: 'cjs' });
   const mod = { exports: {} };
-  new Function('exports', 'require', 'module', code)(mod.exports, customRequire, mod);
-  return { exports: mod.exports, source };
+  new Function('exports', 'require', 'module', code)(mod.exports, resolve, mod);
+  return mod.exports;
 }
+const inertia = {
+  Link: ({ children, href, ...props }) => React.createElement('a', { href, ...props }, children),
+  Head: ({ title }) => React.createElement('title', {}, title),
+  router: { post() {} },
+};
+const logo = loadTsx('../../resources/js/Components/ui/PfLogo.tsx');
+const layout = loadTsx('../../resources/js/Components/AppLayout.tsx', (id) => id === '@inertiajs/react' ? inertia : require(id));
+const onboarding = loadTsx('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', (id) => {
+  if (id === '@inertiajs/react') return inertia;
+  if (id === '../AppLayout') return layout;
+  if (id === '../ui/PfLogo') return logo;
+  return require(id);
+});
 
-const inertiaMock = {
-  Link: ({ children, href, ...rest }) => React.createElement('a', { href, ...rest }, children),
-  Head: ({ title }) => React.createElement('head', {}, React.createElement('title', {}, title)),
-  usePage: () => ({
-    url: '/issues',
-    props: {
-      notifications: [],
-      githubConnection: {
-        isConnected: false,
-        user: null,
-      },
-    },
-  }),
-  useForm: (initial) => ({
-    data: initial,
-    setData: () => {},
-    post: () => {},
-    processing: false,
-    reset: () => {},
-  }),
-  router: {
-    post: () => {},
-  },
+const baseProps = {
+  deviceClientIdInput: '', setDeviceClientIdInput() {}, isSubmittingDevice: false,
+  handleInitiateDeviceFlow() {}, handlePollDeviceFlow() {}, copyDeviceCode() {}, copiedDeviceCode: false,
 };
 
-const framerMotionMock = {
-  motion: {
-    div: ({ children, ...rest }) => React.createElement('div', rest, children),
-  },
-  AnimatePresence: ({ children }) => React.createElement(React.Fragment, {}, children),
-};
+test('the workspace has no duplicate global sidebar; other pages have a way back', () => {
+  const body = React.createElement('p', {}, 'Page content');
+  const workspace = renderToStaticMarkup(React.createElement(layout.AppLayout, { activeNav: 'issues' }, body));
+  assert.match(workspace, /Page content/);
+  assert.doesNotMatch(workspace, /<aside|Back to workspace/);
+  const settings = renderToStaticMarkup(React.createElement(layout.AppLayout, { activeNav: 'settings' }, body));
+  assert.match(settings, /href="\/issues"[^>]*>.*Back to workspace/s);
+});
 
-const { exports: pfLogoModule } = loadTsxModule('../../resources/js/Components/ui/PfLogo.tsx');
-const { exports: themeModule } = loadTsxModule('../../resources/js/Components/ThemeToggle.tsx');
+test('a disconnected user can start GitHub connection without fake balances or fixture shortcuts', () => {
+  const html = renderToStaticMarkup(React.createElement(onboarding.DisconnectedOnboardingView, baseProps));
+  assert.match(html, /Connect GitHub/);
+  assert.match(html, /GitHub App client ID/);
+  assert.match(html, /href="\/settings"/);
+  assert.doesNotMatch(html, /\$15\.00|\$100\.00|Open OrderTotal|Launch Interactive/);
+});
 
-const { exports: appLayoutModule } = loadTsxModule(
-  '../../resources/js/Components/AppLayout.tsx',
-  (id) => {
-    if (id === '@inertiajs/react') return inertiaMock;
-    if (id === 'framer-motion') return framerMotionMock;
-    if (id === './ThemeToggle') return themeModule;
-    if (id === './ui/PfLogo') return pfLogoModule;
-    return require(id);
-  }
-);
+test('the repository sidebar shows tasks only for the selected repository', () => {
+  const sidebar = loadTsx('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', (id) => id === '@inertiajs/react' ? inertia : require(id));
+  const connection = { selectedRepo: 'owner/one', repositories: [{ fullName: 'owner/one' }], repoIssues: [], repoPulls: [], user: { login: 'owner' } };
+  const html = renderToStaticMarkup(React.createElement(sidebar.WorkbenchSidebar, {
+    githubConnection: connection, sidebarTab: 'issues', sidebarQuery: '', filteredIssues: [], filteredPulls: [], issuePathMap: {},
+    localTasks: [{ id: 1, title: 'Selected task', repository: 'owner/one' }, { id: 2, title: 'Other task', repository: 'owner/two' }],
+    handleSelectRepo() {}, setSidebarTab() {}, setSidebarQuery() {}, setIssuePathMap() {}, handleLoadIssue() {}, setViewMode() {}, onSelectTask() {},
+  }));
+  assert.match(html, /Selected task/);
+  assert.doesNotMatch(html, /Other task/);
+  assert.match(html, /Issues \(0\)/);
+  assert.match(html, /Pull Requests \(0\)/);
+  assert.match(html, /href="\/settings"/);
+});
 
-test('PfLogo renders tasteful original cursive vector monogram with Pf calligraphic paths', () => {
-  const html = renderToStaticMarkup(React.createElement(pfLogoModule.PfLogo, { size: 32, badge: true }));
+test('a pending connection displays the actual device code and a way to finish', () => {
+  const html = renderToStaticMarkup(React.createElement(onboarding.DisconnectedOnboardingView, {
+    ...baseProps, githubConnection: { deviceFlow: { userCode: 'TEST-1234', verificationUri: 'https://github.com/login/device' } },
+  }));
+  assert.match(html, /TEST-1234/);
+  assert.match(html, /href="https:\/\/github.com\/login\/device"/);
+  assert.match(html, /Check connection/);
+});
+
+test('provider balances and inactive automation preferences are not presented as live services', () => {
+  const source = readFileSync(new URL('../../resources/js/Pages/Settings.tsx', import.meta.url), 'utf8');
+  const sidebar = readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8');
+  assert.match(source, /Automatic actions are not active yet/);
+  assert.match(source, /Local estimates are not provider balances or billing limits/);
+  assert.doesNotMatch(source + sidebar, /\$15\.00|\$100\.00|Meta \$15/);
+  assert.doesNotMatch(sidebar, /Open OrderTotal Case|5-Gate Case/);
+});
+
+test('the original Pf logo remains available', () => {
+  const html = renderToStaticMarkup(React.createElement(logo.PfLogo, { size: 32, badge: true }));
   assert.match(html, /<svg[^>]*width="32"[^>]*height="32"/);
-  assert.match(html, /d="M 9\.5 9 C 9\.5 12/); // P stem & bowl
-  assert.match(html, /d="M 17 15 C 19 14\.5/); // cursive f ascender
-  assert.match(html, /d="M 18\.5 15\.2 Q 22 14\.8 25\.5 15"/); // cursive f crossbar
-});
-
-test('AppLayout renders compact application sidebar without a top horizontal navbar', () => {
-  const html = renderToStaticMarkup(
-    React.createElement(appLayoutModule.AppLayout, { activeNav: 'issues' }, React.createElement('div', {}, 'Workbench Body'))
-  );
-
-  // Desktop sidebar exists with sticky full height
-  assert.match(html, /<aside class="hidden md:flex w-64 shrink-0/);
-
-  // Top navigation bar was removed
-  assert.doesNotMatch(html, /<header class="sticky top-0 z-40 bg-white/);
-
-  // Cursive ProofPatcher brand mark in sidebar header
-  assert.match(html, /font-semibold text-slate-900/);
-  assert.match(html, /ProofPatcher/);
-
-  // Primary navigation links
-  assert.match(html, /href="\/issues"[^>]*>.*Issues &amp; Tasks/s);
-  assert.match(html, /href="\/repositories"[^>]*>.*Pull Requests/s);
-  assert.match(html, /href="\/"[^>]*>.*Overview/s);
-  assert.match(html, /href="\/settings"[^>]*>.*Settings/s);
-  assert.match(html, /href="\/docs"[^>]*>.*Docs/s);
-
-  // Bottom account card and theme toggle
-  assert.match(html, /GitHub not connected/);
-  assert.match(html, /aria-label="Color theme"/);
-
-  // Content rendered inside edge-to-edge main
-  assert.match(html, /<main class="flex-1 min-w-0 p-4 sm:p-6 lg:p-7 overflow-y-auto">.*Workbench Body.*<\/main>/s);
-});
-
-test('Disconnected Issues screen displays full-screen GitHub onboarding and honest credit metrics without synthetic shortcuts', () => {
-  const issuesSource = [
-    readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8'),
-  ].join('\n');
-
-  // Must check connection and branch to disconnected onboarding view
-  assert.match(issuesSource, /if \(!isConnected\)/);
-  assert.match(issuesSource, /Connect your GitHub account/);
-  assert.match(issuesSource, /GitHub OAuth Device Flow \(RFC 8628\)/);
-
-  // Must display honest usage and allowances
-  assert.match(issuesSource, /Meta Muse API/);
-  assert.match(issuesSource, /\$15\.00/);
-  assert.match(issuesSource, /Baseten Credits/);
-  assert.match(issuesSource, /\$100\.00/);
-  assert.match(issuesSource, /Live Provider API/);
-  assert.match(issuesSource, /Unavailable/);
-  assert.match(issuesSource, /Not exposed via completion API/);
-
-  // Must not render synthetic shortcuts in standard view
-  assert.doesNotMatch(issuesSource, /OrderTotal Bug \(#101 · Offline Fixture\)/);
-  assert.doesNotMatch(issuesSource, /Dedicated Test Repo Issue \(#1\)/);
-});
-
-test('Settings page exposes user-configurable Maintainer Automation Rules and honest credit balances', () => {
-  const settingsSource = readFileSync(new URL('../../resources/js/Pages/Settings.tsx', import.meta.url), 'utf8');
-
-  // Automation rules
-  assert.match(settingsSource, /Maintainer Automation Rules/);
-  assert.match(settingsSource, /Automated Issue Triage/);
-  assert.match(settingsSource, /Automated 5-Gate Verifier/);
-  assert.match(settingsSource, /Require Maintainer Approval Before Model Requests/);
-  assert.match(settingsSource, /Anti-Slop Code Quality Filter/);
-  assert.match(settingsSource, /Maximum Diff Line Threshold/);
-
-  // Honest allowance reporting
-  assert.match(settingsSource, /\$15\.00/);
-  assert.match(settingsSource, /Meta Muse Allowance/);
-  assert.match(settingsSource, /\$100\.00/);
-  assert.match(settingsSource, /Baseten Credits/);
-  assert.match(settingsSource, /Unavailable/);
-  assert.match(settingsSource, /Not exposed via chat completion API/);
-
-  // 3-Pillar & Global Provider Matrix
-  assert.match(settingsSource, /Global Provider &amp; Sandbox Architecture/);
-  assert.match(settingsSource, /Modal gVisor Sandbox/);
-  assert.match(settingsSource, /block_network=True/);
-});
-
-test('Issues workbench includes 3-Pillar architecture explainability, 4-step guided flow bar, Repo Context Memory, and bot attribution', () => {
-  const issuesSource = [
-    readFileSync(new URL('../../resources/js/Pages/Issues.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/DisconnectedOnboardingView.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/GuidedStepBar.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/IssueHeaderCard.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/ProposalDiffCard.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../../resources/js/Components/workbench/VerificationPipelineCard.tsx', import.meta.url), 'utf8'),
-  ].join('\n');
-
-  // 3-Pillar Architecture Cards on Landing Screen
-  assert.match(issuesSource, /1\. Meta Muse Spark/);
-  assert.match(issuesSource, /2\. Baseten Inference/);
-  assert.match(issuesSource, /3\. Modal gVisor Sandbox/);
-  assert.match(issuesSource, /1-Click: Launch Interactive 5-Gate Flow/);
-
-  // 4-Step Guided Co-Maintainer Flow Bar
-  assert.match(issuesSource, /1\. Context Loaded/);
-  assert.match(issuesSource, /2\. Single-Use Approval/);
-  assert.match(issuesSource, /3\. 5-Gate Verifier/);
-  assert.match(issuesSource, /4\. Receipt &amp; PR Response/);
-
-  // Repository Context Memory auto-fill & Issue Media/GIF inspector
-  assert.match(issuesSource, /Repo Context Memory/);
-  assert.match(issuesSource, /proofpatch-repo-memory/);
-  assert.match(issuesSource, /Visual Media \/ GIF Detected/);
-  assert.match(issuesSource, /GitHub Co-Maintainer Response Attribution/);
-  assert.match(issuesSource, /proofpatcher\[bot\]/);
 });

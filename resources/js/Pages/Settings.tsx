@@ -304,7 +304,7 @@ export default function Settings({
               <div>
                 <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Personal preferences</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Maintainer Automation Rules governing PR intake, reviews, and test verification.
+                  Saved in this browser. Automatic actions are not active yet.
                 </p>
               </div>
 
@@ -333,7 +333,7 @@ export default function Settings({
 
                 <SettingToggleRow
                   title="Exhaustive code review"
-                  description="Keep looking for findings until ChatGPT stops finding new issues"
+                  description="Keep looking for findings until no new potential regressions are detected"
                   checked={automationRules.exhaustiveCodeReview}
                   onChange={(val) => updateRule('exhaustiveCodeReview', val)}
                 />
@@ -422,79 +422,22 @@ export default function Settings({
 
             {usageSubTab === 'overview' ? (
               <div className="space-y-6">
-                <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Plan limits</h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Shared across Codex, Work, Workspace Agents, and ProofPatcher review engine.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3.5 pt-1">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">5-hour limit</span>
-                        <span className="text-[11px] text-slate-500 font-mono">0% used · Resets in 1h 20m</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-violet-600 rounded-full w-[0%]" />
-                      </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#141821]">
+                  <h2 className="text-sm font-semibold">Provider balances</h2>
+                  <p className="mt-2 text-sm text-slate-500">Unavailable here. Check your provider dashboard for balances and billing.</p>
+                  {budget && (
+                    <div className="mt-5 border-t border-slate-100 pt-4 text-sm dark:border-slate-800">
+                      <h3 className="font-medium">Local request budget</h3>
+                      <p className="mt-1 text-slate-500">{budget.attempts} of {budget.maxAttempts} attempts · ${(budget.remainingMicros / 1000000).toFixed(2)} estimated remaining</p>
+                      <p className="mt-1 text-xs text-slate-500">Local estimates are not provider balances or billing limits.</p>
                     </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Weekly limit</span>
-                        <span className="text-[11px] text-slate-500 font-mono">16% used · 84% left · Resets in 5d 21h</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-violet-600 rounded-full w-[16%]" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Credits &amp; Allowances</h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Measured runtime allowances and third-party inference limits.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-                      <span className="text-[11px] font-medium text-slate-500">Meta Muse Allowance</span>
-                      <div className="text-lg font-bold text-slate-900 dark:text-slate-100">$15.00</div>
-                      <p className="text-[10px] text-slate-500">Hackathon allowance for issue triage &amp; repair</p>
-                    </div>
-
-                    <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-                      <span className="text-[11px] font-medium text-slate-500">Baseten Credits</span>
-                      <div className="text-lg font-bold text-slate-900 dark:text-slate-100">$100.00</div>
-                      <p className="text-[10px] text-slate-500">High-throughput model engine serving</p>
-                    </div>
-
-                    <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 space-y-1.5">
-                      <span className="text-[11px] font-medium text-slate-500">Live Provider API</span>
-                      <div className="text-lg font-bold text-slate-500">Unavailable</div>
-                      <p className="text-[10px] text-slate-500">Not exposed via chat completion API</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Usage history</h2>
-                  <span className="text-xs font-mono text-slate-500">Oct 24 – 30, 2026</span>
-                </div>
-
-                <div className="p-8 text-center text-xs text-slate-500 space-y-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-800">
-                  <p className="font-medium text-slate-700 dark:text-slate-300">No external billable usage recorded</p>
-                  <p className="text-[11px] text-slate-400">
-                    Offline reference repairs and 5-gate verifications run locally in isolated worktrees.
-                  </p>
-                </div>
+                <h2 className="text-sm font-semibold">Usage history</h2>
+                <p className="text-sm text-slate-500">Provider usage is not available in ProofPatcher. Check your provider dashboard.</p>
               </div>
             )}
           </div>
@@ -555,9 +498,21 @@ export default function Settings({
                 <div className="space-y-4">
                   <form onSubmit={handleInitiate} className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        GitHub App Client ID
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">
+                        GitHub OAuth App Client ID
                       </label>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
+                        Connects ProofPatcher to your repositories via Device Flow (RFC 8628). Find your Client ID under{' '}
+                        <a
+                          href="https://github.com/settings/developers"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-violet-600 underline font-medium"
+                        >
+                          GitHub &gt; Settings &gt; Developer settings &gt; OAuth Apps
+                        </a>
+                        , or keep the pre-configured default.
+                      </p>
                       <input
                         type="text"
                         value={clientIdInput}

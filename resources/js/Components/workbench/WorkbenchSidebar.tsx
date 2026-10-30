@@ -1,23 +1,18 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
   FolderGit2,
   RefreshCw,
   Search,
   Plus,
-  Shield,
-  Layers,
-  Sparkles,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import {
   GitHubConnectionData,
   GitHubIssueItem,
   GitHubPullItem,
-  RepoMemoryState,
-  BudgetData,
-  IssueContext,
 } from './types';
+import { LocalTaskCard } from '../TaskCardSection';
 
 interface WorkbenchSidebarProps {
   githubConnection: GitHubConnectionData | null;
@@ -33,15 +28,9 @@ interface WorkbenchSidebarProps {
   setIssuePathMap: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   loadingIssueNum: number | null;
   handleLoadIssue: (issue: GitHubIssueItem) => void;
-  loadOwned: (event: React.MouseEvent) => void;
-  loadingOwned: boolean;
-  viewMode: 'workbench' | 'local-card' | 'new';
   setViewMode: (mode: 'workbench' | 'local-card' | 'new') => void;
-  context?: IssueContext | null;
-  repoMemory: RepoMemoryState;
-  budget?: BudgetData | null;
-  isConnected: boolean;
-  setShowLandingHub: (show: boolean) => void;
+  localTasks: LocalTaskCard[];
+  onSelectTask: (id: number) => void;
 }
 
 export function WorkbenchSidebar({
@@ -58,15 +47,9 @@ export function WorkbenchSidebar({
   setIssuePathMap,
   loadingIssueNum,
   handleLoadIssue,
-  loadOwned,
-  loadingOwned,
-  viewMode,
   setViewMode,
-  context,
-  repoMemory,
-  budget,
-  isConnected,
-  setShowLandingHub,
+  localTasks,
+  onSelectTask,
 }: WorkbenchSidebarProps) {
   return (
     <aside className="w-full lg:w-80 shrink-0 bg-[#f6f6f4] dark:bg-[#0e1117] border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
@@ -157,22 +140,9 @@ export function WorkbenchSidebar({
         <div className="pt-1 border-t border-slate-200/70 dark:border-slate-800 space-y-2 max-h-[calc(100vh-26rem)] overflow-y-auto pr-0.5">
           {sidebarTab === 'issues' ? (
             filteredIssues.length === 0 ? (
-              <div className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 space-y-2 text-xs">
-                <p className="text-slate-500 dark:text-slate-400">
-                  {githubConnection?.selectedRepo
-                    ? 'No matching issues found in this repository.'
-                    : 'Interactive verification mode active.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={loadOwned}
-                  disabled={loadingOwned}
-                  className="w-full py-1.5 px-2.5 rounded-lg bg-violet-700 hover:bg-violet-800 text-white font-semibold text-[11px] flex items-center justify-center gap-1.5 transition disabled:opacity-50"
-                >
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Open OrderTotal Case (#101)</span>
-                </button>
-              </div>
+              <p className="p-2 text-xs text-slate-500">
+                {githubConnection?.selectedRepo ? 'No matching issues.' : 'Choose a repository.'}
+              </p>
             ) : (
               filteredIssues.map((issue) => (
                 <div
@@ -211,7 +181,7 @@ export function WorkbenchSidebar({
                       type="text"
                       autoComplete="off"
                       spellCheck={false}
-                      placeholder={repoMemory.defaultPath || 'target/file.php'}
+                      placeholder="Path to file"
                       value={issuePathMap[issue.number] ?? ''}
                       onChange={(e) =>
                         setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
@@ -221,7 +191,7 @@ export function WorkbenchSidebar({
                     <button
                       type="button"
                       onClick={() => handleLoadIssue(issue)}
-                      disabled={loadingIssueNum === issue.number}
+                      disabled={loadingIssueNum === issue.number || !issuePathMap[issue.number]?.trim()}
                       className="px-2.5 py-1 rounded bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-[11px] hover:bg-slate-800 transition shrink-0 disabled:opacity-50"
                     >
                       {loadingIssueNum === issue.number ? '…' : 'Open'}
@@ -255,73 +225,40 @@ export function WorkbenchSidebar({
                       {pull.state}
                     </span>
                   </div>
-                  <Link
-                    href={`/repositories?repo=${encodeURIComponent(githubConnection?.selectedRepo || '')}&pull=${pull.number}`}
+                  <button
+                    type="button"
+                    onClick={() => router.post('/github/pulls/capture', { repository: githubConnection?.selectedRepo, number: pull.number })}
                     className="w-full mt-1 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium text-center block transition"
                   >
-                    Inspect PR Diff &rarr;
-                  </Link>
+                    Open pull request
+                  </button>
                 </div>
               ))
             )
           )}
         </div>
 
-        {/* Quick Mode Switcher & Repository Context Memory */}
-        <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-2">
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              type="button"
-              onClick={() => setViewMode('new')}
-              className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border transition ${
-                viewMode === 'new'
-                  ? 'bg-violet-700 text-white border-violet-700'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Plus className="w-3 h-3" />
-              <span>New Task</span>
-            </button>
-            <button
-              type="button"
-              onClick={loadOwned}
-              disabled={loadingOwned}
-              className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 border transition ${
-                viewMode === 'workbench' && context
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Shield className="w-3 h-3" />
-              <span>{loadingOwned ? 'Loading…' : '5-Gate Case'}</span>
-            </button>
+        {localTasks.some((task) => task.repository.toLowerCase() === githubConnection?.selectedRepo?.toLowerCase()) && (
+          <div className="space-y-1 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <h2 className="text-xs font-semibold text-slate-500">Tasks</h2>
+            {localTasks.filter((task) => task.repository.toLowerCase() === githubConnection?.selectedRepo?.toLowerCase()).map((task) => (
+              <button key={task.id} type="button" onClick={() => onSelectTask(Number(task.id))} className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800">
+                {task.title}
+              </button>
+            ))}
           </div>
+        )}
 
-          {/* Persistent Repository Context Memory Card */}
-          <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-2.5 space-y-1 text-[10px]">
-            <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-300">
-              <span className="flex items-center gap-1">
-                <Layers className="w-3 h-3 text-violet-600" />
-                <span>Repo Context Memory</span>
-              </span>
-              <span className="text-[9px] font-mono text-emerald-700 dark:text-emerald-400">Auto-Fill Active</span>
-            </div>
-            <div className="font-mono text-slate-600 dark:text-slate-400 truncate">
-              Target: <span className="text-slate-900 dark:text-slate-200">{repoMemory.defaultPath}</span>
-            </div>
-            <div className="font-mono text-slate-500 dark:text-slate-400 truncate">
-              Oracle: {repoMemory.testCommand}
-            </div>
-            {repoMemory.lastVerifiedReceipt && (
-              <div className="font-mono text-emerald-700 dark:text-emerald-400 truncate">
-                Last Receipt: {repoMemory.lastVerifiedReceipt.slice(0, 12)}…
-              </div>
-            )}
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setViewMode('new')}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        >
+          <Plus className="mr-1 inline h-3.5 w-3.5" /> New task
+        </button>
       </div>
 
-      {/* Bottom Account & Credit Control */}
+      {/* Bottom Account & Allowance Bar */}
       <div className="sticky bottom-0 p-3 border-t border-slate-200/80 dark:border-slate-800 bg-[#e9e6dc] dark:bg-[#11141c] space-y-2 text-[11px] text-slate-700 dark:text-slate-300">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -338,24 +275,14 @@ export function WorkbenchSidebar({
             )}
             <div className="min-w-0">
               <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                {githubConnection?.user?.login ? `@${githubConnection.user.login}` : 'proofpatcher[bot]'}
+                {githubConnection?.user?.login ? `@${githubConnection.user.login}` : 'GitHub'}
               </div>
               <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                {githubConnection?.selectedRepo || (isConnected ? 'GitHub connected' : 'Local 5-Gate Sandbox')}
+                {githubConnection?.selectedRepo || 'GitHub connected'}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {!isConnected && (
-              <button
-                type="button"
-                onClick={() => setShowLandingHub(true)}
-                title="Open 3-Pillar Architecture & GitHub OAuth Hub"
-                className="px-2 py-1 rounded-md border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/60 text-violet-800 dark:text-violet-200 font-semibold text-[10px] hover:bg-violet-100 transition"
-              >
-                3-Pillar Hub
-              </button>
-            )}
             <Link
               href="/settings"
               aria-label="Account and GitHub settings"
@@ -367,15 +294,7 @@ export function WorkbenchSidebar({
           </div>
         </div>
 
-        <div className="pt-1.5 border-t border-slate-300/60 dark:border-slate-800 flex items-center justify-between gap-2 text-[10px] text-slate-600 dark:text-slate-400">
-          <span className="inline-flex items-center gap-1 truncate">
-            <Sparkles className="w-3 h-3 text-violet-700 dark:text-violet-400 shrink-0" />
-            <span className="truncate">Meta ($15) · Baseten ($100) · Modal</span>
-          </span>
-          <span className="font-mono shrink-0">
-            {budget ? `${budget.attempts}/${budget.maxAttempts} req` : '0 req'}
-          </span>
-        </div>
+
       </div>
     </aside>
   );

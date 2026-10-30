@@ -101,18 +101,21 @@ export default function Overview({
             </div>
           </div>
 
-          <dl className="mt-5 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
-              <dt className="text-xs font-medium text-slate-500">Saved PR snapshots</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{totalSnapshots}</dd>
+          <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 dark:border-slate-800 pt-5 sm:grid-cols-4">
+            <div className="rounded-lg border border-slate-200 p-3.5 dark:border-slate-700">
+              <dt className="text-[11px] font-medium text-slate-500">Provider balance</dt>
+              <dd className="mt-1 text-sm font-medium">Unavailable</dd>
+              <p className="text-[10px] text-slate-400">Check your provider dashboard</p>
             </div>
-            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
-              <dt className="text-xs font-medium text-slate-500">Verification runs</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{totalRuns}</dd>
+            <div className="rounded-lg border border-slate-200/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-3.5 space-y-1">
+              <dt className="text-[11px] font-medium text-slate-500">Local Verifications</dt>
+              <dd className="text-xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{totalRuns}</dd>
+              <p className="text-[10px] text-emerald-600 font-medium">{verifiedRuns} verified passes</p>
             </div>
-            <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-3.5">
-              <dt className="text-xs font-medium text-slate-500">Runs with verified results</dt>
-              <dd className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{verifiedRuns}</dd>
+            <div className="rounded-lg border border-slate-200/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 p-3.5 space-y-1">
+              <dt className="text-[11px] font-medium text-slate-500">PR Snapshots</dt>
+              <dd className="text-xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{totalSnapshots}</dd>
+              <p className="text-[10px] text-slate-400">Captured for review</p>
             </div>
           </dl>
         </section>

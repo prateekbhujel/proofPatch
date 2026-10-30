@@ -94,8 +94,8 @@ export default function Repositories({
     postDeviceInitiate('/github/device/initiate');
   };
 
-  const handlePollDeviceFlow = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePollDeviceFlow = (e?: React.FormEvent) => {
+    e?.preventDefault();
     router.post('/github/device/poll', {}, { preserveScroll: true });
   };
 
@@ -216,9 +216,7 @@ export default function Repositories({
 
   if (!githubConnection?.isConnected) {
     return (
-      <AppLayout activeNav="repositories">
-        <Head title="Connect GitHub · ProofPatcher" />
-        <DisconnectedOnboardingView
+      <DisconnectedOnboardingView
           error={error}
           deviceClientIdInput={deviceFormData.client_id}
           setDeviceClientIdInput={(val: string) => setDeviceFormData('client_id', val)}
@@ -232,9 +230,7 @@ export default function Repositories({
           }}
           copiedDeviceCode={copiedUserCode}
           githubConnection={githubConnection as any}
-          budget={budget as any}
-        />
-      </AppLayout>
+      />
     );
   }
 

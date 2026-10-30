@@ -127,7 +127,9 @@ export function ThemeToggle({ compact = true }: ThemeToggleProps) {
     <div
       role="radiogroup"
       aria-label="Color theme"
-      className="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-[#f2f0e8] dark:bg-slate-800 p-0.5 gap-0.5"
+      className={`items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-[#f2f0e8] dark:bg-slate-800 p-0.5 gap-0.5 ${
+        compact ? 'inline-flex' : 'flex w-full'
+      }`}
     >
       {options.map((opt, idx) => {
         const Icon = opt.icon;
@@ -146,7 +148,9 @@ export function ThemeToggle({ compact = true }: ThemeToggleProps) {
             tabIndex={isChecked ? 0 : -1}
             onClick={() => selectPreference(opt.value)}
             onKeyDown={(e) => handleKeyDown(e, idx)}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 ${
+              compact ? '' : 'flex-1'
+            } ${
               isChecked
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xs border border-slate-200/80 dark:border-slate-700'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -154,9 +158,7 @@ export function ThemeToggle({ compact = true }: ThemeToggleProps) {
           >
             <Icon className="w-3.5 h-3.5 shrink-0" />
             <span className={compact ? 'hidden sm:inline' : 'inline'}>
-              {opt.value === 'system' && !compact
-                ? `System (${systemScheme})`
-                : opt.label}
+              {opt.label}
             </span>
           </button>
         );

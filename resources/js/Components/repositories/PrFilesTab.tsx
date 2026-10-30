@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
-import { Search, AlertTriangle } from 'lucide-react';
+import { Search, AlertTriangle, MessageSquare } from 'lucide-react';
 import { DiffViewer, PatchFile } from '../DiffViewer';
 import { ChangedFile, SnapshotData, ReviewFinding, CommentDraft } from './types';
 
@@ -61,6 +61,13 @@ export function PrFilesTab({
         </div>
       </div>
 
+      <div className="flex items-center justify-between p-3 rounded-lg bg-violet-50/70 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 text-xs text-violet-900 dark:text-violet-200">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-violet-700 dark:text-violet-400 shrink-0" />
+          <span><strong>Inline Comments:</strong> Click the <strong>+</strong> button on any diff line to add maintainer review comments. Drafts stay local until published.</span>
+        </div>
+      </div>
+
       {!patchPreview && snapshot && (
         <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-0.5">
@@ -114,7 +121,7 @@ export function PrFilesTab({
                 headSha={headSha}
                 findings={findings}
                 drafts={drafts}
-                initiallyExpanded={false}
+                initiallyExpanded={filteredFiles.length <= 3}
                 onSaveDraft={onSaveDraft}
                 onDeleteDraft={onDeleteDraft}
                 isSavingDraft={draftProcessing}

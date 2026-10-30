@@ -19,7 +19,6 @@ import {
   VerificationReport,
   WorkbenchTaskData,
   BudgetData,
-  RepoMemoryState,
   GitHubIssueItem,
 } from '../Components/workbench/types';
 import { DisconnectedOnboardingView } from '../Components/workbench/DisconnectedOnboardingView';
@@ -65,7 +64,7 @@ interface Props {
 }
 
 export default function Issues({
-  context,
+  context: suppliedContext,
   preview,
   suggestion,
   draft,
@@ -85,10 +84,10 @@ export default function Issues({
   modelContextAllowed = false,
   modelKeyAvailable = false,
 }: Props) {
+  const context = suppliedContext?.isSynthetic ? null : suppliedContext;
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
   const [sending, setSending] = useState(false);
-  const [loadingOwned, setLoadingOwned] = useState(false);
   const [loadingDedicated, setLoadingDedicated] = useState(false);
   const [publishingPr, setPublishingPr] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -101,42 +100,8 @@ export default function Issues({
   const [copiedCandidateSha, setCopiedCandidateSha] = useState(false);
   const [copiedDeviceCode, setCopiedDeviceCode] = useState(false);
   const [isSubmittingDevice, setIsSubmittingDevice] = useState(false);
-  const [deviceClientIdInput, setDeviceClientIdInput] = useState('');
-  const [enteredWorkbench, setEnteredWorkbench] = useState(false);
-  const [showLandingHub, setShowLandingHub] = useState(false);
+  const [deviceClientIdInput, setDeviceClientIdInput] = useState(githubConnection?.clientId || '');
   const [copiedBotComment, setCopiedBotComment] = useState(false);
-
-  // Persistent Repository Context Memory (pre-fills target path so opening issues is 1-click child's play)
-  const [repoMemory, setRepoMemory] = useState<RepoMemoryState>(() => {
-    const fallback = {
-      defaultPath: 'src/OrderTotal.php',
-      testCommand: 'php tests/order_total.php',
-      branchRule: 'draft-pr-only (no auto-merge)',
-      lastVerifiedReceipt: null,
-    };
-    if (typeof window === 'undefined') return fallback;
-    try {
-      const saved = window.localStorage.getItem('proofpatch-repo-memory');
-      if (saved) return { ...fallback, ...JSON.parse(saved) };
-    } catch {}
-    return fallback;
-  });
-
-  useEffect(() => {
-    if (context?.path || verificationReport?.receipt?.sha256) {
-      setRepoMemory((prev) => {
-        const next = {
-          ...prev,
-          defaultPath: context?.path || prev.defaultPath,
-          lastVerifiedReceipt: verificationReport?.receipt?.sha256 || prev.lastVerifiedReceipt,
-        };
-        try {
-          window.localStorage.setItem('proofpatch-repo-memory', JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-    }
-  }, [context?.path, verificationReport?.receipt?.sha256]);
 
   // Parse Markdown images / GIFs from issue description for visual repro inspection
   const detectedIssueMedia = useMemo(() => {
@@ -207,7 +172,7 @@ export default function Issues({
 
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
-    const path = issuePathMap[issue.number]?.trim() || repoMemory.defaultPath || 'src/OrderTotal.php';
+    const path = issuePathMap[issue.number]?.trim() || '';
     if (!path) return;
     setLoadingIssueNum(issue.number);
     router.post(
@@ -263,19 +228,6 @@ export default function Issues({
     capture.post('/issues/preview', {
       onSuccess: () => setViewMode('workbench'),
     });
-  }
-
-  function loadOwned(event: React.MouseEvent) {
-    event.preventDefault();
-    setLoadingOwned(true);
-    router.post(
-      '/issues/load-owned',
-      { reset: true },
-      {
-        onSuccess: () => setViewMode('workbench'),
-        onFinish: () => setLoadingOwned(false),
-      }
-    );
   }
 
   function loadDedicated(event: React.MouseEvent) {
@@ -436,35 +388,20 @@ export default function Issues({
 
   const passedGateCount = pipelineGates ? pipelineGates.filter((g) => g.passed).length : 0;
 
-  // Disconnected Onboarding Hub View
   if (!isConnected) {
-    if ((!context && !cardPreview && !enteredWorkbench) || showLandingHub) {
-      return (
-        <DisconnectedOnboardingView
-          error={error}
-          deviceClientIdInput={deviceClientIdInput}
-          setDeviceClientIdInput={setDeviceClientIdInput}
-          isSubmittingDevice={isSubmittingDevice}
-          handleInitiateDeviceFlow={handleInitiateDeviceFlow}
-          handlePollDeviceFlow={handlePollDeviceFlow}
-          copyDeviceCode={copyDeviceCode}
-          copiedDeviceCode={copiedDeviceCode}
-          githubConnection={githubConnection}
-          budget={budget}
-          onLaunchInteractiveFlow={(e) => {
-            setShowLandingHub(false);
-            setEnteredWorkbench(true);
-            loadOwned(e);
-          }}
-          onOpenTaskComposer={() => {
-            setShowLandingHub(false);
-            setEnteredWorkbench(true);
-            setViewMode('new');
-          }}
-          loadingOwned={loadingOwned}
-        />
-      );
-    }
+    return (
+      <DisconnectedOnboardingView
+        error={error}
+        deviceClientIdInput={deviceClientIdInput}
+        setDeviceClientIdInput={setDeviceClientIdInput}
+        isSubmittingDevice={isSubmittingDevice}
+        handleInitiateDeviceFlow={handleInitiateDeviceFlow}
+        handlePollDeviceFlow={handlePollDeviceFlow}
+        copyDeviceCode={copyDeviceCode}
+        copiedDeviceCode={copiedDeviceCode}
+        githubConnection={githubConnection}
+      />
+    );
   }
 
   return (
@@ -488,15 +425,12 @@ export default function Issues({
           setIssuePathMap={setIssuePathMap}
           loadingIssueNum={loadingIssueNum}
           handleLoadIssue={handleLoadIssue}
-          loadOwned={loadOwned}
-          loadingOwned={loadingOwned}
-          viewMode={viewMode}
           setViewMode={setViewMode}
-          context={context}
-          repoMemory={repoMemory}
-          budget={budget}
-          isConnected={isConnected}
-          setShowLandingHub={setShowLandingHub}
+          localTasks={localTasks}
+          onSelectTask={(id) => {
+            setSelectedLocalCardId(id);
+            setViewMode('local-card');
+          }}
         />
 
         {/* Right Main Pane: Edge-to-Edge Focused Task */}
@@ -529,7 +463,7 @@ export default function Issues({
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
                   <Shield className="w-3 h-3 text-slate-500" />
-                  <span>Execution boundary</span>
+                  <span>Local workspace</span>
                 </span>
               </div>
             </div>
@@ -550,16 +484,17 @@ export default function Issues({
                 <div className="space-y-6 pt-1">
                   <div className="space-y-1">
                     <h1 className="text-xl font-serif tracking-tight text-slate-900 dark:text-slate-100">
-                      Co-Maintainer Task Composer
+                      New task
                     </h1>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Create a local maintainer task card or select an incoming issue from {githubConnection?.selectedRepo || 'the sidebar'} to begin triage and automated 5-gate verification.
+                      Create a task or open an issue from {githubConnection?.selectedRepo || 'the sidebar'}.
                     </p>
                   </div>
 
                   <NewTaskComposer
                     githubConnection={githubConnection}
-                    onCreated={() => {
+                    onCreated={(taskId) => {
+                      setSelectedLocalCardId(taskId);
                       setViewMode('local-card');
                     }}
                   />

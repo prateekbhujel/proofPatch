@@ -36,11 +36,11 @@ Open **http://127.0.0.1:8000** in your browser.
 
 *(Alternatively, run `php artisan serve --port=8431`).*
 
-For an existing installation, back up the SQLite database before running `php artisan migrate`. The task-card migration adds a table; rolling it back deletes the cards in that table.
+For an existing installation, back up the SQLite database before running `php artisan migrate`. Rolling back the task-card migrations deletes the cards or their screenshots.
 
 ### Issue suggestions
 
-The Issues page also lets a connected user save text task cards for repositories granted to the GitHub app. Cards stay local and are not assigned to Muse or run automatically.
+The Issues page also lets a connected user save task cards and one PNG or JPEG screenshot per card for repositories granted to the GitHub app. Cards and images stay local; they are not assigned to Muse or run automatically.
 
 The Issues page can load issues from repositories granted to the connected GitHub account. A public issue and selected text file can also be previewed when that repository is granted. Muse suggestions are unverified until checked. The dedicated test workflow requires a local repository and revision allowlist; it is disabled when those settings are absent. General automatic reviews, GitHub comment triggers, and verification of arbitrary model-generated patches are not yet supported.
 

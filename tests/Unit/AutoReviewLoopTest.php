@@ -954,4 +954,103 @@ final class AutoReviewLoopTest extends TestCase
         \ProofPatch\GitHub\GitHubTokenStore::clear();
         $this->assertFileDoesNotExist($path);
     }
+
+    public function testPaginationHandlingForRepositoriesAndPullRequests(): void
+    {
+        // Setup mock HTTP returning multiple pages
+        $page1Repos = array_map(fn($i) => [
+            'id' => 100 + $i,
+            'name' => "repo-{$i}",
+            'full_name' => "acme/repo-{$i}",
+            'owner' => ['login' => 'acme'],
+            'private' => false,
+            'visibility' => 'public',
+            'default_branch' => 'main',
+        ], range(1, 100));
+
+        $page2Repos = [
+            [
+                'id' => 201,
+                'name' => 'repo-101',
+                'full_name' => 'acme/repo-101',
+                'owner' => ['login' => 'acme'],
+                'private' => false,
+                'visibility' => 'public',
+                'default_branch' => 'main',
+            ],
+        ];
+
+        $page1Pulls = array_map(fn($i) => [
+            'number' => $i,
+            'title' => "PR {$i}",
+            'state' => 'open',
+            'head' => ['ref' => "feature-{$i}", 'sha' => str_repeat('a', 40)],
+            'base' => ['ref' => 'main', 'sha' => str_repeat('b', 40), 'repo' => ['private' => false, 'visibility' => 'public']],
+            'user' => ['login' => "dev-{$i}"],
+        ], range(1, 100));
+
+        $page2Pulls = [
+            [
+                'number' => 101,
+                'title' => 'PR 101',
+                'state' => 'open',
+                'head' => ['ref' => 'feature-101', 'sha' => str_repeat('c', 40)],
+                'base' => ['ref' => 'main', 'sha' => str_repeat('d', 40), 'repo' => ['private' => false, 'visibility' => 'public']],
+                'user' => ['login' => 'dev-101'],
+            ],
+        ];
+
+        $http = new MockHttpClient([
+            // 1. listSelectedRepositories: installations
+            new MockResponse(json_encode(['total_count' => 1, 'installations' => [['id' => 10]]])),
+            // 2. installations/10/repositories: page 1 (100 items)
+            new MockResponse(json_encode(['total_count' => 101, 'repositories' => $page1Repos])),
+            // 3. installations/10/repositories: page 2 (1 item)
+            new MockResponse(json_encode(['total_count' => 101, 'repositories' => $page2Repos])),
+            // 4. listOpenPullRequests for repo: page 1 (100 items)
+            new MockResponse(json_encode($page1Pulls)),
+            // 5. listOpenPullRequests for repo: page 2 (1 item)
+            new MockResponse(json_encode($page2Pulls)),
+        ]);
+
+        $client = new GitHubAppClient($http);
+
+        // Verify repository pagination
+        $repoStatus = [];
+        $repos = $client->listSelectedRepositories('mock-token', $repoStatus);
+        $this->assertCount(101, $repos);
+        $this->assertFalse($repoStatus['truncated']);
+        $this->assertSame('acme/repo-101', $repos[100]['fullName']);
+
+        // Verify pull request pagination
+        $prStatus = [];
+        $pulls = $client->listOpenPullRequests('mock-token', 'acme/repo-1', $prStatus);
+        $this->assertCount(101, $pulls);
+        $this->assertFalse($prStatus['truncated']);
+        $this->assertSame(101, $pulls[100]['number']);
+    }
+
+    public function testPaginationTruncationWhenExceedingMaxPages(): void
+    {
+        // 6 pages of 100 pull requests -> triggers truncation guard at page 5
+        $fullPage = array_map(fn($i) => [
+            'number' => $i,
+            'title' => "PR {$i}",
+            'state' => 'open',
+            'head' => ['ref' => "feature-{$i}", 'sha' => str_repeat('a', 40)],
+            'base' => ['ref' => 'main', 'sha' => str_repeat('b', 40), 'repo' => ['private' => false, 'visibility' => 'public']],
+            'user' => ['login' => 'dev'],
+        ], range(1, 100));
+
+        $responses = array_fill(0, 6, new MockResponse(json_encode($fullPage)));
+        $http = new MockHttpClient($responses);
+        $client = new GitHubAppClient($http);
+
+        $prStatus = [];
+        $pulls = $client->listOpenPullRequests('mock-token', 'acme/repo-1', $prStatus);
+
+        // Max 5 pages * 100 items = 500 items
+        $this->assertCount(500, $pulls);
+        $this->assertTrue($prStatus['truncated']);
+    }
 }

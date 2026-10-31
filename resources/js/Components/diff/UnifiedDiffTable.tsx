@@ -161,8 +161,7 @@ export function UnifiedDiffTable({
                             <div className="w-6 h-6 rounded-full bg-violet-700 text-white flex items-center justify-center text-xs font-bold">
                               <Sparkles className="w-3.5 h-3.5" />
                             </div>
-                            <span className="text-xs font-semibold text-[#1f2328]">muse[bot]</span>
-                            <span className="text-[10px] text-slate-500 font-normal">Co-Maintainer</span>
+                            <span className="text-xs font-semibold text-[#1f2328]">Muse suggestion</span>
                             <span className="text-slate-300">·</span>
                             <span
                               className={`px-2 py-0.2 rounded text-[10px] font-bold uppercase tracking-wider ${
@@ -219,8 +218,8 @@ export function UnifiedDiffTable({
                             </span>
                           </summary>
                           <p className="mt-1.5 p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 font-mono text-[11px] leading-relaxed">
-                            Validated anchor on line {matchingFinding.lineHint}. Review finding verified
-                            against captured patch revision.
+                            This suggestion matches line {matchingFinding.lineHint} in the captured patch.
+                            Review its content before posting.
                           </p>
                         </details>
                       </div>

@@ -153,7 +153,7 @@ export function ProposalDiffCard({
           <div className="font-mono text-xs divide-y divide-slate-100 dark:divide-slate-800">
             <div className="bg-rose-50/75 dark:bg-rose-950/30 text-rose-950 dark:text-rose-200 px-4 py-2.5 flex items-start gap-3 overflow-x-auto">
               <span className="text-rose-600 select-none shrink-0">-</span>
-              <pre className="whitespace-pre-wrap break-words line-through decoration-rose-400">
+              <pre className="whitespace-pre-wrap break-words">
                 {suggestion.find}
               </pre>
             </div>

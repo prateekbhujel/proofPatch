@@ -20,7 +20,7 @@ export function TaskComposerFooter({
 }: TaskComposerFooterProps) {
   return (
     <div className="border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 px-6 py-3.5">
-      <form onSubmit={onSaveDraft} className="w-full">
+      <form onSubmit={onSaveDraft} className="mx-auto w-full max-w-5xl">
         <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 shadow-2xs space-y-2">
           <label htmlFor="review-draft-note" className="sr-only">
             Review note
@@ -30,14 +30,14 @@ export function TaskComposerFooter({
             type="text"
             value={draftValue}
             onChange={(e) => onDraftChange(e.target.value)}
-            placeholder="Record a local review note or observation for this task…"
-            className="w-full text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 bg-transparent focus:outline-none"
+            placeholder="Add a note about this issue…"
+            className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none dark:text-slate-100"
           />
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px]">
                 <MessageSquare className="w-3 h-3 text-slate-500" />
-                Local session note
+                Local note
               </span>
               <VoiceDictationButton
                 label="Voice"

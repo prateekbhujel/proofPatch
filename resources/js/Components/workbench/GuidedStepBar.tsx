@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  CheckCircle2,
-  ChevronRight,
-  Sparkles,
-  Shield,
-  GitPullRequest,
-} from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { IssueContext, Suggestion, VerificationReport } from './types';
 
 interface GuidedStepBarProps {
@@ -15,84 +9,33 @@ interface GuidedStepBarProps {
   hasPublishedPr: boolean;
 }
 
-export function GuidedStepBar({
-  context,
-  suggestion,
-  verificationReport,
-  hasPublishedPr,
-}: GuidedStepBarProps) {
-  const isStep1Done = Boolean(context);
-  const isStep2Done = Boolean(suggestion);
-  const isStep3Done = Boolean(verificationReport && verificationReport.decision === 'VERIFIED');
-  const isStep4Done = hasPublishedPr;
+export function GuidedStepBar({ context, suggestion, verificationReport, hasPublishedPr }: GuidedStepBarProps) {
+  const checks = verificationReport?.gates;
+  const checksPassed = verificationReport?.decision === 'VERIFIED' && checks != null
+    && Object.values(checks).length === 5 && Object.values(checks).every((passed) => passed === true);
+  const complete = [Boolean(context), Boolean(suggestion), checksPassed, hasPublishedPr];
+  const firstIncomplete = complete.findIndex((done) => !done);
+  const current = firstIncomplete < 0 ? -1 : firstIncomplete;
+  const labels = ['Issue', 'Change', 'Checks', 'Draft PR'];
 
   return (
-    <div className="mx-6 mt-4 p-2.5 rounded-xl border border-violet-200/80 dark:border-violet-900/60 bg-gradient-to-r from-violet-50/70 via-white to-violet-50/30 dark:from-violet-950/30 dark:via-[#141821] dark:to-violet-950/20 flex flex-wrap items-center justify-between gap-2 text-xs">
-      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-            isStep1Done
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold'
-              : 'bg-slate-100 text-slate-500'
-          }`}
-        >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>1. Issue</span>
-        </span>
-
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-            isStep2Done
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold'
-              : isStep1Done
-                ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 font-semibold animate-pulse'
-                : 'text-slate-400'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>2. Proposal</span>
-        </span>
-
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-            isStep3Done
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold'
-              : isStep2Done
-                ? 'bg-violet-100 text-violet-900 dark:bg-violet-950/80 dark:text-violet-200 font-semibold'
-                : 'text-slate-400'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5" />
-          <span>3. Checks</span>
-        </span>
-
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition ${
-            isStep4Done
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold'
-              : 'text-slate-400'
-          }`}
-        >
-          <GitPullRequest className="w-3.5 h-3.5" />
-          <span>4. Draft PR</span>
-        </span>
-      </div>
-
-      <div className="text-[11px] font-mono text-violet-700 dark:text-violet-300">
-        {!isStep1Done && 'Choose an issue to get started'}
-        {isStep1Done && !isStep2Done && 'Next: choose a proposal below'}
-        {isStep2Done && !verificationReport && 'Next: run the checks below'}
-        {verificationReport && !isStep3Done && 'Review the check results below'}
-        {isStep3Done && !isStep4Done && verificationReport?.isSimulated !== false && 'Local fixture checks passed'}
-        {isStep3Done && !isStep4Done && verificationReport?.isSimulated === false && 'Review the results before publishing'}
-        {isStep4Done && 'Draft PR created'}
-      </div>
-    </div>
+    <nav aria-label="Issue progress" className="border-b border-slate-200/80 px-5 py-3 dark:border-slate-800 sm:px-7">
+      <ol className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-2 gap-y-2 text-xs sm:gap-x-3">
+        {labels.map((label, index) => (
+          <li key={label} className="flex items-center gap-2 sm:gap-3">
+            {index > 0 && <ChevronRight aria-hidden="true" className="h-3 w-3 text-slate-300 dark:text-slate-700" />}
+            <span
+              aria-current={current === index ? 'step' : undefined}
+              className={`inline-flex items-center gap-1.5 ${complete[index] ? 'text-slate-700 dark:text-slate-300' : current === index ? 'font-semibold text-violet-700 dark:text-violet-300' : 'text-slate-400 dark:text-slate-500'}`}
+            >
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${complete[index] ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : current === index ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                {complete[index] ? <Check aria-label="Done" className="h-3 w-3" /> : index + 1}
+              </span>
+              {label}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }

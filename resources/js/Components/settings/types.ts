@@ -53,4 +53,9 @@ export interface SettingsProps {
   policy: SettingsPolicy;
   statusMessage?: string | null;
   errorMessage?: string | null;
+  autoReview?: {
+    worker: { isLive: boolean; status: string; message?: string };
+    settings: Record<string, { repository: string; enabled: boolean }> | [];
+    publicOnly: boolean;
+  } | null;
 }

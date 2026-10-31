@@ -149,11 +149,11 @@ export function WorkbenchSidebar({
                   key={issue.number}
                   className="p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/70 space-y-2 text-xs shadow-2xs"
                 >
-                  <div className="flex items-start justify-between gap-1.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                  <div className="space-y-1.5">
+                    <div className="min-w-0">
+                      <div className="flex items-start gap-1.5">
                         <span className="font-mono text-xs font-semibold text-slate-400">#{issue.number}</span>
-                        <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        <span className="min-w-0 break-words text-xs font-semibold text-slate-900 dark:text-slate-100" title={issue.title}>
                           {issue.title}
                         </span>
                       </div>
@@ -163,7 +163,7 @@ export function WorkbenchSidebar({
                     </div>
                     {issue.triage && (
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider shrink-0 ${
+                        className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
                           issue.triage.severity === 'rose'
                             ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                             : issue.triage.severity === 'amber'
@@ -183,6 +183,8 @@ export function WorkbenchSidebar({
                       autoComplete="off"
                       spellCheck={false}
                       placeholder="Path to file"
+                      aria-label={`File path required to open issue ${issue.number}`}
+                      title="Enter the file path to open this issue"
                       value={issuePathMap[issue.number] ?? ''}
                       onChange={(e) =>
                         setIssuePathMap((prev) => ({ ...prev, [issue.number]: e.target.value }))
@@ -215,7 +217,7 @@ export function WorkbenchSidebar({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-xs font-semibold text-slate-400">#{pull.number}</span>
-                        <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                        <span className="min-w-0 break-words text-xs font-semibold text-slate-900 dark:text-slate-100" title={pull.title}>
                           {pull.title}
                         </span>
                       </div>

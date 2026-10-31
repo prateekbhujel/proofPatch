@@ -16,12 +16,14 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { SettingsProps } from '../Components/settings/types';
+import { AutoReviewPanel } from '../Components/settings/AutoReviewPanel';
 
 export default function Settings({
   githubConnection,
   budget,
   statusMessage,
   errorMessage,
+  autoReview,
 }: SettingsProps) {
   const { props } = usePage();
 
@@ -32,6 +34,8 @@ export default function Settings({
   const [copiedCode, setCopiedCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [repoSearchQuery, setRepoSearchQuery] = useState('');
+  const [pendingReviewRepo, setPendingReviewRepo] = useState<string | null>(null);
+  const [autoReviewError, setAutoReviewError] = useState<string | null>(null);
 
   const copyUserCode = () => {
     if (githubConnection.deviceFlow?.userCode) {
@@ -67,6 +71,31 @@ export default function Settings({
 
   const handleSelectRepo = (repoName: string) => {
     router.post('/github/repositories/select', { repository: repoName });
+  };
+
+  const handleAutoReview = async (repository: string, enabled: boolean) => {
+    setPendingReviewRepo(repository);
+    setAutoReviewError(null);
+    try {
+      const response = await fetch('/repositories/auto-review/toggle', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': String(props.csrf_token || ''),
+        },
+        body: JSON.stringify({ repository, enabled }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success !== true) {
+        throw new Error(typeof result.error === 'string' ? result.error : 'Could not update automatic reviews.');
+      }
+      router.reload({ only: ['autoReview'], onFinish: () => setPendingReviewRepo(null) });
+    } catch (error) {
+      setAutoReviewError(error instanceof Error ? error.message : 'Could not update automatic reviews.');
+      setPendingReviewRepo(null);
+    }
   };
 
   const repositories = githubConnection.repositories || [];
@@ -227,14 +256,9 @@ export default function Settings({
               )}
             </div>
 
-            <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Automatic reviews</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Automatic actions are not active yet. Open a pull request to review it manually.
-                </p>
-              </div>
-            </div>
+            <AutoReviewPanel connected={githubConnection.isConnected} repositories={repositories} autoReview={autoReview}
+              pendingRepo={pendingReviewRepo} error={autoReviewError} onToggle={handleAutoReview}
+              onRefresh={() => router.reload({ only: ['autoReview'] })} />
           </div>
         )}
 

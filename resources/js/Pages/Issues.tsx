@@ -9,7 +9,6 @@ import {
   NewTaskComposer,
   FocusedLocalTaskView,
 } from '../Components/TaskCardSection';
-import { Shield } from 'lucide-react';
 import {
   GitHubConnectionData,
   IssueContext,
@@ -460,10 +459,6 @@ export default function Issues({
                     <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">{context.repository}</span>
                     <span className="text-slate-300 dark:text-slate-700">/</span>
                     <span className="font-mono text-slate-600 dark:text-slate-300">#{context.issueNumber}</span>
-                    <span className="text-slate-300 dark:text-slate-700">·</span>
-                    <span className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                      {context.path}
-                    </span>
                   </>
                 ) : viewMode === 'local-card' && selectedLocalCard ? (
                   <>
@@ -472,16 +467,10 @@ export default function Issues({
                     <span className="font-mono text-slate-600 dark:text-slate-300">#{selectedLocalCard.id}</span>
                   </>
                 ) : (
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">Task Composer</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">New task</span>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                  <Shield className="w-3 h-3 text-slate-500" />
-                  <span>Local workspace</span>
-                </span>
-              </div>
             </div>
 
             {/* Guided Step Bar */}
@@ -495,7 +484,7 @@ export default function Issues({
             )}
 
             {/* Pane Content */}
-            <div className="p-6 space-y-6">
+            <div className="mx-auto w-full max-w-5xl space-y-6 p-5 sm:p-7">
               {viewMode === 'new' && (
                 <div className="space-y-6 pt-1">
                   <div className="space-y-1">

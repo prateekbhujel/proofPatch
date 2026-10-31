@@ -223,18 +223,15 @@ export function VerificationPipelineCard({
               <div className="rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 p-3.5 space-y-1.5 text-xs">
                 <div className="font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>Draft PR #{publishedPr.prNumber} prepared on GitHub</span>
+                  <span>Draft PR #{publishedPr.prNumber} created on GitHub</span>
                 </div>
-                <p className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                  Branch {publishedPr.branch} · Receipt {publishedPr.receiptSha256.slice(0, 12)}…
-                </p>
                 <a
                   href={publishedPr.prUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-400 hover:underline pt-1"
                 >
-                  <span>Open Draft PR on GitHub</span>
+                  <span>Open on GitHub</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -246,7 +243,7 @@ export function VerificationPipelineCard({
                 {publisherDisconnected ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-amber-800 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Held in review safety mode</span>
+                    <span>Publishing unavailable</span>
                   </span>
                 ) : (
                   <button

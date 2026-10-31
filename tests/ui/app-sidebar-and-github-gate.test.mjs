@@ -101,8 +101,9 @@ test('a pending connection displays the actual device code and a way to finish',
 
 test('provider balances and inactive automation preferences are not presented as live services', () => {
   const source = readFileSync(new URL('../../resources/js/Pages/Settings.tsx', import.meta.url), 'utf8');
+  const autoReview = readFileSync(new URL('../../resources/js/Components/settings/AutoReviewPanel.tsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', import.meta.url), 'utf8');
-  assert.match(source, /Automatic actions are not active yet/);
+  assert.match(autoReview, /Automatic actions are not active yet/);
   assert.match(source, /Local estimates are not provider balances or billing limits/);
   assert.doesNotMatch(source + sidebar, /\$15\.00|\$100\.00|Meta \$15/);
   assert.doesNotMatch(sidebar, /Open OrderTotal Case|5-Gate Case/);

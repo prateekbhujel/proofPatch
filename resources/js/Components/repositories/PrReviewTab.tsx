@@ -41,12 +41,15 @@ export function PrReviewTab({
   reviewError,
 }: PrReviewTabProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Muse review</h2>
-        <p className="text-xs text-slate-500">
-          {review ? 'Review suggestions are advisory.' : isPrivate ? 'Private pull requests stay local and are not sent to Muse.' : 'Ask Muse to review the selected public diff.'}
+    <div className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-[#141821]">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Muse review</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {review ? 'Review these suggestions before acting on them.' : isPrivate ? 'Private pull requests stay local and are not sent to Muse.' : 'Ask Muse to review the selected public diff.'}
         </p>
+        </div>
+        {!review && isPrivate && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">Not available yet</span>}
       </div>
 
       {reviewError && (
@@ -57,11 +60,11 @@ export function PrReviewTab({
       )}
 
       {review && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-violet-700" />
-              <span className="text-xs font-semibold text-slate-900">Review Completed</span>
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Muse suggestions</span>
             </div>
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -72,13 +75,13 @@ export function PrReviewTab({
                   : 'bg-rose-50 text-rose-800 border border-rose-200'
               }`}
             >
-              {review.riskLevel} risk
+              Estimated {review.riskLevel} risk
             </span>
           </div>
 
-          <div className="border-t border-slate-100 pt-2.5">
-            <h3 className="text-xs font-semibold text-slate-900 mb-0.5">Summary</h3>
-            <p className="text-xs text-slate-700 leading-relaxed">{review.summary}</p>
+          <div className="border-t border-slate-100 pt-2.5 dark:border-slate-800">
+            <h3 className="mb-0.5 text-xs font-semibold text-slate-900 dark:text-slate-100">Summary</h3>
+            <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">{review.summary}</p>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-mono">
@@ -99,8 +102,7 @@ export function PrReviewTab({
           {/* Accessible Full Request Inspection Disclosure */}
           <details className="border border-slate-200 rounded-lg p-3 bg-white space-y-3">
             <summary className="cursor-pointer text-xs font-semibold text-slate-800 flex items-center justify-between">
-              <span>Inspect Complete Model Request Payload &amp; Cryptographic Digest</span>
-              <span className="text-[11px] text-slate-500 font-normal">Click to expand</span>
+              <span>Review what will be sent</span>
             </summary>
             <div className="space-y-3 pt-3 text-xs border-t border-slate-100">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
@@ -160,7 +162,7 @@ export function PrReviewTab({
                 className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
               />
               <span className="leading-relaxed">
-                I have inspected the complete request payload and SHA-256 digest above. I approve sending this untrusted diff to the review engine.
+                I approve sending this public diff to Muse for review.
               </span>
             </label>
 
@@ -181,7 +183,7 @@ export function PrReviewTab({
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-700 text-white text-xs font-semibold hover:bg-violet-800 disabled:opacity-40 transition shadow-xs"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{reviewProcessing ? 'Analyzing PR with Muse…' : 'Approve & Run Review'}</span>
+                <span>{reviewProcessing ? 'Reviewing…' : 'Run Muse review'}</span>
               </button>
             </div>
           </form>

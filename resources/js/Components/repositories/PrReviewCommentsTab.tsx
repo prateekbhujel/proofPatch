@@ -19,8 +19,6 @@ interface PrReviewCommentsTabProps {
 
 export function PrReviewCommentsTab({
   drafts,
-  reviewDecision,
-  setReviewDecision,
   commentApprovals,
   commentToPost,
   setCommentToPost,
@@ -32,12 +30,12 @@ export function PrReviewCommentsTab({
   githubConnection,
 }: PrReviewCommentsTabProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+    <div className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-[#141821]">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Review Summary &amp; Drafts</h2>
-          <p className="text-xs text-slate-500">
-            Review decisions and line drafts stay local until explicitly published.
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Draft comments</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Review your comments before posting them.
           </p>
         </div>
         {drafts.length > 0 && (
@@ -53,53 +51,17 @@ export function PrReviewCommentsTab({
         )}
       </div>
 
-      {/* Decision Radio Selector */}
-      <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-700">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="reviewDecision"
-            checked={reviewDecision === 'comment'}
-            onChange={() => setReviewDecision('comment')}
-            className="text-violet-700 focus:ring-violet-600"
-          />
-          <span>Comment</span>
-        </label>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="reviewDecision"
-            checked={reviewDecision === 'approve'}
-            onChange={() => setReviewDecision('approve')}
-            className="text-violet-700 focus:ring-violet-600"
-          />
-          <span>Approve</span>
-        </label>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="reviewDecision"
-            checked={reviewDecision === 'request_changes'}
-            onChange={() => setReviewDecision('request_changes')}
-            className="text-violet-700 focus:ring-violet-600"
-          />
-          <span>Request Changes</span>
-        </label>
-      </div>
-
       {commentPosted && <p role="status" className="text-xs text-emerald-700">Comment posted on GitHub.</p>}
 
-      {drafts
-        .filter((draft) => commentApprovals[draft.id])
-        .map((draft) => (
-          <div key={draft.id} className="rounded-lg border border-slate-200 p-3 space-y-2 text-xs">
-            <p className="font-semibold text-slate-800">
+      {drafts.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No draft comments yet. Add one from a changed line.</p>}
+      {drafts.map((draft) => (
+          <div key={draft.id} className="space-y-3 rounded-lg border border-slate-200 p-4 text-sm dark:border-slate-700">
+            <p className="font-medium text-slate-800 dark:text-slate-200">
               {draft.path}:{draft.line} ({draft.side})
             </p>
-            <p className="whitespace-pre-wrap break-words text-slate-700">{draft.comment}</p>
-            <label className="flex items-center gap-2 text-slate-700">
+            <p className="whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">{draft.comment}</p>
+            {commentApprovals[draft.id] ? <>
+            <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={commentToPost === commentApprovals[draft.id]}
@@ -107,7 +69,7 @@ export function PrReviewCommentsTab({
                   setCommentToPost(event.target.checked ? commentApprovals[draft.id] : null)
                 }
               />
-              <span>Post this comment to the configured test repository</span>
+              <span>Post this comment to the test repository{githubConnection?.user?.login ? ` as @${githubConnection.user.login}` : ''}</span>
             </label>
             <button
               type="button"
@@ -135,35 +97,13 @@ export function PrReviewCommentsTab({
                 ? 'Posting…'
                 : 'Post comment'}
             </button>
-            <p className="text-slate-500">
-              The PR can change between the final check and posting; check GitHub if the outcome is unclear.
-            </p>
+            </> : <p className="text-xs text-slate-500 dark:text-slate-400">This draft is saved locally. Posting it is not available for this pull request.</p>}
           </div>
         ))}
 
-      {/* Review decisions remain local notice */}
-      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
-        <p className="font-semibold text-slate-800">
-          Review decisions stay local · GitHub Comment Attribution (
-          {githubConnection?.user?.login
-            ? `@${githubConnection.user.login} / Co-Maintainer`
-            : 'proofpatcher[bot]'}
-          )
-        </p>
-        <p className="text-[11px] leading-relaxed">
-          Approvals and change requests are not submitted automatically to GitHub. Individual line-anchored comments can be posted manually to the configured test repository with a single-use SHA-256 digest token.
-        </p>
-      </div>
-
-      {/* Disabled Submission Button */}
-      <div>
-        <button
-          type="button"
-          disabled
-          className="px-4 py-2 text-xs font-medium rounded-md bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
-        >
-          Publish Review to GitHub (Not Implemented)
-        </button>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400">
+        <span>Submit an approval or change request</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">Coming soon</span>
       </div>
     </div>
   );

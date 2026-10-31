@@ -22,8 +22,12 @@ final readonly class RequestBudget
 
     public static function forRuntime(?string $customDir = null): self
     {
-        $configuredAttempts = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
-        if ($configuredAttempts === false || $configuredAttempts === '') {
+        $rawAttempts = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        if ($rawAttempts === false || $rawAttempts === '') {
+            $rawAttempts = $_ENV['PROOFPATCH_MODEL_MAX_ATTEMPTS'] ?? $_SERVER['PROOFPATCH_MODEL_MAX_ATTEMPTS'] ?? null;
+        }
+        $configuredAttempts = is_scalar($rawAttempts) ? (string) $rawAttempts : null;
+        if ($configuredAttempts === null || $configuredAttempts === '') {
             $maxAttempts = self::DEFAULT_MAX_ATTEMPTS;
         } elseif (preg_match('/\A[1-9][0-9]{0,2}\z/D', $configuredAttempts) && (int) $configuredAttempts <= 100) {
             $maxAttempts = (int) $configuredAttempts;

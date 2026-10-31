@@ -500,9 +500,15 @@ COMMIT;
         $testSha = (string) ($report['testSha256'] ?? self::KNOWN_TEST_SHA256);
         $baseCommit = DedicatedTestRepo::requireBaseCommit();
         $targetRepository = DedicatedTestRepo::requireName();
-        $origin = ($context['proposalOrigin'] ?? null) === 'offline_reference'
-            ? 'This is the known offline reference repair. No model was called for this proposal.'
-            : 'The candidate matches the pinned reference repair.';
+        $tokensInfo = isset($context['usage']) && is_array($context['usage'])
+            ? " (Tokens: {$context['usage']['prompt_tokens']} prompt, {$context['usage']['completion_tokens']} completion)"
+            : '';
+        $modelName = $context['model'] ?? 'meta-models/muse-spark-open-1026';
+        $origin = match ($context['proposalOrigin'] ?? null) {
+            'offline_reference' => 'This is the known offline reference repair. No model was called for this proposal.',
+            'muse' => "Candidate proposed by Meta Muse Spark ({$modelName}) via Baseten inference on public fixture context{$tokensInfo}. Applied to dedicated test repository with exact matching source SHA-256.",
+            default => 'The candidate matches the pinned reference repair.',
+        };
 
         return <<<MARKDOWN
 This draft was prepared by ProofPatcher for review. It does not merge automatically.

@@ -403,9 +403,16 @@ final class ModalIsolatedRunner implements IsolatedRunnerInterface
             return (is_file($this->pythonPath) && is_executable($this->pythonPath)) ? $this->pythonPath : null;
         }
 
-        if ($envPath = getenv('MODAL_PYTHON_PATH')) {
-            if (is_file($envPath) && is_executable($envPath)) {
-                return $envPath;
+        $envPath = getenv('MODAL_PYTHON_PATH') ?: ($_ENV['MODAL_PYTHON_PATH'] ?? $_SERVER['MODAL_PYTHON_PATH'] ?? null);
+        if ($envPath && is_file($envPath) && is_executable($envPath)) {
+            return $envPath;
+        }
+
+        $home = getenv('HOME') ?: ($_ENV['HOME'] ?? $_SERVER['HOME'] ?? null);
+        if ($home) {
+            $defaultVenv = $home . '/.local/share/proofpatch/venv/bin/python';
+            if (is_file($defaultVenv) && is_executable($defaultVenv)) {
+                return $defaultVenv;
             }
         }
 

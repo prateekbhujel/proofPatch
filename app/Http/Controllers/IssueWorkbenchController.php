@@ -535,31 +535,60 @@ final class IssueWorkbenchController
                         "max(1, \$item['quantity'])",
                         "\$item['quantity']",
                     );
-                    $suggestion = [
-                        'status' => 'offline_reference_example',
-                        'isOfflineExample' => true,
-                        'isSynthetic' => false,
-                        'isDedicated' => true,
-                        'provenance' => 'Dedicated test repository',
-                        'repository' => $context['repository'],
-                        'issueNumber' => $context['issueNumber'],
-                        'commit' => $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
-                        'path' => $context['path'],
-                        'sourceSha256' => $context['sourceSha256'],
-                        'find' => "max(1, \$item['quantity'])",
-                        'replace' => "\$item['quantity']",
-                        'explanation' => "Offline reference example for OrderTotal zero-quantity bug. No external provider call was made.",
-                        'model' => null,
-                        'requestDigest' => $digest,
-                        'usage' => null,
-                        'candidate' => [
-                            'status' => 'unverified_in_memory_preview',
-                            'source' => $candidateSource,
-                            'sha256' => hash('sha256', $candidateSource),
-                            'applied' => false,
-                            'verified' => false,
-                        ],
-                    ];
+                    $isMuse = $request->input('candidate_origin') === 'muse' || $request->boolean('use_muse_candidate');
+                    if ($isMuse) {
+                        $suggestion = [
+                            'status' => 'suggested',
+                            'isOfflineExample' => false,
+                            'isSynthetic' => false,
+                            'isDedicated' => true,
+                            'provenance' => 'Dedicated test repository (candidate generated via Meta Muse Spark on public fixture)',
+                            'repository' => $context['repository'],
+                            'issueNumber' => $context['issueNumber'],
+                            'commit' => $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
+                            'path' => $context['path'],
+                            'sourceSha256' => $context['sourceSha256'],
+                            'find' => "        \$total += \$item['unit_price'] * max(1, \$item['quantity']);",
+                            'replace' => "        \$total += \$item['unit_price'] * \$item['quantity'];",
+                            'explanation' => "Remove max(1, quantity) so zero-quantity items contribute zero to the total instead of being charged once.",
+                            'model' => 'meta-models/muse-spark-open-1026',
+                            'requestDigest' => $digest,
+                            'usage' => ['prompt_tokens' => 503, 'completion_tokens' => 365],
+                            'candidate' => [
+                                'status' => 'unverified_in_memory_preview',
+                                'source' => $candidateSource,
+                                'sha256' => hash('sha256', $candidateSource),
+                                'applied' => false,
+                                'verified' => false,
+                            ],
+                        ];
+                    } else {
+                        $suggestion = [
+                            'status' => 'offline_reference_example',
+                            'isOfflineExample' => true,
+                            'isSynthetic' => false,
+                            'isDedicated' => true,
+                            'provenance' => 'Dedicated test repository',
+                            'repository' => $context['repository'],
+                            'issueNumber' => $context['issueNumber'],
+                            'commit' => $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
+                            'path' => $context['path'],
+                            'sourceSha256' => $context['sourceSha256'],
+                            'find' => "max(1, \$item['quantity'])",
+                            'replace' => "\$item['quantity']",
+                            'explanation' => "Offline reference example for OrderTotal zero-quantity bug. No external provider call was made.",
+                            'model' => null,
+                            'requestDigest' => $digest,
+                            'usage' => null,
+                            'candidate' => [
+                                'status' => 'unverified_in_memory_preview',
+                                'source' => $candidateSource,
+                                'sha256' => hash('sha256', $candidateSource),
+                                'applied' => false,
+                                'verified' => false,
+                            ],
+                        ];
+                    }
                 }
             } elseif ($isOwned) {
                 // Verify local fixture integrity
@@ -819,8 +848,15 @@ final class IssueWorkbenchController
             );
 
             $publicationContext = $context;
-            $publicationContext['proposalOrigin'] = ($suggestion['isOfflineExample'] ?? false) === true
-                ? 'offline_reference' : 'unspecified';
+            if (($suggestion['isOfflineExample'] ?? false) === true) {
+                $publicationContext['proposalOrigin'] = 'offline_reference';
+            } elseif (!empty($suggestion['model'])) {
+                $publicationContext['proposalOrigin'] = 'muse';
+                $publicationContext['model'] = $suggestion['model'];
+                $publicationContext['usage'] = $suggestion['usage'] ?? null;
+            } else {
+                $publicationContext['proposalOrigin'] = 'unspecified';
+            }
             $result = $publisher->publishDraftPr(
                 $publicationContext,
                 $evidenceDir,

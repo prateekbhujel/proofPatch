@@ -80,7 +80,7 @@ export default function Overview({
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Overview</h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                Inspect pull requests, manage local tasks, and verify repairs with cryptographic receipts.
+                Review pull requests, verify bug fixes in isolated environments, and prepare draft changes.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
@@ -158,7 +158,7 @@ export default function Overview({
               <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-violet-700 transition" />
             </div>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              Queue local tasks with voice or screenshots, preview public files, request Muse proposals, and run verification checks.
+              Review repository issues, test candidate fixes in an isolated microVM, and prepare draft pull requests.
             </p>
           </Link>
 

@@ -46,7 +46,7 @@ final readonly class PrTriageAnalyzer
                 'filesTruncated' => $truncated,
             ],
             'policy' => [
-                'mode' => $this->policy['maintainerMode'] ?? 'STRICT_ANTI_SLOP',
+                'mode' => $this->policy['maintainerMode'] ?? 'MAINTAINER_STANDARDS',
                 'status' => $status,
                 'maxDiffLines' => $limit,
                 'totalChanges' => $total,

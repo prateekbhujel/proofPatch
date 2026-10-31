@@ -24,7 +24,7 @@ export function PrTriageTab({
       {/* 1. Triage Banner */}
       <div
         className={`p-6 rounded-2xl border shadow-xs space-y-4 ${
-          triage.summary.classification === 'AI_SLOP_REJECT'
+          triage.summary.classification === 'POLICY_VIOLATION' || triage.summary.classification === 'CHANGES_REQUESTED'
             ? 'bg-rose-50/70 border-rose-200'
             : triage.summary.classification === 'CLEAN_PR'
             ? 'bg-emerald-50/70 border-emerald-200'
@@ -35,7 +35,7 @@ export function PrTriageTab({
           <div className="flex items-start gap-3">
             <span
               className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${
-                triage.summary.classification === 'AI_SLOP_REJECT'
+                triage.summary.classification === 'POLICY_VIOLATION' || triage.summary.classification === 'CHANGES_REQUESTED'
                   ? 'bg-rose-600'
                   : triage.summary.classification === 'CLEAN_PR'
                   ? 'bg-emerald-600'
@@ -46,7 +46,7 @@ export function PrTriageTab({
               <div className="flex items-center gap-2">
                 <h3
                   className={`text-base font-bold ${
-                    triage.summary.classification === 'AI_SLOP_REJECT'
+                    triage.summary.classification === 'POLICY_VIOLATION' || triage.summary.classification === 'CHANGES_REQUESTED'
                       ? 'text-rose-900'
                       : triage.summary.classification === 'CLEAN_PR'
                       ? 'text-emerald-900'
@@ -57,7 +57,7 @@ export function PrTriageTab({
                 </h3>
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    triage.summary.classification === 'AI_SLOP_REJECT'
+                    triage.summary.classification === 'POLICY_VIOLATION' || triage.summary.classification === 'CHANGES_REQUESTED'
                       ? 'bg-rose-200/80 text-rose-800'
                       : triage.summary.classification === 'CLEAN_PR'
                       ? 'bg-emerald-200/80 text-emerald-800'
@@ -91,11 +91,7 @@ export function PrTriageTab({
                     setTimeout(() => setCopiedFeedback(false), 2000);
                   }
                 }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-                  triage.summary.classification === 'AI_SLOP_REJECT'
-                    ? 'bg-rose-700 text-white hover:bg-rose-800'
-                    : 'bg-amber-700 text-white hover:bg-amber-800'
-                }`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors bg-slate-900 text-white hover:bg-slate-800"
               >
                 {copiedFeedback ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedFeedback ? 'Copied Response!' : 'Copy Review Response'}</span>
@@ -130,9 +126,7 @@ export function PrTriageTab({
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-slate-800">
-                {triage.summary.classification === 'AI_SLOP_REJECT'
-                  ? 'Recommended Rejection Response (Close PR):'
-                  : 'Actionable Review Feedback for Contributor:'}
+                Actionable Review Feedback for Contributor:
               </span>
               <span className="text-[11px] text-slate-500">Ready to post or use as maintainer feedback</span>
             </div>
@@ -154,7 +148,7 @@ export function PrTriageTab({
             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
               triage.summary.classification === 'CLEAN_PR'
                 ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-                : triage.summary.classification === 'AI_SLOP_REJECT'
+                : triage.summary.classification === 'POLICY_VIOLATION' || triage.summary.classification === 'CHANGES_REQUESTED'
                 ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20'
                 : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20'
             }`}

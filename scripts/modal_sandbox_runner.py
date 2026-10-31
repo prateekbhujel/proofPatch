@@ -71,6 +71,10 @@ def validate_pinned_spec(source_b64: str, harness_b64: str, target: str, harness
         raise ValueError("Untrusted candidates are blocked until the test oracle is isolated from the candidate.")
 
 
+# Backwards compatibility alias
+validate_execution_spec = validate_pinned_spec
+
+
 def get_worker_script() -> str:
     """Worker PHP script that runs candidate function in isolated child process per case."""
     return (

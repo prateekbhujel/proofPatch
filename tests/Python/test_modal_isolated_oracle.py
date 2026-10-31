@@ -148,13 +148,13 @@ class ModalIsolatedOracleBoundaryTest(unittest.TestCase):
         oversized = base64.b64encode(b"a" * 70000).decode("ascii")
         valid_harness = base64.b64encode(FIXTURE_HARNESS).decode("ascii")
         with self.assertRaises(ValueError):
-            msr.validate_execution_spec(oversized, valid_harness, "src/OrderTotal.php", "tests/order_total.php", msr.DEFAULT_IMAGE)
+            msr.validate_pinned_spec(oversized, valid_harness, "src/OrderTotal.php", "tests/order_total.php", msr.DEFAULT_IMAGE)
 
     def test_spec_validation_blocks_unauthorized_harnesses(self):
         valid_source = base64.b64encode(BENIGN_REPAIR).decode("ascii")
         fake_harness = base64.b64encode(b"<?php echo 'tampered harness';").decode("ascii")
         with self.assertRaises(ValueError):
-            msr.validate_execution_spec(valid_source, fake_harness, "src/OrderTotal.php", "tests/order_total.php", msr.DEFAULT_IMAGE)
+            msr.validate_pinned_spec(valid_source, fake_harness, "src/OrderTotal.php", "tests/order_total.php", msr.DEFAULT_IMAGE)
 
 
 if __name__ == "__main__":

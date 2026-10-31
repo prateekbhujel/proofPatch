@@ -686,8 +686,9 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             githubToken: 'gho_dummy_valid_test_token_1234567890'
         );
 
-        self::assertSame('proofpatch/issue-1-' . $run1Id, $res1['branch']);
-        self::assertSame('proofpatch/issue-1-' . $run2Id, $res2['branch']);
+        self::assertMatchesRegularExpression('~\Aproofpatch/1-[a-z0-9-]{1,40}-[a-f0-9]{6}\z~', $res1['branch']);
+        self::assertSame(DedicatedTestRepoPublisher::branchName((string) ($context['title'] ?? ''), 1, $run1Id), $res1['branch']);
+        self::assertSame(DedicatedTestRepoPublisher::branchName((string) ($context['title'] ?? ''), 1, $run2Id), $res2['branch']);
         self::assertNotSame($res1['branch'], $res2['branch']);
     }
 
@@ -733,5 +734,24 @@ final class DedicatedTestRepoPublisherTest extends TestCase
             authorizationToken: $token,
             githubToken: null
         );
+    }
+
+    public function testBranchNamesAreReadableBoundedAndUnique(): void
+    {
+        $a = DedicatedTestRepoPublisher::branchName('Zero-quantity items inflate the order total!', 1, 'run-a');
+        $b = DedicatedTestRepoPublisher::branchName('Zero-quantity items inflate the order total!', 1, 'run-b');
+        self::assertMatchesRegularExpression('~\Aproofpatch/1-zero-quantity-items-inflate-the-order-[a-f0-9]{6}\z~', $a);
+        self::assertNotSame($a, $b);
+        self::assertSame($a, DedicatedTestRepoPublisher::branchName('Zero-quantity items inflate the order total!', 1, 'run-a'));
+        $long = DedicatedTestRepoPublisher::branchName(str_repeat('word ', 40).'../$(rm -rf)', 7, 'r');
+        self::assertMatchesRegularExpression('~\Aproofpatch/7-[a-z0-9-]{1,40}-[a-f0-9]{6}\z~', $long);
+        self::assertSame('proofpatch/2-fix-'.substr(hash('sha256', 'r'), 0, 6), DedicatedTestRepoPublisher::branchName('!!!', 2, 'r'));
+    }
+
+    public function testCommitCreditsTheRealAppIdentity(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 2).'/app/GitHub/DedicatedTestRepoPublisher.php');
+        self::assertStringContainsString('Co-authored-by: proofpatcher[bot] <349779349+proofpatcher[bot]@users.noreply.github.com>', $source);
+        self::assertStringNotContainsString('proofpatcher.dev', $source);
     }
 }

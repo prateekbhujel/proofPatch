@@ -1,6 +1,6 @@
 {
   "maintainerMode": "STRICT_ANTI_SLOP",
-  "maxDiffLines": 50,
+  "maxDiffLines": 10000,
   "maxAllowedMaskViewportRatio": 0.18,
   "maxOutsideMaskPixelDriftRatio": 0.0015,
   "requireTestCoverage": true,

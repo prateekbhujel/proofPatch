@@ -1,5 +1,6 @@
-import React from 'react';
-import { ExternalLink, Check, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { ExternalLink, Check, Lock, GitMerge, XCircle } from 'lucide-react';
+import { router } from '@inertiajs/react';
 import { PullData, TriageData } from './types';
 
 interface PrHeaderCardProps {
@@ -9,11 +10,23 @@ interface PrHeaderCardProps {
 }
 
 export function PrHeaderCard({ pull, triage, onViewTriage }: PrHeaderCardProps) {
+  const [pending, setPending] = useState<'merge' | 'close' | null>(null);
+  const [confirming, setConfirming] = useState<'merge' | 'close' | null>(null);
+
   const files = pull.files || [];
   const totalAdditions = files.reduce((acc, f) => acc + (f.additions || 0), 0);
   const totalDeletions = files.reduce((acc, f) => acc + (f.deletions || 0), 0);
   const total = totalAdditions + totalDeletions;
   const addBlocks = total > 0 ? Math.round((totalAdditions / total) * 5) : 0;
+  const isOpen = pull.state.toLowerCase() === 'open';
+
+  const submit = (action: 'merge' | 'close') => {
+    setPending(action);
+    router.post(`/repositories/pull/${action}`, { head_sha: pull.headSha, confirmed: true }, {
+      preserveScroll: true,
+      onFinish: () => { setPending(null); setConfirming(null); },
+    });
+  };
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 shadow-xs p-5 space-y-4">
@@ -91,7 +104,48 @@ export function PrHeaderCard({ pull, triage, onViewTriage }: PrHeaderCardProps) 
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 self-start md:self-center">
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          {isOpen && confirming === null && (
+            <>
+              <button
+                type="button"
+                disabled={pull.isDraft === true}
+                onClick={() => setConfirming('merge')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                <GitMerge className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{pull.isDraft ? 'Draft · cannot merge' : 'Merge'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming('close')}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+              >
+                <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Close</span>
+              </button>
+            </>
+          )}
+          {isOpen && confirming !== null && (
+            <div role="group" aria-label="Confirm action" className="flex flex-wrap items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-800">
+              <span>
+                {confirming === 'merge' ? 'Squash and merge' : 'Close without merging'} commit <code className="font-mono">{pull.headSha.slice(0, 7)}</code>?
+              </span>
+              <button
+                type="button"
+                autoFocus
+                disabled={pending !== null}
+                onClick={() => submit(confirming)}
+                className={`rounded px-2.5 py-1 font-semibold text-white disabled:opacity-50 ${confirming === 'merge' ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-rose-700 hover:bg-rose-800'}`}
+              >
+                {pending ? 'Working…' : 'Confirm'}
+              </button>
+              <button type="button" disabled={pending !== null} onClick={() => setConfirming(null)} className="px-1.5 py-1 text-slate-600 hover:text-slate-900">
+                Cancel
+              </button>
+            </div>
+          )}
+
           <a
             href={pull.url}
             target="_blank"

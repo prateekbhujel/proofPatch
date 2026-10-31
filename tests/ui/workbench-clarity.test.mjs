@@ -18,6 +18,10 @@ const { IssueHeaderCard } = component('../../resources/js/Components/workbench/I
 const { GuidedStepBar } = component('../../resources/js/Components/workbench/GuidedStepBar.tsx');
 const { PrReviewCommentsTab } = component('../../resources/js/Components/repositories/PrReviewCommentsTab.tsx',
   (id) => id === '@inertiajs/react' ? { router: { post() {} } } : require(id));
+const { PrHeaderCard } = component('../../resources/js/Components/repositories/PrHeaderCard.tsx',
+  (id) => id === '@inertiajs/react' ? { router: { post() {} } } : require(id));
+const { TaskComposerFooter } = component('../../resources/js/Components/workbench/TaskComposerFooter.tsx',
+  (id) => id === '../VoiceDictationButton' ? { VoiceDictationButton: () => null } : require(id));
 const { AutoReviewPanel } = component('../../resources/js/Components/settings/AutoReviewPanel.tsx');
 const render = (type, props) => renderToStaticMarkup(React.createElement(type, props));
 
@@ -76,4 +80,45 @@ test('automatic reviews show the real worker state and only enable public reposi
   assert.match(running, /Worker running/);
   assert.match(running, /Automatic review for owner\/public[^>]*checked/);
   assert.doesNotMatch(running, /Start the local worker/);
+});
+
+test('pull request header renders Merge and Close controls for open PRs and disables Merge for drafts', () => {
+  const basePull = {
+    repository: 'owner/repo',
+    number: 7,
+    title: 'Fix zero-quantity order total',
+    state: 'open',
+    head: 'proofpatch/1-zero-quantity-items-66b1eb',
+    base: 'main',
+    headSha: 'a'.repeat(40),
+    url: 'https://github.com/owner/repo/pull/7',
+    isPrivate: false,
+    isDraft: false,
+    files: [{ name: 'src/OrderTotal.php', additions: 2, deletions: 1 }],
+  };
+
+  const openHtml = render(PrHeaderCard, { pull: basePull, triage: null, onViewTriage() {} });
+  assert.match(openHtml, />Merge<\/span>/);
+  assert.match(openHtml, />Close<\/span>/);
+
+  const draftHtml = render(PrHeaderCard, { pull: { ...basePull, isDraft: true }, triage: null, onViewTriage() {} });
+  assert.match(draftHtml, /disabled=""[^>]*>.*Draft · cannot merge/);
+  assert.match(draftHtml, />Close<\/span>/);
+
+  const mergedHtml = render(PrHeaderCard, { pull: { ...basePull, state: 'merged' }, triage: null, onViewTriage() {} });
+  assert.doesNotMatch(mergedHtml, />Merge<\/span>/);
+  assert.doesNotMatch(mergedHtml, />Close<\/span>/);
+});
+
+test('TaskComposerFooter renders spacious multi-line textarea with visible label and field-sizing content', () => {
+  const html = render(TaskComposerFooter, {
+    draftValue: 'Reproduced with quantity=0',
+    onDraftChange() {},
+    onSaveDraft() {},
+    isSaving: false,
+    draft: null,
+  });
+  assert.match(html, /<textarea[^>]*id="review-draft-note"[^>]*rows="4"/);
+  assert.match(html, /\[field-sizing:content\]/);
+  assert.match(html, /Maintainer Review Note/);
 });

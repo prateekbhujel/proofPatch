@@ -631,6 +631,47 @@ final class DashboardController
         return redirect('/repositories?preview=1');
     }
 
+    public function mergePull(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        return $this->pullAction($request, 'merge');
+    }
+
+    public function closePull(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        return $this->pullAction($request, 'close');
+    }
+
+    private function pullAction(Request $request, string $action): \Illuminate\Http\RedirectResponse
+    {
+        $auth = $this->getSession($request, 'github_auth');
+        $pull = $this->getSession($request, 'pullRequest');
+        $access = $request->attributes->get('proofpatch_github_access');
+        $expectedHead = (string) $request->input('head_sha', '');
+        if ($request->input('confirmed') !== true || !is_array($auth) || !is_string($auth['token'] ?? null)
+            || !is_array($pull) || !is_array($access)) {
+            return redirect('/repositories')->with('error', 'Connect GitHub, load the pull request and confirm the action.');
+        }
+        try {
+            $actions = new \ProofPatch\GitHub\PullRequestActions(HttpClient::create());
+            $number = (int) ($pull['number'] ?? 0);
+            if ($action === 'merge') {
+                $result = $actions->merge($auth['token'], $access, $pull, $expectedHead);
+                $pull['state'] = 'merged';
+                $message = "Pull request #{$number} was merged (commit ".substr($result['sha'], 0, 7).').';
+            } else {
+                $actions->close($auth['token'], $access, $pull, $expectedHead);
+                $pull['state'] = 'closed';
+                $message = "Pull request #{$number} was closed without merging.";
+            }
+            $this->putSession($request, 'pullRequest', $pull);
+            $this->addNotification($request, 'success', $action === 'merge' ? 'Merged' : 'Closed', $message);
+
+            return redirect('/repositories')->with('status', $message);
+        } catch (\Throwable $e) {
+            return redirect('/repositories')->with('error', $e->getMessage());
+        }
+    }
+
     public function saveDraftComment(Request $request): \Illuminate\Http\RedirectResponse
     {
         $pull = $this->getSession($request, 'pullRequest');

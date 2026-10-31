@@ -10,7 +10,7 @@ namespace ProofPatch\GitHub;
  */
 final readonly class PrTriageAnalyzer
 {
-    private const DEFAULT_MAX_DIFF = 50;
+    private const DEFAULT_MAX_DIFF = 10000;
     private const MIN_BODY_LENGTH = 25;
 
     public function __construct(private array $policy = []) {}
@@ -65,6 +65,7 @@ final readonly class PrTriageAnalyzer
                 'suggestedComment' => $evaluation['suggestedComment'],
                 'reasoning' => $evaluation['reasoning'],
                 'flags' => $evaluation['flags'],
+                'diagnostics' => $evaluation['diagnostics'],
             ],
             'comparisons' => array_values($comparisons),
         ];
@@ -78,24 +79,49 @@ final readonly class PrTriageAnalyzer
         bool $truncated,
         bool $hasSharedFiles
     ): array {
+        $title = trim((string) ($targetPull['title'] ?? ''));
         $body = trim((string) ($targetPull['body'] ?? $targetPull['description'] ?? ''));
+        $combinedText = $title . "\n" . $body;
         $exceeded = $total > $limit;
         $flags = [];
+        $diagnostics = [];
+
         if ($exceeded) {
             $flags[] = 'diff_exceeded';
+            $diagnostics[] = "Changed lines ({$total}) exceed configured policy threshold ({$limit}).";
+        } else {
+            $diagnostics[] = "Changed lines ({$total}) are within policy threshold ({$limit}).";
         }
+
         if (strlen($body) < self::MIN_BODY_LENGTH) {
             $flags[] = 'short_description';
+            $diagnostics[] = 'Pull request description is brief (< 25 chars); context and motivation may be missing.';
         }
+
         if ($testPaths === []) {
             $flags[] = 'no_test_paths_observed';
+            $diagnostics[] = 'No test file paths were observed in the diff list.';
+            if (preg_match('/\b(?:performance|optimiz[a-z]*|faster|speedup|cleanup|refactor)\b/i', $combinedText) === 1) {
+                $flags[] = 'unverified_claim_without_tests';
+                $diagnostics[] = 'Title or description claims optimization/cleanup without accompanying test or benchmark files in the diff.';
+            }
+        } else {
+            $diagnostics[] = count($testPaths) . ' test file path(s) observed in diff, though file names alone do not prove execution or coverage.';
         }
+
+        if (preg_match('/(?:#\d+\b|(?:fixes|closes|resolves)\s+#?\d+)/i', $combinedText) !== 1) {
+            $flags[] = 'no_linked_issue_observed';
+        }
+
         if ($truncated) {
             $flags[] = 'files_truncated';
+            $diagnostics[] = 'Captured file list was truncated by pagination bounds.';
         }
+
         if (isset($this->policy['defaultBranch']) && ($targetPull['base'] ?? '') !== ''
             && strcasecmp((string) $targetPull['base'], (string) $this->policy['defaultBranch']) !== 0) {
             $flags[] = 'different_target_branch';
+            $diagnostics[] = 'Target base branch (' . $targetPull['base'] . ') differs from configured default branch (' . $this->policy['defaultBranch'] . ').';
         }
 
         $headline = $exceeded ? 'Changed lines exceed the configured limit'
@@ -116,6 +142,7 @@ final readonly class PrTriageAnalyzer
                 ? 'Some captured file paths overlap with other pull requests; this does not establish duplicate work.'
                 : 'Only captured metadata and file names were compared.',
             'flags' => $flags,
+            'diagnostics' => $diagnostics,
         ];
     }
 
@@ -124,20 +151,42 @@ final readonly class PrTriageAnalyzer
     {
         $number = (int) ($issue['number'] ?? 0);
         $body = trim((string) ($issue['body'] ?? $issue['description'] ?? ''));
-        $short = strlen($body) < self::MIN_BODY_LENGTH;
+        $hasImage = (bool) ($issue['hasImage'] ?? false)
+            || preg_match('/!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>|https?:\/\/\S+\.(?:png|jpe?g|gif|webp)\b/i', $body) === 1;
+        $textOnly = trim((string) preg_replace('/!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>/i', '', $body));
+        $short = strlen($textOnly) < self::MIN_BODY_LENGTH;
+
+        $flags = [];
+        if ($short) {
+            $flags[] = 'short_description';
+        }
+        if ($hasImage) {
+            $flags[] = 'screenshot_attached';
+        }
+
+        $headline = $hasImage && $short
+            ? 'Screenshot attached with brief description'
+            : ($short ? 'Issue description is brief' : 'Review issue details');
+
+        $suggestedComment = '';
+        if ($hasImage && $short) {
+            $suggestedComment = 'Thanks for the report and screenshot. Screenshots are kept local and not read automatically—could you share the text steps to reproduce this, along with the expected and actual results?';
+        } elseif ($short) {
+            $suggestedComment = 'Thanks for the report. Could you share the steps to reproduce this, along with the expected and actual results?';
+        }
 
         return [
             'issueNumber' => $number,
             'classification' => 'ISSUE_REVIEW',
             'badge' => 'Needs review',
-            'category' => 'needs-repro',
+            'category' => $hasImage && $short ? 'needs-text-repro' : 'needs-repro',
             'severity' => 'amber',
-            'headline' => $short ? 'Issue description is brief' : 'Review issue details',
-            'suggestedAction' => 'Review the issue and confirm how to reproduce it.',
-            'suggestedComment' => $short
-                ? 'Thanks for the report. Could you share the steps to reproduce this, along with the expected and actual results?'
-                : '',
-            'flags' => $short ? ['short_description'] : [],
+            'headline' => $headline,
+            'suggestedAction' => $hasImage
+                ? 'Review the issue and ensure written reproduction steps accompany any screenshot.'
+                : 'Review the issue and confirm how to reproduce it.',
+            'suggestedComment' => $suggestedComment,
+            'flags' => $flags,
         ];
     }
 

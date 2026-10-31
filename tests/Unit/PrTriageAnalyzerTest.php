@@ -237,4 +237,40 @@ final class PrTriageAnalyzerTest extends TestCase
         self::assertStringContainsString('steps to reproduce', $result['suggestedComment']);
         self::assertStringNotContainsString('will', strtolower($result['suggestedComment']));
     }
+
+    public function testScreenshotOnlyIssueFlagsAttachedImageAndRequestsTextReproduction(): void
+    {
+        $result = (new PrTriageAnalyzer())->triageIssue([
+            'number' => 91,
+            'title' => 'Checkout screen broken',
+            'body' => '![screenshot](https://user-images.githubusercontent.com/1/broken.png)',
+        ]);
+        self::assertSame('ISSUE_REVIEW', $result['classification']);
+        self::assertSame('needs-text-repro', $result['category']);
+        self::assertContains('screenshot_attached', $result['flags']);
+        self::assertContains('short_description', $result['flags']);
+        self::assertStringContainsString('steps to reproduce', $result['suggestedComment']);
+        self::assertStringContainsString('Screenshots are kept local', $result['suggestedComment']);
+    }
+
+    public function testMultiThousandLinePullRequestIsAllowedByDefaultPolicyUnlessConfiguredLower(): void
+    {
+        $largeRealisticPr = [
+            'repository' => 'acme/kernel',
+            'number' => 204,
+            'title' => 'Implement storage engine compaction (#190)',
+            'body' => 'Adds compaction passes and unit test suite for multi-segment WAL files.',
+            'files' => [
+                ['name' => 'src/Storage/Compactor.php', 'additions' => 1800, 'deletions' => 450],
+                ['name' => 'tests/Storage/CompactorTest.php', 'additions' => 920, 'deletions' => 30],
+            ],
+        ];
+
+        $defaultResult = (new PrTriageAnalyzer())->triage($largeRealisticPr, []);
+        self::assertSame(3200, $defaultResult['policy']['totalChanges']);
+        self::assertFalse($defaultResult['policy']['diffExceeded']);
+        self::assertNotContains('diff_exceeded', $defaultResult['summary']['flags']);
+        self::assertNotContains('unverified_claim_without_tests', $defaultResult['summary']['flags']);
+        self::assertNotContains('no_linked_issue_observed', $defaultResult['summary']['flags']);
+    }
 }

@@ -538,42 +538,48 @@ export function NewTaskComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-slate-200 border-t-2 border-t-violet-600/80 bg-white shadow-xs p-4 space-y-3"
+      className="rounded-2xl border border-slate-200 dark:border-slate-800 border-t-4 border-t-violet-600 bg-white dark:bg-[#141821] shadow-sm p-6 space-y-4"
     >
       {!canCreate && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 dark:bg-amber-950/40 dark:border-amber-900/60 p-3.5 text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2">
           <span>
             Draft a task or test voice input below. Connect GitHub in Settings to save repository tasks, or use the verified cases below.
           </span>
-          <Link href="/settings" className="font-semibold underline shrink-0">
-            Connect GitHub
+          <Link href="/settings" className="font-semibold underline shrink-0 hover:text-amber-800 dark:hover:text-amber-100">
+            Connect GitHub →
           </Link>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        <div className="sm:col-span-2">
-          <label htmlFor="local-task-title" className="sr-only">Task title</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
+          <label htmlFor="local-task-title" className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+            Task Title
+          </label>
           <input
             id="local-task-title"
+            name="title"
             type="text"
             required
             maxLength={180}
             value={data.title}
             onChange={(e) => setData('title', e.target.value)}
-            placeholder="Task title — e.g. Fix zero-quantity order total calculation"
-            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600"
+            placeholder="e.g. Fix zero-quantity order total calculation"
+            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 transition shadow-2xs"
           />
         </div>
-        <div>
-          <label htmlFor="local-task-repository" className="sr-only">Repository</label>
+        <div className="space-y-1.5">
+          <label htmlFor="local-task-repository" className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+            Repository
+          </label>
           <select
             id="local-task-repository"
+            name="repository"
             required
             disabled={!canCreate}
             value={data.repository}
             onChange={(e) => setData('repository', e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 py-2 text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600 disabled:opacity-60"
+            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-mono text-slate-800 dark:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 disabled:opacity-60 transition shadow-2xs"
           >
             {repositories.length === 0 ? (
               <option value="">No connected repo</option>
@@ -586,27 +592,34 @@ export function NewTaskComposer({
         </div>
       </div>
 
-      <div>
-        <label htmlFor="local-task-description" className="sr-only">Description</label>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label htmlFor="local-task-description" className="block text-xs font-semibold text-slate-800 dark:text-slate-200">
+            Description &amp; Reproduction Steps
+          </label>
+          <span id="local-task-description-hint" className="text-[11px] text-slate-400 font-mono">Markdown supported</span>
+        </div>
         <textarea
           id="local-task-description"
-          rows={3}
+          name="description"
+          aria-describedby="local-task-description-hint"
+          rows={6}
           required
           maxLength={10000}
           value={data.description}
           onChange={(e) => setData('description', e.target.value)}
-          placeholder="Describe a change, bug reproduction, or question…"
-          className="w-full rounded-lg border border-slate-200 bg-slate-50/40 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-600"
+          placeholder="Describe the expected behavior, reproduction steps, or context in detail…"
+          className="w-full h-auto min-h-[150px] max-h-[24rem] [field-sizing:content] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3.5 text-sm leading-relaxed text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 transition shadow-2xs resize-y"
         />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 text-slate-700 border border-slate-200">
-            <Sparkles className="w-3 h-3 text-violet-700" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <Sparkles className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
             <span>muse-spark-open-1026</span>
           </span>
-          <VoiceDictationButton label="Voice" onTranscript={(t) => {
+          <VoiceDictationButton label="Voice Input" onTranscript={(t) => {
             const cur = data.description.trim();
             setData('description', cur ? `${cur} ${t}` : t);
           }} />
@@ -614,9 +627,9 @@ export function NewTaskComposer({
         <button
           type="submit"
           disabled={!canCreate || processing || !data.title.trim() || !data.description.trim() || !data.repository}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-40 transition"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-xl text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-40 transition shadow-xs"
         >
-          <span>{processing ? 'Saving…' : 'Save task'}</span>
+          <span>{processing ? 'Saving…' : 'Save Task Card'}</span>
         </button>
       </div>
     </form>

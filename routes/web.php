@@ -41,6 +41,8 @@ Route::post('/repositories/review/draft', [DashboardController::class, 'saveDraf
 Route::post('/repositories/review/comment', [ManualInlineCommentController::class, 'store']);
 Route::post('/repositories/review/draft/delete', [DashboardController::class, 'deleteDraftComment']);
 Route::post('/repositories/review/draft/clear', [DashboardController::class, 'clearDraftComments']);
+Route::post('/repositories/pull/merge', [DashboardController::class, 'mergePull']);
+Route::post('/repositories/pull/close', [DashboardController::class, 'closePull']);
 
 // Auto PR Review Engine (Opt-in loop, status, and persisted results under web session/CSRF boundary)
 Route::post('/repositories/auto-review/toggle', [AutoReviewController::class, 'toggle']);

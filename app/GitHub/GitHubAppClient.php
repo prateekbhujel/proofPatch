@@ -414,6 +414,7 @@ final readonly class GitHubAppClient
             'body' => (string) ($postPull['body'] ?? ''),
             'state' => $state,
             'isMerged' => $isMerged,
+            'isDraft' => ($postPull['draft'] ?? false) === true,
             'head' => (string) ($postPull['head']['ref'] ?? ''),
             'base' => (string) ($postPull['base']['ref'] ?? ''),
             'headSha' => $headSha,

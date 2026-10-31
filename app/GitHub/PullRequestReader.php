@@ -85,7 +85,7 @@ final readonly class PullRequestReader
 
         return ['repository' => $owner.'/'.$repo, 'number' => (int) $number,
             'url' => 'https://github.com/'.$owner.'/'.$repo.'/pull/'.$number,
-            'title' => $pull['title'], 'body' => (string) ($pull['body'] ?? ''), 'state' => $state, 'isMerged' => $isMerged, 'base' => $pull['base']['ref'],
+            'title' => $pull['title'], 'body' => (string) ($pull['body'] ?? ''), 'state' => $state, 'isMerged' => $isMerged, 'isDraft' => ($pull['draft'] ?? false) === true, 'base' => $pull['base']['ref'],
             'head' => $pull['head']['ref'], 'headSha' => $sha, 'baseSha' => $baseSha, 'isPrivate' => $isPrivate, 'changedFiles' => $pull['changed_files'],
             'files' => $fileRows, 'filesTruncated' => $pull['changed_files'] > count($fileRows),
             'checks' => $checkRows, 'checksTotal' => $checks['total_count'], 'checksTruncated' => $checks['total_count'] > count($checkRows)];

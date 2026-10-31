@@ -1015,7 +1015,8 @@ final class TaskConcurrencyRaceConditionIntegrationTest extends TestCase
         $taskFresh = $task->fresh();
         self::assertSame('outcome_unknown', $taskFresh->status);
         self::assertNotNull($taskFresh->published_branch);
-        self::assertStringStartsWith('proofpatch/issue-1-', $taskFresh->published_branch);
+        self::assertStringStartsWith('proofpatch/1-test-issue-1-', $taskFresh->published_branch);
+        self::assertMatchesRegularExpression('~\Aproofpatch/1-[a-z0-9-]{1,40}-[a-f0-9]{6}\z~', $taskFresh->published_branch);
         self::assertSame('outcome_unknown', $pubSession->get('issue_publication_reconciliation')['status'] ?? null);
 
         // Failed reconciliation and an empty response are not proof that retry is safe.

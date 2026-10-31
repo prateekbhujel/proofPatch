@@ -88,6 +88,7 @@ export interface PullData {
   headSha: string;
   url: string;
   isPrivate?: boolean;
+  isDraft?: boolean;
   files?: ChangedFile[];
   checks?: CheckRun[];
 }

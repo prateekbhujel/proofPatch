@@ -249,7 +249,7 @@ final readonly class DedicatedTestRepoPublisher
         if (strlen($sanitizedRunId) < 8) {
             $sanitizedRunId = bin2hex(random_bytes(8));
         }
-        $branchName = "proofpatch/issue-1-{$sanitizedRunId}";
+        $branchName = self::branchName((string) ($context['title'] ?? ''), self::AUTHORIZED_ISSUE_NUMBER, $sanitizedRunId);
         $commitMessage = $this->buildCommitMessage($verificationReport, $sanitizedRunId);
         $prBody = $this->buildPrBody($context, $verificationReport, $sanitizedRunId);
 
@@ -497,6 +497,23 @@ final readonly class DedicatedTestRepoPublisher
         return null;
     }
 
+    /**
+     * Readable, unique branch name: proofpatch/<issue>-<title-slug>-<6 hex>.
+     * The suffix is derived from the verification run so retries of one run reuse the branch.
+     */
+    public static function branchName(string $title, int $issueNumber, string $runId): string
+    {
+        $slug = strtolower((string) preg_replace('/[^A-Za-z0-9]+/', '-', $title));
+        $slug = trim($slug, '-');
+        if (strlen($slug) > 40) {
+            $cut = substr($slug, 0, 41);
+            $slug = rtrim(str_contains($cut, '-') ? substr($cut, 0, (int) strrpos($cut, '-')) : substr($cut, 0, 40), '-');
+        }
+        $slug = $slug === '' ? 'fix' : $slug;
+
+        return 'proofpatch/'.$issueNumber.'-'.$slug.'-'.substr(hash('sha256', $runId), 0, 6);
+    }
+
     private function buildCommitMessage(array $report, string $shortId): string
     {
         $receiptSha = (string) ($report['receipt']['sha256'] ?? 'none');
@@ -513,6 +530,8 @@ Baseline Reproduced: Yes (Exit 1)
 Negative Control Caught: Yes (Exit 1)
 Candidate Sandbox Check: Passed (Exit 0 - Replicated bounded cases)
 Base Commit: {$baseCommit}
+
+Co-authored-by: proofpatcher[bot] <349779349+proofpatcher[bot]@users.noreply.github.com>
 COMMIT;
     }
 
@@ -543,7 +562,7 @@ This draft was prepared by ProofPatcher for review. It does not merge automatica
 The checks below cover the bounded OrderTotal fixture, not the full repository test suite.
 
 ### Summary
-Fixes issue #1 (`Zero-quantity items inflate the order total`).
+Fixes #1 (`Zero-quantity items inflate the order total`).
 Zero-quantity items now contribute 0 to the total order price instead of charging for 1 unit.
 
 ### Verification Evidence & 5-Gate Audit

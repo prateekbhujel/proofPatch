@@ -470,9 +470,20 @@ final class DashboardController
         $runId = (string) $request->query('run', '');
         $history = [];
         $latestVisualRunId = null;
-        foreach (glob($this->runsDir.'/*/result.json') ?: [] as $file) {
+        $runFiles = glob($this->runsDir.'/*/result.json') ?: [];
+        rsort($runFiles, SORT_STRING);
+        if ($runId !== '' && $validId($runId)) {
+            $requestedFile = $this->runsDir.'/'.$runId.'/result.json';
+            if (is_file($requestedFile) && !in_array($requestedFile, array_slice($runFiles, 0, 25), true)) {
+                array_unshift($runFiles, $requestedFile);
+            }
+        }
+        foreach ($runFiles as $file) {
+            if (count($history) >= 20 && ($runId === '' || isset($history[$runId]))) {
+                break;
+            }
             $id = basename(dirname($file));
-            if ($runDir($id) === null || is_link($file) || filesize($file) > 1048576) {
+            if (isset($history[$id]) || $runDir($id) === null || is_link($file) || filesize($file) > 1048576) {
                 continue;
             }
             try {
@@ -873,6 +884,8 @@ final class DashboardController
                     'repositories' => $repos,
                     'repositoriesStatus' => $reposStatus,
                     'connectedAt' => gmdate(DATE_ATOM),
+                    'verified_token_sha256' => hash('sha256', $token),
+                    'verified_at' => time(),
                 ];
                 $this->putSession($request, 'github_auth', $authData);
                 \ProofPatch\GitHub\GitHubTokenStore::save($token, $user, $repos, $reposStatus);
@@ -949,7 +962,12 @@ final class DashboardController
         \ProofPatch\GitHub\GitHubTokenStore::clear();
         $this->addNotification($request, 'info', 'GitHub Disconnected', 'Disconnected from GitHub device session.');
 
-        return redirect('/repositories')->with('github_status', 'Disconnected from GitHub.');
+        $redirectTo = $request !== null ? (string) $request->input('redirect_to', '') : '';
+        $target = in_array($redirectTo, ['/issues', '/repositories', '/settings', '/checks'], true)
+            ? $redirectTo
+            : '/repositories';
+
+        return redirect($target)->with('github_status', 'Disconnected from GitHub.');
     }
 
     public function selectInstalledRepository(Request $request): \Illuminate\Http\RedirectResponse

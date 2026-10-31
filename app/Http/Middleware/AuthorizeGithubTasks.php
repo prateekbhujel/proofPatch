@@ -27,33 +27,53 @@ final class AuthorizeGithubTasks
         $userId = null;
         $repositories = [];
         if ($token !== '') {
-            try {
-                $client = $this->client ?? new GitHubAppClient(HttpClient::create());
-                $user = $client->getCurrentUser($token);
-                if (!is_int($user['id'] ?? null) || $user['id'] <= 0) {
-                    throw new \RuntimeException('GitHub did not return a valid user identity.');
+            $tokenHash = hash('sha256', $token);
+            $canUseRecentSessionCheck = $this->client === null
+                && getenv('APP_ENV') !== 'testing'
+                && $request->isMethod('GET')
+                && is_array($auth)
+                && ($auth['verified_token_sha256'] ?? null) === $tokenHash
+                && is_int($auth['user']['id'] ?? null)
+                && $auth['user']['id'] > 0
+                && is_array($auth['repositories'] ?? null)
+                && is_int($auth['verified_at'] ?? null)
+                && $auth['verified_at'] >= time() - 60;
+
+            if ($canUseRecentSessionCheck) {
+                $userId = $auth['user']['id'];
+                $repositories = $auth['repositories'];
+            } else {
+                try {
+                    $client = $this->client ?? new GitHubAppClient(HttpClient::create());
+                    $user = $client->getCurrentUser($token);
+                    if (!is_int($user['id'] ?? null) || $user['id'] <= 0) {
+                        throw new \RuntimeException('GitHub did not return a valid user identity.');
+                    }
+                    $status = [];
+                    $repositories = $client->listSelectedRepositories($token, $status);
+                    if (($status['truncated'] ?? true) || !empty($status['errors'])) {
+                        throw new \RuntimeException('GitHub repository permissions could not be verified.');
+                    }
+                    $userId = $user['id'];
+                    if (($auth['user']['id'] ?? null) !== $userId) {
+                        $session->forget(array_merge(IssueWorkbenchController::CASE_SESSION_KEYS, [
+                            'selected_github_repo', 'github_repo_issues', 'github_repo_pulls', 'notifications',
+                        ]));
+                    }
+                    $auth['user'] = $user;
+                    $auth['repositories'] = $repositories;
+                    $auth['verified_token_sha256'] = $tokenHash;
+                    $auth['verified_at'] = time();
+                    $session->put('github_auth', $auth);
+                } catch (\Throwable) {
+                    $userId = null;
+                    $repositories = [];
+                    $auth['user'] = null;
+                    $auth['repositories'] = [];
+                    unset($auth['verified_token_sha256'], $auth['verified_at']);
+                    $session->put('github_auth', $auth);
+                    $session->forget(['selected_github_repo', 'github_repo_issues', 'github_repo_pulls', 'notifications']);
                 }
-                $status = [];
-                $repositories = $client->listSelectedRepositories($token, $status);
-                if (($status['truncated'] ?? true) || !empty($status['errors'])) {
-                    throw new \RuntimeException('GitHub repository permissions could not be verified.');
-                }
-                $userId = $user['id'];
-                if (($auth['user']['id'] ?? null) !== $userId) {
-                    $session->forget(array_merge(IssueWorkbenchController::CASE_SESSION_KEYS, [
-                        'selected_github_repo', 'github_repo_issues', 'github_repo_pulls', 'notifications',
-                    ]));
-                }
-                $auth['user'] = $user;
-                $auth['repositories'] = $repositories;
-                $session->put('github_auth', $auth);
-            } catch (\Throwable) {
-                $userId = null;
-                $repositories = [];
-                $auth['user'] = null;
-                $auth['repositories'] = [];
-                $session->put('github_auth', $auth);
-                $session->forget(['selected_github_repo', 'github_repo_issues', 'github_repo_pulls', 'notifications']);
             }
         }
 

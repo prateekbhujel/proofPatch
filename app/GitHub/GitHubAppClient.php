@@ -218,14 +218,15 @@ final readonly class GitHubAppClient
     }
 
     /**
-     * Lists open issues (excluding pull requests) for an authorized repository.
+     * Lists issues (excluding pull requests) for an authorized repository.
      *
      * @param-out array{truncated: bool, count: int, errors: array<string>} $status
-     * @return array<int, array{number: int, title: string, body: string, user: string, htmlUrl: string, createdAt: string, labels: array<string>, isPrivate: bool}>
+     * @return array<int, array{number: int, state: string, title: string, body: string, user: string, htmlUrl: string, createdAt: string, labels: array<string>, isPrivate: bool}>
      */
-    public function listOpenIssues(string $token, string $repository, ?array &$status = null): array
+    public function listOpenIssues(string $token, string $repository, ?array &$status = null, string $stateFilter = 'open'): array
     {
         $this->validateRepositoryName($repository);
+        $queryState = in_array($stateFilter, ['open', 'closed', 'all'], true) ? $stateFilter : 'open';
         $results = [];
         $page = 1;
         $truncated = false;
@@ -233,7 +234,7 @@ final readonly class GitHubAppClient
 
         do {
             try {
-                $issues = $this->get("/repos/{$repository}/issues?state=open&per_page=100&page={$page}", $token);
+                $issues = $this->get("/repos/{$repository}/issues?state={$queryState}&per_page=100&page={$page}", $token);
             } catch (\Throwable $e) {
                 $errors[] = "Issues page {$page}: ".$e->getMessage();
                 $truncated = true;
@@ -267,6 +268,7 @@ final readonly class GitHubAppClient
 
                 $results[] = [
                     'number' => (int) $issue['number'],
+                    'state' => (string) ($issue['state'] ?? 'open'),
                     'title' => (string) $issue['title'],
                     'body' => (string) ($issue['body'] ?? ''),
                     'user' => (string) ($issue['user']['login'] ?? 'unknown'),

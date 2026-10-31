@@ -26,6 +26,7 @@ export interface IssueTriage {
 
 export interface GitHubIssueItem {
   number: number;
+  state?: string;
   title: string;
   body: string;
   user: string;

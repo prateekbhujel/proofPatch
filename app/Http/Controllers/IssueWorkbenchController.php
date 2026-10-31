@@ -343,7 +343,7 @@ final class IssueWorkbenchController
             $client = new \ProofPatch\GitHub\GitHubAppClient($this->getHttpClient());
             $issueStatus = [];
             $pullStatus = [];
-            $issues = $client->listOpenIssues($token, $repoName, $issueStatus);
+            $issues = $client->listOpenIssues($token, $repoName, $issueStatus, 'all');
             $pulls = $client->listOpenPullRequests($token, $repoName, $pullStatus, 'all');
             if (!empty($issueStatus['errors']) || !empty($pullStatus['errors'])) {
                 throw new \RuntimeException('GitHub did not return a complete issue and pull request list. Try again.');

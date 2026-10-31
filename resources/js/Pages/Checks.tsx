@@ -107,15 +107,21 @@ export default function Checks({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                <span>Checks</span>
+                <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 font-mono text-[10px] font-bold uppercase tracking-wider">
+                  Kernel Module · Chromium Sandbox
+                </span>
                 <span>/</span>
                 <span className="font-semibold text-slate-900">
                   {fixture.includes('occlusion-b') ? 'Lumen Checkout' : fixture.includes('modal-overflow') ? 'Aura Checkout' : 'Northline Checkout'}
                 </span>
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Visual Layout Verification</h1>
-              <p className="text-xs text-slate-500">
-                4-gate verification suite for bundled CSS fixtures with headless Chromium probes.
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Visual &amp; CSS Sandbox Verification</h1>
+              <p className="text-xs text-slate-600 max-w-2xl">
+                4-gate headless Chromium visual verifier for UI/CSS patches (Baseline Reproduction, Protected E2E Tests, Outside-Mask Pixel Guard, and Test Authority Integrity). For backend PHP/AST 5-Gate repository issue verification, use{' '}
+                <Link href="/issues" className="font-semibold text-violet-700 hover:underline">
+                  Issues &amp; Tasks
+                </Link>
+                .
               </p>
             </div>
 

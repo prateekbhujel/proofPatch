@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, router } from '@inertiajs/react';
 import {
   FolderGit2,
@@ -6,6 +6,9 @@ import {
   Search,
   Plus,
   Settings as SettingsIcon,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   GitHubConnectionData,
@@ -51,6 +54,39 @@ export function WorkbenchSidebar({
   localTasks,
   onSelectTask,
 }: WorkbenchSidebarProps) {
+  const [issueStateFilter, setIssueStateFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [pullStateFilter, setPullStateFilter] = useState<'all' | 'open' | 'merged' | 'closed'>('all');
+  const [issuePage, setIssuePage] = useState(1);
+  const [pullPage, setPullPage] = useState(1);
+  const pageSize = 20;
+
+  const stateFilteredIssues = filteredIssues.filter((iss) => {
+    const st = (iss.state || 'open').toLowerCase();
+    if (issueStateFilter === 'all') return true;
+    return st === issueStateFilter;
+  });
+
+  const stateFilteredPulls = filteredPulls.filter((pull) => {
+    const st = (pull.state || 'open').toLowerCase();
+    if (pullStateFilter === 'all') return true;
+    return st === pullStateFilter;
+  });
+
+  const totalIssuePages = Math.max(1, Math.ceil(stateFilteredIssues.length / pageSize));
+  const safeIssuePage = Math.min(issuePage, totalIssuePages);
+  const pagedIssues = stateFilteredIssues.slice((safeIssuePage - 1) * pageSize, safeIssuePage * pageSize);
+
+  const totalPullPages = Math.max(1, Math.ceil(stateFilteredPulls.length / pageSize));
+  const safePullPage = Math.min(pullPage, totalPullPages);
+  const pagedPulls = stateFilteredPulls.slice((safePullPage - 1) * pageSize, safePullPage * pageSize);
+
+  const openIssuesCount = filteredIssues.filter((i) => (i.state || 'open').toLowerCase() === 'open').length;
+  const closedIssuesCount = filteredIssues.filter((i) => (i.state || 'open').toLowerCase() === 'closed').length;
+
+  const openPullsCount = filteredPulls.filter((p) => (p.state || 'open').toLowerCase() === 'open').length;
+  const mergedPullsCount = filteredPulls.filter((p) => (p.state || 'open').toLowerCase() === 'merged').length;
+  const closedPullsCount = filteredPulls.filter((p) => (p.state || 'open').toLowerCase() === 'closed').length;
+
   return (
     <aside className="w-full lg:w-80 shrink-0 lg:sticky lg:top-0 lg:h-screen lg:max-h-screen lg:overflow-hidden bg-[#f6f6f4] dark:bg-[#0e1117] border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
       <div className="p-3 pb-2 space-y-2.5 shrink-0">
@@ -129,26 +165,104 @@ export function WorkbenchSidebar({
             autoCapitalize="off"
             spellCheck={false}
             value={sidebarQuery}
-            onChange={(e) => setSidebarQuery(e.target.value)}
+            onChange={(e) => {
+              setSidebarQuery(e.target.value);
+              setIssuePage(1);
+              setPullPage(1);
+            }}
             placeholder={sidebarTab === 'issues' ? 'Search GitHub issues…' : 'Search pull requests…'}
             aria-label="Search items"
             className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
           />
         </div>
+
+        {/* State Filter Pills (Scales to Open, Closed, Merged & Large Repos) */}
+        {sidebarTab === 'issues' ? (
+          <div className="flex items-center justify-between gap-1 text-[10px]">
+            <div className="flex items-center gap-1">
+              {(['all', 'open', 'closed'] as const).map((st) => {
+                const count = st === 'all' ? filteredIssues.length : st === 'open' ? openIssuesCount : closedIssuesCount;
+                const active = issueStateFilter === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      setIssueStateFilter(st);
+                      setIssuePage(1);
+                    }}
+                    className={`px-2 py-0.5 rounded-md font-semibold uppercase tracking-wider transition ${
+                      active
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                        : 'bg-slate-200/70 text-slate-600 hover:bg-slate-300/70 dark:bg-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    {st} ({count})
+                  </button>
+                );
+              })}
+            </div>
+            {stateFilteredIssues.length > pageSize && (
+              <span className="font-mono text-slate-500">
+                p.{safeIssuePage}/{totalIssuePages}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-1 text-[10px]">
+            <div className="flex items-center gap-1 flex-wrap">
+              {(['all', 'open', 'merged', 'closed'] as const).map((st) => {
+                const count =
+                  st === 'all'
+                    ? filteredPulls.length
+                    : st === 'open'
+                      ? openPullsCount
+                      : st === 'merged'
+                        ? mergedPullsCount
+                        : closedPullsCount;
+                const active = pullStateFilter === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      setPullStateFilter(st);
+                      setPullPage(1);
+                    }}
+                    className={`px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wider transition ${
+                      active
+                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                        : 'bg-slate-200/70 text-slate-600 hover:bg-slate-300/70 dark:bg-slate-800 dark:text-slate-400'
+                    }`}
+                  >
+                    {st} ({count})
+                  </button>
+                );
+              })}
+            </div>
+            {stateFilteredPulls.length > pageSize && (
+              <span className="font-mono text-slate-500">
+                p.{safePullPage}/{totalPullPages}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Single Clean Scrollable Item Stream */}
+      {/* Single Clean Scrollable Item Stream (Paginated to 20 items max for instant DOM rendering even with 1,000+ items) */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 border-t border-slate-200/70 dark:border-slate-800 space-y-2 [scrollbar-width:thin]">
           {sidebarTab === 'issues' ? (
-            filteredIssues.length === 0 ? (
+            pagedIssues.length === 0 ? (
               <p className="p-2 text-xs text-slate-500">
                 {githubConnection?.selectedRepo ? 'No matching issues.' : 'Choose a repository.'}
               </p>
             ) : (
-              filteredIssues.map((issue) => {
+              <>
+              {pagedIssues.map((issue) => {
                 const isScreenshotIssue = issue.triage?.category === 'needs-text-repro' || /screenshot/i.test(issue.title);
                 const isContradictedIssue = /returns 0 when quantity is 3/i.test(issue.title);
                 const isDedicatedIssue = issue.number === githubConnection?.dedicatedIssueNumber;
+                const issueState = (issue.state || 'open').toLowerCase();
                 return (
                 <div
                   key={issue.number}
@@ -156,10 +270,21 @@ export function WorkbenchSidebar({
                 >
                   <div className="space-y-1.5">
                     <div className="min-w-0">
-                      <div className="flex items-start gap-1.5">
-                        <span className="font-mono text-xs font-semibold text-slate-400">#{issue.number}</span>
-                        <span className="min-w-0 break-words text-xs font-semibold text-slate-900 dark:text-slate-100" title={issue.title}>
-                          {issue.title}
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          <span className="font-mono text-xs font-semibold text-slate-400 shrink-0">#{issue.number}</span>
+                          <span className="min-w-0 break-words text-xs font-semibold text-slate-900 dark:text-slate-100" title={issue.title}>
+                            {issue.title}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 border ${
+                            issueState === 'closed'
+                              ? 'bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                          }`}
+                        >
+                          {issueState}
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5 truncate">
@@ -225,13 +350,40 @@ export function WorkbenchSidebar({
                   </div>
                 </div>
                 );
-              })
+              })}
+              {stateFilteredIssues.length > pageSize && (
+                <div className="flex items-center justify-between pt-1 pb-2 text-[11px] text-slate-500">
+                  <span>
+                    {(safeIssuePage - 1) * pageSize + 1}–{Math.min(safeIssuePage * pageSize, stateFilteredIssues.length)} of {stateFilteredIssues.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={safeIssuePage <= 1}
+                      onClick={() => setIssuePage((p) => Math.max(1, p - 1))}
+                      className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-40"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={safeIssuePage >= totalIssuePages}
+                      onClick={() => setIssuePage((p) => Math.min(totalIssuePages, p + 1))}
+                      className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-40"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             )
           ) : (
-            filteredPulls.length === 0 ? (
+            pagedPulls.length === 0 ? (
               <p className="text-xs text-slate-500 p-2">No pull requests found.</p>
             ) : (
-              filteredPulls.map((pull) => (
+              <>
+              {pagedPulls.map((pull) => (
                 <div
                   key={pull.number}
                   className="p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/70 space-y-1.5 text-xs shadow-2xs"
@@ -270,7 +422,33 @@ export function WorkbenchSidebar({
                     Open pull request
                   </button>
                 </div>
-              ))
+              ))}
+              {stateFilteredPulls.length > pageSize && (
+                <div className="flex items-center justify-between pt-1 pb-2 text-[11px] text-slate-500">
+                  <span>
+                    {(safePullPage - 1) * pageSize + 1}–{Math.min(safePullPage * pageSize, stateFilteredPulls.length)} of {stateFilteredPulls.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={safePullPage <= 1}
+                      onClick={() => setPullPage((p) => Math.max(1, p - 1))}
+                      className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-40"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={safePullPage >= totalPullPages}
+                      onClick={() => setPullPage((p) => Math.min(totalPullPages, p + 1))}
+                      className="p-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 disabled:opacity-40"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             )
           )}
 
@@ -335,6 +513,16 @@ export function WorkbenchSidebar({
               <SettingsIcon className="w-3.5 h-3.5" />
               <span>Settings</span>
             </Link>
+            <button
+              type="button"
+              onClick={() => router.post('/github/device/disconnect', { redirect_to: '/issues' })}
+              aria-label="Log out and disconnect GitHub"
+              title="Log out / Disconnect GitHub session"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-rose-200 dark:border-rose-900/70 bg-rose-50/80 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 text-[11px] font-medium shrink-0 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log out</span>
+            </button>
           </div>
         </div>
       </div>

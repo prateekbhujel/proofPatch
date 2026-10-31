@@ -1096,6 +1096,78 @@ final class IssueWorkbenchController
         TaskWorkflowHelper::consumeProposalApproval($request, $context, $digest, $this->approvalStore());
     }
 
+    public function transcribeVoice(Request $request): \Illuminate\Http\JsonResponse
+    {
+        if (!$request->hasFile('audio')) {
+            return response()->json(['status' => 'error', 'message' => 'No audio clip received.'], 422);
+        }
+
+        $file = $request->file('audio');
+        if ($file === null || !$file->isValid() || $file->getSize() > 4194304) {
+            return response()->json(['status' => 'error', 'message' => 'Audio clip exceeds the 4 MB local limit.'], 422);
+        }
+
+        $whisperBin = is_executable('/Users/pratikbhujel/.local/bin/whisper')
+            ? '/Users/pratikbhujel/.local/bin/whisper'
+            : 'whisper';
+        $ffmpegBin = is_executable('/opt/homebrew/bin/ffmpeg')
+            ? '/opt/homebrew/bin/ffmpeg'
+            : 'ffmpeg';
+
+        $id = bin2hex(random_bytes(8));
+        $tmpDir = sys_get_temp_dir();
+        $inputPath = $tmpDir . "/pp_voice_{$id}.webm";
+        $wavPath = $tmpDir . "/pp_voice_{$id}.wav";
+        $jsonPath = $tmpDir . "/pp_voice_{$id}.json";
+
+        try {
+            file_put_contents($inputPath, file_get_contents($file->getRealPath()));
+
+            $ffmpeg = new \Symfony\Component\Process\Process([
+                $ffmpegBin, '-y', '-i', $inputPath, '-ar', '16000', '-ac', '1', $wavPath,
+            ]);
+            $ffmpeg->setTimeout(10);
+            $ffmpeg->run();
+            if (!$ffmpeg->isSuccessful() || !is_file($wavPath)) {
+                return response()->json(['status' => 'error', 'message' => 'Could not decode audio locally.'], 500);
+            }
+
+            $whisper = new \Symfony\Component\Process\Process([
+                $whisperBin,
+                $wavPath,
+                '--model', 'tiny.en',
+                '--language', 'en',
+                '--fp16', 'False',
+                '--output_format', 'json',
+                '--output_dir', $tmpDir,
+            ]);
+            $whisper->setEnv(['PATH' => '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin']);
+            $whisper->setTimeout(20);
+            $whisper->run();
+
+            if (!is_file($jsonPath)) {
+                return response()->json(['status' => 'error', 'message' => 'Local Whisper model did not produce output.'], 500);
+            }
+
+            $decoded = json_decode((string) file_get_contents($jsonPath), true);
+            $transcript = trim((string) ($decoded['text'] ?? ''));
+
+            return response()->json([
+                'status' => 'ok',
+                'transcript' => $transcript,
+                'engine' => 'local-whisper-tiny.en',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => 'Local voice transcription failed.'], 500);
+        } finally {
+            foreach ([$inputPath, $wavPath, $jsonPath] as $p) {
+                if (is_file($p)) {
+                    @unlink($p);
+                }
+            }
+        }
+    }
+
     private function addNotification(Request $request, string $type, string $title, string $message, ?string $link = null): void
     {
         NotificationHelper::add($request, $type, $title, $message, $link);

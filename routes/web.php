@@ -34,6 +34,7 @@ Route::post('/issues/publish-pr', [IssueWorkbenchController::class, 'publishDraf
 Route::post('/issues/reconcile-pr', [IssueWorkbenchController::class, 'reconcilePr']);
 Route::post('/issues/switch-task', [IssueWorkbenchController::class, 'switchTask']);
 Route::post('/issues/draft', [IssueWorkbenchController::class, 'saveDraft']);
+Route::post('/issues/voice-transcribe', [IssueWorkbenchController::class, 'transcribeVoice']);
 Route::match(['get', 'post'], '/repositories', [DashboardController::class, 'repositories']);
 Route::post('/repositories/review', [DashboardController::class, 'reviewPullRequest']);
 Route::post('/repositories/review/clear', [DashboardController::class, 'clearReview']);

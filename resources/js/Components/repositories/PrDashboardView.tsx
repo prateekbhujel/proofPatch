@@ -34,7 +34,7 @@ export function PrDashboardView({
   inspectProcessing,
 }: PrDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'merged'>('open');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'merged' | 'closed'>('all');
   const [manualInspectOpen, setManualInspectOpen] = useState(false);
 
   const repositories = githubConnection.repositories || [];
@@ -43,9 +43,11 @@ export function PrDashboardView({
 
   const filteredPulls = useMemo(() => {
     return pulls.filter((pr) => {
+      const state = ((pr as any).state || 'open').toLowerCase();
       // Status filter
-      if (statusFilter === 'open' && (pr as any).state?.toLowerCase() === 'merged') return false;
-      if (statusFilter === 'merged' && (pr as any).state?.toLowerCase() !== 'merged') return false;
+      if (statusFilter === 'open' && state !== 'open') return false;
+      if (statusFilter === 'merged' && state !== 'merged') return false;
+      if (statusFilter === 'closed' && state !== 'closed') return false;
 
       // Query filter
       if (!searchQuery.trim()) return true;
@@ -107,18 +109,7 @@ export function PrDashboardView({
 
         {/* Filter & Search Controls */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('open')}
-              className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-                statusFilter === 'open'
-                  ? 'bg-violet-700 text-white font-semibold shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 bg-slate-100/70 hover:bg-slate-200/70'
-              }`}
-            >
-              Open PRs ({pulls.filter((p) => (p as any).state?.toLowerCase() !== 'merged').length})
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setStatusFilter('all')}
@@ -132,6 +123,17 @@ export function PrDashboardView({
             </button>
             <button
               type="button"
+              onClick={() => setStatusFilter('open')}
+              className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+                statusFilter === 'open'
+                  ? 'bg-violet-700 text-white font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 bg-slate-100/70 hover:bg-slate-200/70'
+              }`}
+            >
+              Open ({pulls.filter((p) => ((p as any).state || 'open').toLowerCase() === 'open').length})
+            </button>
+            <button
+              type="button"
               onClick={() => setStatusFilter('merged')}
               className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
                 statusFilter === 'merged'
@@ -139,7 +141,18 @@ export function PrDashboardView({
                   : 'text-slate-600 hover:text-slate-900 bg-slate-100/70 hover:bg-slate-200/70'
               }`}
             >
-              Merged ({pulls.filter((p) => (p as any).state?.toLowerCase() === 'merged').length})
+              Merged ({pulls.filter((p) => ((p as any).state || '').toLowerCase() === 'merged').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('closed')}
+              className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
+                statusFilter === 'closed'
+                  ? 'bg-violet-700 text-white font-semibold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 bg-slate-100/70 hover:bg-slate-200/70'
+              }`}
+            >
+              Closed ({pulls.filter((p) => ((p as any).state || '').toLowerCase() === 'closed').length})
             </button>
           </div>
 
@@ -174,7 +187,10 @@ export function PrDashboardView({
           </div>
         ) : (
           filteredPulls.map((pr) => {
-            const isMerged = (pr as any).state?.toLowerCase() === 'merged';
+            const state = ((pr as any).state || 'open').toLowerCase();
+            const isMerged = state === 'merged';
+            const isClosed = state === 'closed';
+            const isDraft = Boolean((pr as any).isDraft) && state === 'open';
             return (
               <div
                 key={pr.number}
@@ -187,11 +203,15 @@ export function PrDashboardView({
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
                         isMerged
                           ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                          : isClosed
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : isDraft
+                          ? 'bg-slate-100 text-slate-700 border border-slate-300'
                           : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}
                     >
                       {isMerged && <Check className="w-2.5 h-2.5" />}
-                      <span>{isMerged ? 'MERGED' : 'OPEN'}</span>
+                      <span>{isMerged ? 'MERGED' : isClosed ? 'CLOSED' : isDraft ? 'DRAFT' : 'OPEN'}</span>
                     </span>
                     {pr.isPrivate && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-medium">

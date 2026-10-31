@@ -210,15 +210,15 @@ export function GitHubConnectionSection({
                 )}
               </div>
 
-              {/* Open Pull Requests in Selected Repo */}
+              {/* Pull Requests in Selected Repo */}
               {githubConnection.selectedRepo && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-slate-800">
-                      Open Pull Requests in <span className="font-mono text-violet-900">{githubConnection.selectedRepo}</span>
+                      Pull Requests in <span className="font-mono text-violet-900">{githubConnection.selectedRepo}</span>
                     </h4>
                     <span className="text-[11px] text-slate-500 font-mono">
-                      {githubConnection.repoPulls.length} open
+                      {githubConnection.repoPulls.length} total
                     </span>
                   </div>
 
@@ -258,6 +258,19 @@ export function GitHubConnectionSection({
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-xs text-slate-900">#{pr.number}</span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase border ${
+                                  (pr as any).state === 'merged'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : (pr as any).state === 'closed'
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : (pr as any).isDraft
+                                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                {(pr as any).isDraft && (pr as any).state === 'open' ? 'DRAFT' : ((pr as any).state || 'OPEN')}
+                              </span>
                               <span className="text-xs font-medium text-slate-800 truncate">{pr.title}</span>
                               {pr.isPrivate && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">

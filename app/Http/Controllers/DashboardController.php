@@ -657,6 +657,7 @@ final class DashboardController
             if ($action === 'merge') {
                 $result = $actions->merge($auth['token'], $access, $pull, $expectedHead);
                 $pull['state'] = 'merged';
+                $pull['isMerged'] = true;
                 $message = "Pull request #{$number} was merged (commit ".substr($result['sha'], 0, 7).').';
             } else {
                 $actions->close($auth['token'], $access, $pull, $expectedHead);
@@ -664,6 +665,17 @@ final class DashboardController
                 $message = "Pull request #{$number} was closed without merging.";
             }
             $this->putSession($request, 'pullRequest', $pull);
+            $repoPulls = $this->getSession($request, 'github_repo_pulls');
+            if (is_array($repoPulls)) {
+                foreach ($repoPulls as &$rp) {
+                    if (is_array($rp) && ($rp['number'] ?? null) === $number) {
+                        $rp['state'] = $pull['state'];
+                        $rp['isMerged'] = $pull['state'] === 'merged';
+                    }
+                }
+                unset($rp);
+                $this->putSession($request, 'github_repo_pulls', $repoPulls);
+            }
             $this->addNotification($request, 'success', $action === 'merge' ? 'Merged' : 'Closed', $message);
 
             return redirect('/repositories')->with('status', $message);
@@ -964,7 +976,7 @@ final class DashboardController
         try {
             $client = $this->getGitHubAppClient();
             $pullsStatus = [];
-            $pulls = $client->listOpenPullRequests((string) $auth['token'], $repoName, $pullsStatus);
+            $pulls = $client->listOpenPullRequests((string) $auth['token'], $repoName, $pullsStatus, 'all');
             $this->putSession($request, 'selected_github_repo', $repoName);
             $this->putSession($request, 'github_repo_pulls', $pulls);
             $this->putSession($request, 'github_repo_pulls_status', $pullsStatus);
@@ -1045,6 +1057,7 @@ final class DashboardController
                 'body' => $patchPreview['body'] ?? '',
                 'state' => $patchPreview['state'],
                 'isMerged' => $patchPreview['isMerged'] ?? false,
+                'isDraft' => ($patchPreview['isDraft'] ?? false) === true,
                 'head' => $patchPreview['head'],
                 'base' => $patchPreview['base'],
                 'headSha' => $patchPreview['headSha'],

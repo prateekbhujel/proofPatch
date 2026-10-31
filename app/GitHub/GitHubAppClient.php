@@ -156,9 +156,10 @@ final readonly class GitHubAppClient
      * @param-out array{truncated: bool, count: int, errors: array<string>} $status
      * @return array<int, array{number: int, title: string, head: string, base: string, headSha: string, baseSha: string, user: string, isPrivate: bool}>
      */
-    public function listOpenPullRequests(string $token, string $repository, ?array &$status = null): array
+    public function listOpenPullRequests(string $token, string $repository, ?array &$status = null, string $stateFilter = 'open'): array
     {
         $this->validateRepositoryName($repository);
+        $queryState = in_array($stateFilter, ['open', 'closed', 'all'], true) ? $stateFilter : 'open';
         $results = [];
         $page = 1;
         $truncated = false;
@@ -166,7 +167,7 @@ final readonly class GitHubAppClient
 
         do {
             try {
-                $pulls = $this->get("/repos/{$repository}/pulls?state=open&per_page=100&page={$page}", $token);
+                $pulls = $this->get("/repos/{$repository}/pulls?state={$queryState}&per_page=100&page={$page}", $token);
             } catch (\Throwable $e) {
                 $errors[] = "Pulls page {$page}: ".$e->getMessage();
                 $truncated = true;
@@ -183,11 +184,13 @@ final readonly class GitHubAppClient
                 }
 
                 $isMerged = ($pull['merged'] ?? false) === true || ($pull['merged_at'] ?? null) !== null;
+                $isDraft = ($pull['draft'] ?? false) === true;
                 $state = $isMerged ? 'merged' : (string) ($pull['state'] ?? 'open');
                 $results[] = [
                     'number' => (int) $pull['number'],
                     'state' => $state,
                     'isMerged' => $isMerged,
+                    'isDraft' => $isDraft,
                     'title' => (string) $pull['title'],
                     'head' => (string) ($pull['head']['ref'] ?? ''),
                     'base' => (string) ($pull['base']['ref'] ?? ''),

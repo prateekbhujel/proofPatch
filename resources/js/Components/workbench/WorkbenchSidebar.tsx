@@ -225,8 +225,18 @@ export function WorkbenchSidebar({
                         {pull.head} &rarr; {pull.base}
                       </div>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                      {pull.state}
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 border ${
+                        pull.state === 'merged'
+                          ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                          : pull.state === 'closed'
+                            ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                            : (pull as any).isDraft
+                              ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                              : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      }`}
+                    >
+                      {(pull as any).isDraft && pull.state === 'open' ? 'draft' : pull.state}
                     </span>
                   </div>
                   <button

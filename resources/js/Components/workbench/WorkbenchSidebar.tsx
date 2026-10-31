@@ -52,8 +52,8 @@ export function WorkbenchSidebar({
   onSelectTask,
 }: WorkbenchSidebarProps) {
   return (
-    <aside className="w-full lg:w-80 shrink-0 bg-[#f6f6f4] dark:bg-[#0e1117] border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
-      <div className="p-3 space-y-3">
+    <aside className="w-full lg:w-80 shrink-0 lg:sticky lg:top-0 lg:h-screen lg:max-h-screen lg:overflow-hidden bg-[#f6f6f4] dark:bg-[#0e1117] border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
+      <div className="p-3 pb-2 space-y-2.5 shrink-0">
         {/* Repository Selector Dropdown */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
@@ -66,7 +66,7 @@ export function WorkbenchSidebar({
                 type="button"
                 onClick={() => handleSelectRepo(githubConnection.selectedRepo!)}
                 disabled={loadingRepo}
-                title="Refresh repository issues"
+                title="Refresh repository issues and pull requests"
                 className="p-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
               >
                 <RefreshCw className={`w-3 h-3 ${loadingRepo ? 'animate-spin' : ''}`} />
@@ -135,16 +135,21 @@ export function WorkbenchSidebar({
             className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
           />
         </div>
+      </div>
 
-        {/* Item Stream */}
-        <div className="pt-1 border-t border-slate-200/70 dark:border-slate-800 space-y-2 max-h-[calc(100vh-26rem)] overflow-y-auto pr-0.5">
+      {/* Single Clean Scrollable Item Stream */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 border-t border-slate-200/70 dark:border-slate-800 space-y-2 [scrollbar-width:thin]">
           {sidebarTab === 'issues' ? (
             filteredIssues.length === 0 ? (
               <p className="p-2 text-xs text-slate-500">
                 {githubConnection?.selectedRepo ? 'No matching issues.' : 'Choose a repository.'}
               </p>
             ) : (
-              filteredIssues.map((issue) => (
+              filteredIssues.map((issue) => {
+                const isScreenshotIssue = issue.triage?.category === 'needs-text-repro' || /screenshot/i.test(issue.title);
+                const isContradictedIssue = /returns 0 when quantity is 3/i.test(issue.title);
+                const isDedicatedIssue = issue.number === githubConnection?.dedicatedIssueNumber;
+                return (
                 <div
                   key={issue.number}
                   className="p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/70 space-y-2 text-xs shadow-2xs"
@@ -161,19 +166,36 @@ export function WorkbenchSidebar({
                         @{issue.user} · {new Date(issue.createdAt).toLocaleDateString()}
                       </div>
                     </div>
-                    {issue.triage && (
-                      <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
-                          issue.triage.severity === 'rose'
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                            : issue.triage.severity === 'amber'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                        }`}
-                      >
-                        {issue.triage.badge}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1">
+                      {issue.triage && (
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+                            issue.triage.severity === 'rose'
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              : issue.triage.severity === 'amber'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          }`}
+                        >
+                          {issue.triage.badge}
+                        </span>
+                      )}
+                      {isDedicatedIssue && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Verified PR ready
+                        </span>
+                      )}
+                      {isContradictedIssue && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                          Contradicted by code
+                        </span>
+                      )}
+                      {isScreenshotIssue && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                          Screenshot · Needs text steps
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -202,7 +224,8 @@ export function WorkbenchSidebar({
                     </button>
                   </div>
                 </div>
-              ))
+                );
+              })
             )
           ) : (
             filteredPulls.length === 0 ? (
@@ -221,7 +244,7 @@ export function WorkbenchSidebar({
                           {pull.title}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-slate-400 mt-0.5 break-all">
                         {pull.head} &rarr; {pull.base}
                       </div>
                     </div>
@@ -250,31 +273,37 @@ export function WorkbenchSidebar({
               ))
             )
           )}
-        </div>
 
         {localTasks.some((task) => task.repository.toLowerCase() === githubConnection?.selectedRepo?.toLowerCase()) && (
-          <div className="space-y-1 border-t border-slate-200 pt-3 dark:border-slate-800">
-            <h2 className="text-xs font-semibold text-slate-500">Tasks</h2>
+          <div className="space-y-1 border-t border-slate-200 pt-2.5 dark:border-slate-800">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Automation Tasks</h2>
             {localTasks.filter((task) => task.repository.toLowerCase() === githubConnection?.selectedRepo?.toLowerCase()).map((task) => (
-              <button key={task.id} type="button" onClick={() => onSelectTask(Number(task.id))} className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800">
+              <button key={task.id} type="button" onClick={() => onSelectTask(Number(task.id))} className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 bg-white/80 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 hover:bg-slate-200/70 dark:text-slate-300 dark:hover:bg-slate-800">
                 {task.title}
               </button>
             ))}
           </div>
         )}
-
-        <button
-          type="button"
-          onClick={() => setViewMode('new')}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-        >
-          <Plus className="mr-1 inline h-3.5 w-3.5" /> New task
-        </button>
       </div>
 
-      {/* Bottom Account & Allowance Bar */}
-      <div className="sticky bottom-0 p-3 border-t border-slate-200/80 dark:border-slate-800 bg-[#e9e6dc] dark:bg-[#11141c] space-y-2 text-[11px] text-slate-700 dark:text-slate-300">
-        <div className="flex items-center justify-between gap-2">
+      {/* Pinned Bottom Account, New Task & Navigation Bar (Never scrolls off-screen) */}
+      <div className="shrink-0 p-3 border-t border-slate-200/80 dark:border-slate-800 bg-[#e9e6dc] dark:bg-[#11141c] space-y-2 text-[11px] text-slate-700 dark:text-slate-300">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setViewMode('new')}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          >
+            <Plus className="mr-1 inline h-3.5 w-3.5" /> New task
+          </button>
+          <Link
+            href="/repositories"
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-center text-xs font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          >
+            PR Dashboard
+          </Link>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-0.5">
           <div className="flex items-center gap-2 min-w-0">
             {githubConnection?.user?.avatarUrl ? (
               <img
@@ -301,14 +330,13 @@ export function WorkbenchSidebar({
               href="/settings"
               aria-label="Account and GitHub settings"
               title="Account & GitHub settings"
-              className="p-1.5 rounded-md border border-slate-300/80 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300/80 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-slate-900 text-[11px] font-medium shrink-0"
             >
               <SettingsIcon className="w-3.5 h-3.5" />
+              <span>Settings</span>
             </Link>
           </div>
         </div>
-
-
       </div>
     </aside>
   );

@@ -16,7 +16,7 @@ export interface IssueTriage {
   issueNumber: number;
   classification: 'ISSUE_REVIEW';
   badge: string;
-  category: 'invalid' | 'needs-repro' | 'bug';
+  category: 'invalid' | 'needs-repro' | 'needs-text-repro' | 'bug';
   severity: 'emerald' | 'amber' | 'rose';
   headline: string;
   suggestedAction: string;

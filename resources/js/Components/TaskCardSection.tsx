@@ -219,8 +219,26 @@ export function FocusedLocalTaskView({
       </div>
 
       {isPrivate ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
-          This task is saved locally. Task-card suggestions for private repositories are not available yet.
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+          <p>
+            This task is saved locally. Task-card suggestions for private repositories are not available yet.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => router.post('/issues/load-dedicated')}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-xs hover:bg-slate-800 transition"
+            >
+              Run Local 5-Gate Verifier
+            </button>
+            <button
+              type="button"
+              onClick={() => router.visit('/repositories')}
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium text-xs hover:bg-slate-100 transition"
+            >
+              Open PR Triage &amp; Merge Dashboard
+            </button>
+          </div>
         </div>
       ) : (
       <>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
 import {
   LocalTaskCard,
@@ -101,6 +101,29 @@ export default function Issues({
   const [isSubmittingDevice, setIsSubmittingDevice] = useState(false);
   const [deviceClientIdInput, setDeviceClientIdInput] = useState(githubConnection?.clientId || '');
   const [copiedBotComment, setCopiedBotComment] = useState(false);
+  const [commandFeedback, setCommandFeedback] = useState<string | null>(null);
+
+  // Auto-fill known default source file paths so users can click Open in 1 click without typing manually
+  useEffect(() => {
+    const repo = githubConnection?.selectedRepo?.toLowerCase() || '';
+    const defaultPath = repo.includes('proofpatch-workflow-test')
+      ? 'src/OrderTotal.php'
+      : repo.includes('proofpatch-review-demo')
+        ? 'order_total.php'
+        : '';
+    if (!defaultPath || !githubConnection?.repoIssues) return;
+    setIssuePathMap((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const iss of githubConnection.repoIssues!) {
+        if (!next[iss.number]) {
+          next[iss.number] = defaultPath;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [githubConnection?.selectedRepo, githubConnection?.repoIssues]);
 
   // Parse Markdown images / GIFs from issue description for visual repro inspection
   const detectedIssueMedia = useMemo(() => {
@@ -419,13 +442,128 @@ export default function Issues({
     );
   }
 
+  const activeOpenPull = useMemo(() => {
+    const pulls = githubConnection?.repoPulls ?? [];
+    if (!context) return pulls.find((p) => p.state === 'open' && !(p as any).isDraft) || null;
+    return (
+      pulls.find(
+        (p) =>
+          p.state === 'open' &&
+          !(p as any).isDraft &&
+          (p.head.startsWith(`proofpatch/${context.issueNumber}-`) || p.title.includes(`#${context.issueNumber}`))
+      ) ||
+      pulls.find((p) => p.state === 'open' && !(p as any).isDraft) ||
+      null
+    );
+  }, [githubConnection?.repoPulls, context?.issueNumber]);
+
+  function handleExecutePrompt(promptText: string) {
+    const q = promptText.trim().toLowerCase();
+    if (!q) return;
+
+    if (/\bmerge\b/.test(q)) {
+      const prMatch = q.match(/#?(\d+)/);
+      const targetPr = prMatch
+        ? (githubConnection?.repoPulls ?? []).find((p) => p.number === Number(prMatch[1]))
+        : activeOpenPull;
+      if (targetPr && targetPr.state === 'open') {
+        setCommandFeedback(`Merging PR #${targetPr.number} (${targetPr.head})…`);
+        router.post(
+          '/repositories/pull/merge',
+          {
+            repository: context?.repository || githubConnection?.selectedRepo,
+            number: targetPr.number,
+            head_sha: targetPr.headSha,
+            method: 'squash',
+          },
+          { onFinish: () => setCommandFeedback(null) }
+        );
+        return;
+      }
+      setCommandFeedback('No open ready-to-merge PR found on this repository. Opening PR Dashboard…');
+      router.visit('/repositories');
+      return;
+    }
+
+    if (/\bclose\b/.test(q)) {
+      const prMatch = q.match(/#?(\d+)/);
+      const targetPr = prMatch
+        ? (githubConnection?.repoPulls ?? []).find((p) => p.number === Number(prMatch[1]))
+        : activeOpenPull;
+      if (targetPr && targetPr.state === 'open') {
+        setCommandFeedback(`Closing PR #${targetPr.number}…`);
+        router.post(
+          '/repositories/pull/close',
+          {
+            repository: context?.repository || githubConnection?.selectedRepo,
+            number: targetPr.number,
+            head_sha: targetPr.headSha,
+          },
+          { onFinish: () => setCommandFeedback(null) }
+        );
+        return;
+      }
+    }
+
+    if (/\b(create|open|publish)\b.*\b(pr|pull|draft)\b/.test(q)) {
+      setCommandFeedback('Publishing verified PR branch to GitHub…');
+      setPublishingPr(true);
+      router.post('/issues/publish-pr', {}, { onFinish: () => { setPublishingPr(false); setCommandFeedback(null); } });
+      return;
+    }
+
+    if (/\b(verify|check|test|gate)\b/.test(q)) {
+      setCommandFeedback('Running 5-Gate isolated verification checks…');
+      setVerifying(true);
+      router.post('/issues/verify', {}, { onFinish: () => { setVerifying(false); setCommandFeedback(null); } });
+      return;
+    }
+
+    if (/\b(propose|fix|repair|solve)\b/.test(q) && preview) {
+      setCommandFeedback('Generating candidate repair…');
+      router.post(
+        '/issues/propose',
+        {
+          digest: preview.digest,
+          approved: true,
+          approval_token: preview.approvalToken,
+          offline_reference: isDedicatedTestRepo || isOwnedFixture,
+        },
+        {
+          onStart: () => setSending(true),
+          onFinish: () => { setSending(false); setCommandFeedback(null); },
+        }
+      );
+      return;
+    }
+
+    // Otherwise create & open a new Automation Task from the user's prompt
+    if (githubConnection?.selectedRepo) {
+      setCommandFeedback('Creating automation task from prompt…');
+      router.post(
+        '/issues/tasks',
+        {
+          repository: githubConnection.selectedRepo,
+          title: promptText.trim().slice(0, 100),
+          description: promptText.trim(),
+        },
+        {
+          onSuccess: () => {
+            setCommandFeedback('Automation task created.');
+            setViewMode('local-card');
+          },
+        }
+      );
+    }
+  }
+
   return (
     <AppLayout activeNav="issues">
       <Head title="Issues & Tasks · ProofPatcher" />
 
       {/* Full-Screen Edge-to-Edge Desktop Workbench */}
-      <div className="w-full min-h-[calc(100vh-4.5rem)] rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#141821] shadow-xs overflow-hidden flex flex-col lg:flex-row">
-        {/* Left Sidebar: Real GitHub Repositories & Items */}
+      <div className="w-full min-h-screen bg-white dark:bg-[#141821] flex flex-col lg:flex-row">
+        {/* Left Sidebar: Sticky 100vh on desktop so Settings & PRs never scroll away */}
         <WorkbenchSidebar
           githubConnection={githubConnection}
           loadingRepo={loadingRepo}
@@ -451,8 +589,8 @@ export default function Issues({
         {/* Right Main Pane: Edge-to-Edge Focused Task */}
         <div className="flex-1 min-w-0 bg-white dark:bg-[#141821] flex flex-col justify-between">
           <div>
-            {/* Top Context Bar */}
-            <div className="h-12 px-6 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-4">
+            {/* Sticky Top Context & Quick-Action Bar */}
+            <div className="sticky top-0 z-20 h-12 px-6 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-[#141821]/95 backdrop-blur-xs flex items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 truncate">
                 {viewMode === 'workbench' && context ? (
                   <>
@@ -471,6 +609,26 @@ export default function Issues({
                 )}
               </div>
 
+              <div className="flex items-center gap-2 text-xs shrink-0">
+                <Link
+                  href="/repositories"
+                  className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+                >
+                  Pull Requests ({githubConnection?.repoPulls?.length ?? 0})
+                </Link>
+                <Link
+                  href="/checks"
+                  className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+                >
+                  Checks
+                </Link>
+                <Link
+                  href="/settings"
+                  className="px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+                >
+                  Settings
+                </Link>
+              </div>
             </div>
 
             {/* Guided Step Bar */}
@@ -579,6 +737,9 @@ export default function Issues({
               onSaveDraft={handleSaveDraft}
               isSaving={draftForm.processing}
               draft={draft}
+              onExecutePrompt={handleExecutePrompt}
+              activeOpenPull={activeOpenPull}
+              commandFeedback={commandFeedback}
             />
           )}
         </div>

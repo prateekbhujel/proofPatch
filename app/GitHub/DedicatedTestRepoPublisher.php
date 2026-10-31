@@ -132,8 +132,33 @@ final readonly class DedicatedTestRepoPublisher
                 'Candidate source hash does not match allowlisted candidate digest. Untrusted candidate cannot be published.'
             );
         }
-        if (!hash_equals(\ProofPatch\Verifier\OwnedCaseVerifier::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha)) {
+        $isTrustedFixture = hash_equals(\ProofPatch\Verifier\OwnedCaseVerifier::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha);
+        $isIsolatedVerified = ($verificationReport['oracleVerified'] ?? false) === true
+            && ($verificationReport['isolated'] ?? false) === true
+            && ($verificationReport['genuineProviderEvidence'] ?? false) === true;
+
+        if (!$isTrustedFixture && !$isIsolatedVerified) {
             throw new \InvalidArgumentException('Publication refused: the test oracle is not isolated from untrusted candidates.');
+        }
+
+        // Boundary 5b: Cryptographically verify model provenance if claimed
+        $proposalOrigin = $context['proposalOrigin'] ?? null;
+        if ($proposalOrigin === 'muse' || !empty($context['model'])) {
+            $proposalStore = new \ProofPatch\Agent\ServerHeldModelProposal();
+            $serverProposal = $proposalStore->lookup($candidateSha);
+            if ($serverProposal === null) {
+                throw new \InvalidArgumentException(
+                    'Publication refused: Candidate claims Muse model provenance but has no verified server-held model proposal.'
+                );
+            }
+            if ($serverProposal['model'] !== ($context['model'] ?? 'meta-models/muse-spark-open-1026')) {
+                throw new \InvalidArgumentException('Publication refused: Model name mismatch against server-held proposal.');
+            }
+            if (!hash_equals($serverProposal['sourceSha256'], (string) ($verificationReport['baseSha256'] ?? ''))) {
+                throw new \InvalidArgumentException('Publication refused: Target file source hash mismatch against model proposal source.');
+            }
+            // Bind usage to verified server-held usage
+            $context['usage'] = $serverProposal['usage'];
         }
 
         // Boundary 6: Revalidate base fixture and test harness digests from disk

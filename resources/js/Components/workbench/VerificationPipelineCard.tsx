@@ -80,12 +80,12 @@ export function VerificationPipelineCard({
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141821] p-5 space-y-4 shadow-2xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
-                <span>5-Gate Falsifiable Verifier</span>
+                <span>Check this change</span>
               </h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Runs the test case against the original, a negative control and the proposed repair.
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Run the fixture checks before creating a draft PR.
               </p>
             </div>
             <button
@@ -99,8 +99,8 @@ export function VerificationPipelineCard({
                 {verifying
                   ? 'Running checks…'
                   : verificationReport
-                  ? 'Re-run verifier'
-                  : 'Run verifier'}
+                  ? 'Run checks again'
+                  : 'Run checks'}
               </span>
             </button>
           </div>
@@ -108,8 +108,8 @@ export function VerificationPipelineCard({
           <ThinkingAnimation
             isActive={verifying}
             steps={verifierThinkingSteps}
-            title="Running 5-gate verification"
-            subtitle="Executing baseline, negative control, and candidate checks…"
+            title="Running checks"
+            subtitle="Checking the original and proposed change…"
           />
 
           {verificationReport && (
@@ -121,8 +121,13 @@ export function VerificationPipelineCard({
                 isSimulated={verificationReport.isSimulated}
               />
 
+              <details className="rounded-xl border border-slate-200 dark:border-slate-800 p-3.5">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Receipt and sharing
+                </summary>
+
               {/* Cryptographic Receipt Bar */}
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-3.5 space-y-2">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-3.5 space-y-2 mt-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     {verificationReport.decision === 'VERIFIED' ? (
@@ -163,7 +168,7 @@ export function VerificationPipelineCard({
 
               {/* GitHub Co-Maintainer Attribution & 1-Click Response Preview */}
               {verificationReport.decision === 'VERIFIED' && (
-                <div className="rounded-xl border border-violet-200 dark:border-violet-800/80 bg-violet-50/35 dark:bg-violet-950/20 p-3.5 space-y-2 text-xs">
+                <div className="rounded-xl border border-violet-200 dark:border-violet-800/80 bg-violet-50/35 dark:bg-violet-950/20 p-3.5 space-y-2 text-xs mt-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
                       <Bot className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
@@ -191,6 +196,7 @@ export function VerificationPipelineCard({
                   </div>
                 </div>
               )}
+              </details>
             </div>
           )}
         </div>
@@ -205,11 +211,11 @@ export function VerificationPipelineCard({
               <div className="flex items-center gap-2">
                 <GitPullRequest className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                 <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Draft Pull Request Publication
+                  Create a draft PR
                 </h3>
               </div>
               <span className="text-[10px] font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded">
-                Draft Only · No Auto-Merge
+                Draft · no auto-merge
               </span>
             </div>
 
@@ -235,7 +241,7 @@ export function VerificationPipelineCard({
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  All 5 verification gates passed. Approve creating a Draft PR in the dedicated test repository.
+                  Create a draft in the dedicated test repository for review. It will not be merged.
                 </p>
                 {publisherDisconnected ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-amber-800 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800">
@@ -250,7 +256,7 @@ export function VerificationPipelineCard({
                     className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 transition disabled:opacity-50"
                   >
                     <GitPullRequest className="w-3.5 h-3.5" />
-                    <span>{publishingPr ? 'Publishing…' : 'Publish Draft PR to Dedicated Repo'}</span>
+                    <span>{publishingPr ? 'Creating draft…' : 'Create draft PR'}</span>
                   </button>
                 )}
               </div>

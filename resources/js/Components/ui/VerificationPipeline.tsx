@@ -18,7 +18,7 @@ interface VerificationPipelineProps {
 export function VerificationPipeline({ isRunning, gates, decision, isSimulated }: VerificationPipelineProps) {
   if (isRunning) {
     return (
-      <div role="status" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+      <div role="status" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
         <Loader2 className="h-4 w-4 animate-spin" />
         Running checks…
       </div>
@@ -48,22 +48,22 @@ export function VerificationPipeline({ isRunning, gates, decision, isSimulated }
 
   return (
     <div className="space-y-3">
-      <div className={`flex items-start gap-3 rounded-lg border p-4 ${checksPassed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-        {checksPassed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" /> : <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />}
+      <div role="status" className={`flex items-start gap-3 rounded-lg border p-4 ${checksPassed ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'}`}>
+        {checksPassed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" /> : <Shield className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" />}
         <div>
-          <h4 className="text-sm font-semibold text-slate-900">{heading}</h4>
-          <p className="mt-1 text-xs text-slate-600">{description}</p>
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{heading}</h4>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{description}</p>
         </div>
       </div>
 
       {gates && gates.length > 0 && (
-        <details className="rounded-lg border border-slate-200 bg-white p-3">
-          <summary className="cursor-pointer text-sm font-medium text-slate-800">Check results</summary>
-          <ul className="mt-3 divide-y divide-slate-100">
+        <details className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800 dark:text-slate-200">Check results</summary>
+          <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
             {gates.map((gate, index) => (
               <li key={`${gate.label}-${index}`} className="flex items-start gap-2 py-2 text-xs">
                 {gate.passed ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />}
-                <span><span className="font-medium text-slate-800">{gate.shortLabel}</span><span className="block text-slate-500">{gate.detail}</span></span>
+                <span><span className="font-medium text-slate-800 dark:text-slate-200">{gate.shortLabel}</span><span className="block text-slate-500 dark:text-slate-400">{gate.detail}</span></span>
               </li>
             ))}
           </ul>

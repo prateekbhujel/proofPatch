@@ -72,10 +72,10 @@ export function ProposalDiffCard({
           <div className="flex items-start gap-2.5">
             <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {canUseReference ? 'Try the reference repair' : 'Ask Muse for a suggestion'}
               </h2>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                 {canUseReference
                   ? 'This known repair runs without sending your repository to a model.'
                   : 'Review the request before sending the selected file to Muse.'}
@@ -145,7 +145,7 @@ export function ProposalDiffCard({
               >
                 {suggestion.candidate?.verified
                   ? 'Fixture checks passed'
-                  : 'Proposed Diff'}
+                  : 'Not checked yet'}
               </span>
             </div>
           </div>
@@ -166,7 +166,7 @@ export function ProposalDiffCard({
           </div>
 
           <div className="px-4 py-3 bg-white dark:bg-[#141821] border-t border-slate-200 dark:border-slate-800 space-y-2">
-            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{suggestion.explanation}</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{suggestion.explanation}</p>
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
               <div className="flex items-center gap-2 font-mono text-[11px]">
@@ -179,38 +179,38 @@ export function ProposalDiffCard({
                 />
                 <span
                   className={
-                    verificationReport?.decision === 'VERIFIED'
-                      ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                    suggestion.isOfflineExample
+                      ? 'text-amber-700 dark:text-amber-400 font-medium'
                       : 'text-slate-600 dark:text-slate-400 font-medium'
                   }
                 >
-                  {suggestion.isOfflineExample ? 'Offline reference' : 'Allowed once'}
+                  {suggestion.isOfflineExample ? 'Offline reference' : suggestion.model ? 'Muse suggestion' : 'Suggestion'}
                 </span>
                 {verificationReport && (
                   <span className="text-slate-500">
-                    {passedGateCount} passed, {5 - passedGateCount} failed
+                    · {passedGateCount} passed, {5 - passedGateCount} failed
                   </span>
                 )}
               </div>
 
-              {suggestion.candidate && (
-                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500">
-                  <span>SHA: {suggestion.candidate.sha256.slice(0, 10)}…</span>
+            </div>
+            {suggestion.candidate && (
+              <details className="text-xs text-slate-500 dark:text-slate-400">
+                <summary className="cursor-pointer">Change details</summary>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 break-all">{suggestion.candidate.sha256}</code>
                   <button
                     type="button"
                     onClick={() => copyCandidateHash(suggestion.candidate!.sha256)}
-                    className="p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                    title="Copy candidate SHA-256"
+                    className="shrink-0 rounded p-1 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                    aria-label="Copy change hash"
+                    title="Copy change hash"
                   >
-                    {copiedCandidateSha ? (
-                      <Check className="w-3 h-3 text-emerald-600" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
+                    {copiedCandidateSha ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                   </button>
                 </div>
-              )}
-            </div>
+              </details>
+            )}
           </div>
         </div>
       )}

@@ -84,7 +84,7 @@ export default function Issues({
   modelContextAllowed = false,
   modelKeyAvailable = false,
 }: Props) {
-  const context = suppliedContext?.isSynthetic ? null : suppliedContext;
+  const context = suppliedContext;
   const capture = useForm({ issue_url: '', path: '' });
   const draftForm = useForm({ comment: draft?.comment || '' });
   const [sending, setSending] = useState(false);

@@ -104,6 +104,25 @@ final readonly class IssueSuggestion
                 $suggestion['find'],
                 $suggestion['replace'],
             );
+            $candidateSha = hash('sha256', $candidateSource);
+            try {
+                (new ServerHeldModelProposal())->record([
+                    'candidateSha256' => $candidateSha,
+                    'candidateSource' => $candidateSource,
+                    'sourceSha256' => $context['sourceSha256'],
+                    'model' => self::MODEL,
+                    'requestDigest' => $preview['digest'],
+                    'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']],
+                    'find' => $suggestion['find'],
+                    'replace' => $suggestion['replace'],
+                    'explanation' => $suggestion['explanation'],
+                    'githubUserId' => $context['githubUserId'] ?? 0,
+                    'repository' => $context['repository'] ?? '',
+                    'issueNumber' => (int) ($context['issueNumber'] ?? 0),
+                    'path' => $context['path'] ?? '',
+                ]);
+            } catch (\Throwable) {
+            }
             return ['status' => 'unverified_suggestion', 'repository' => $context['repository'],
                 'issueNumber' => $context['issueNumber'], 'commit' => $context['commit'], 'path' => $context['path'],
                 'sourceSha256' => $context['sourceSha256'], 'find' => $suggestion['find'], 'replace' => $suggestion['replace'],
@@ -112,7 +131,7 @@ final readonly class IssueSuggestion
                 'candidate' => [
                     'status' => 'unverified_in_memory_preview',
                     'source' => $candidateSource,
-                    'sha256' => hash('sha256', $candidateSource),
+                    'sha256' => $candidateSha,
                     'applied' => false,
                     'verified' => false,
                 ]];

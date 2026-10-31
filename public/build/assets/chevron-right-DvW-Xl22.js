@@ -1,4 +1,4 @@
-import{c as o}from"./AppLayout-CxqTYIzQ.js";/**
+import{c as o}from"./AppLayout-BPmCe4TC.js";/**
  * @license lucide-react v1.62.0 - ISC
  *
  * This source code is licensed under the ISC license.

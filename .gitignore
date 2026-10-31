@@ -1,6 +1,6 @@
 /vendor/
 /node_modules/
-/drivers/
+/drivers
 /artifacts/
 /.phpunit.cache/
 /.env

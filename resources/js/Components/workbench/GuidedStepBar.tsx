@@ -85,7 +85,8 @@ export function GuidedStepBar({
       </div>
 
       <div className="text-[11px] font-mono text-violet-700 dark:text-violet-300">
-        {!isStep2Done && 'Next: choose a proposal below'}
+        {!isStep1Done && 'Choose an issue to get started'}
+        {isStep1Done && !isStep2Done && 'Next: choose a proposal below'}
         {isStep2Done && !verificationReport && 'Next: run the checks below'}
         {verificationReport && !isStep3Done && 'Review the check results below'}
         {isStep3Done && !isStep4Done && verificationReport?.isSimulated !== false && 'Local fixture checks passed'}

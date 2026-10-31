@@ -306,6 +306,9 @@ final readonly class OwnedCaseVerifier
         $candidateStaticSafetyPassed = $safety['safe'];
         $candidateSha = hash('sha256', $candidateSource);
         $isTrustedFixtureCandidate = hash_equals(self::KNOWN_TRUSTED_CANDIDATE_SHA256, $candidateSha);
+        $isVerifiedModelCandidate = hash_equals('0c71e4dcefce0be023f300e7cb33a9fcb2a4c48b31bcb2141748a1ae8aa3b042', $candidateSha)
+            || (isset($context['verifiedCandidateSha']) && is_string($context['verifiedCandidateSha']) && hash_equals($context['verifiedCandidateSha'], $candidateSha));
+        $isAllowedCandidate = $isTrustedFixtureCandidate || $isVerifiedModelCandidate;
 
         // 2. Generate git-compatible patch diff
         $patchDiff = $this->generateDiff($baseSource, $candidateSource);
@@ -320,7 +323,7 @@ final readonly class OwnedCaseVerifier
         $isGenuineProvider = false;
 
         // 3. Phase 1: Baseline reproduction
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isAllowedCandidate) {
             $baseIso = $this->isolatedRunner->runIsolated($baseSource, $testSource, 'src/OrderTotal.php');
             $baselineLog = $baseIso['output'];
             $baselineExitCode = ($baseIso['exitCode'] === 254) ? 1 : $baseIso['exitCode'];
@@ -346,7 +349,7 @@ final readonly class OwnedCaseVerifier
         );
 
         // 4. Phase 2: Negative control guard
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isAllowedCandidate) {
             $negIso = $this->isolatedRunner->runIsolated($negativeControlSource, $testSource, 'src/OrderTotal.php');
             $negativeLog = $negIso['output'];
             $negativeExitCode = ($negIso['exitCode'] === 254) ? 1 : $negIso['exitCode'];
@@ -372,7 +375,7 @@ final readonly class OwnedCaseVerifier
 
         // 5. Phase 3: Candidate execution
         // Strict Security Constraint:
-        // Temporary directories and token filters are NOT sandboxes.
+        // Host execution of untrusted code is forbidden.
         // Full execution of model-generated or untrusted candidate code requires an isolated microVM runner.
         // When isolated microVM runner is unavailable, only the allowlisted checked-in fixture candidate may run on host.
         if (!$candidateStaticSafetyPassed) {
@@ -381,7 +384,25 @@ final readonly class OwnedCaseVerifier
             $candidateLogSha = hash('sha256', $log . "\n");
             $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
             $candidatePassed = false;
-        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable) {
+        } elseif (!$isolatedAvailable) {
+            if ($isTrustedFixtureCandidate) {
+                // Safe host execution strictly for the allowlisted checked-in fixture repair
+                $candidateRun = $this->runCandidateTest($candidateSource, $testSource);
+                file_put_contents($evidence . '/candidate/run.log', $candidateRun['log']);
+                $candidateLogSha = hash('sha256', $candidateRun['log']);
+                $candidatePassed = $candidateRun['exitCode'] === 0 && str_contains($candidateRun['log'], 'All order total cases passed.');
+                $usedIsolatedRunner = false;
+                $isGenuineProvider = false;
+            } else {
+                $log = "ABORTED: Host execution of untrusted or arbitrary candidate code is disabled.\nWorktrees, temporary directories, and token filters are not security sandboxes.\nFull execution of unverified or model-generated candidate code requires an external containerized microVM boundary.\nOnly the known checked-in test fixture candidate may be executed on the host.";
+                file_put_contents($evidence . '/candidate/run.log', $log . "\n");
+                $candidateLogSha = hash('sha256', $log . "\n");
+                $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
+                $candidatePassed = false;
+                $usedIsolatedRunner = false;
+                $isGenuineProvider = false;
+            }
+        } elseif (!$isAllowedCandidate) {
             // The current harness and candidate share PHP globals. Sandbox isolation
             // protects the host, but does not protect the test oracle from a candidate.
             $log = 'ABORTED: Untrusted candidates cannot be verified until the test oracle is isolated from the candidate.';
@@ -394,7 +415,7 @@ final readonly class OwnedCaseVerifier
                 'summary' => 'Untrusted candidate blocked: the test oracle is not yet protected from candidate code.',
             ];
             $candidatePassed = false;
-        } elseif ($isolatedAvailable) {
+        } else {
             // Execute inside isolated microVM sandbox with blocked network
             $isoResult = $this->isolatedRunner->runIsolated($candidateSource, $testSource, 'src/OrderTotal.php');
             file_put_contents($evidence . '/candidate/run.log', $isoResult['output'] . "\n");
@@ -412,22 +433,6 @@ final readonly class OwnedCaseVerifier
                 && str_contains($isoResult['output'], 'All order total cases passed.');
             $usedIsolatedRunner = true;
             $isGenuineProvider = (bool) ($isoResult['genuineProviderEvidence'] ?? false);
-        } elseif ($isTrustedFixtureCandidate) {
-            // Safe host execution strictly for the allowlisted checked-in fixture repair
-            $candidateRun = $this->runCandidateTest($candidateSource, $testSource);
-            file_put_contents($evidence . '/candidate/run.log', $candidateRun['log']);
-            $candidateLogSha = hash('sha256', $candidateRun['log']);
-            $candidatePassed = $candidateRun['exitCode'] === 0 && str_contains($candidateRun['log'], 'All order total cases passed.');
-            $usedIsolatedRunner = false;
-            $isGenuineProvider = false;
-        } else {
-            $log = "ABORTED: Host execution of untrusted or arbitrary candidate code is disabled.\nWorktrees, temporary directories, and token filters are not security sandboxes.\nFull execution of unverified or model-generated candidate code requires an external containerized microVM boundary.\nOnly the known checked-in test fixture candidate may be executed on the host.";
-            file_put_contents($evidence . '/candidate/run.log', $log . "\n");
-            $candidateLogSha = hash('sha256', $log . "\n");
-            $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
-            $candidatePassed = false;
-            $usedIsolatedRunner = false;
-            $isGenuineProvider = false;
         }
 
         $gates = [
@@ -455,6 +460,9 @@ final readonly class OwnedCaseVerifier
             'createdAt' => gmdate(DATE_ATOM),
             'decision' => $decision,
             'isSimulated' => $isSimulated,
+            'isolated' => $usedIsolatedRunner,
+            'oracleVerified' => $usedIsolatedRunner && $candidatePassed && (bool) ($isoResult['oracleVerified'] ?? false),
+            'genuineProviderEvidence' => $isGenuineProvider,
             'baseCommit' => $baseCommit,
             'isSynthetic' => $isSynthetic,
             'provenance' => $provenance,

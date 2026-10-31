@@ -51,7 +51,10 @@ final class RequestBudgetTest extends TestCase
     public function testDefaultLimitsAndFactoryMethod(): void
     {
         $previous = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        $prevEnv = $_ENV['PROOFPATCH_MODEL_MAX_ATTEMPTS'] ?? null;
+        $prevServer = $_SERVER['PROOFPATCH_MODEL_MAX_ATTEMPTS'] ?? null;
         putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        unset($_ENV['PROOFPATCH_MODEL_MAX_ATTEMPTS'], $_SERVER['PROOFPATCH_MODEL_MAX_ATTEMPTS']);
         try {
             self::assertSame(500000, RequestBudget::DEFAULT_LIMIT_MICROS);
             self::assertSame(10, RequestBudget::DEFAULT_MAX_ATTEMPTS);
@@ -68,6 +71,12 @@ final class RequestBudgetTest extends TestCase
             self::assertSame($status, $factoryBudget->status());
         } finally {
             $previous === false ? putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS') : putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS='.$previous);
+            if ($prevEnv !== null) {
+                $_ENV['PROOFPATCH_MODEL_MAX_ATTEMPTS'] = $prevEnv;
+            }
+            if ($prevServer !== null) {
+                $_SERVER['PROOFPATCH_MODEL_MAX_ATTEMPTS'] = $prevServer;
+            }
         }
     }
 

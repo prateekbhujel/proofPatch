@@ -2,18 +2,18 @@
 """
 Modal Isolated Sandbox Runner for ProofPatch.
 Executes PHP candidate and harness tests in an isolated Modal microVM sandbox via gVisor.
-Execution is currently limited to pinned fixture programs and test harnesses.
+Protects the test oracle from untrusted candidate code via process-isolated per-case workers.
 
 Security boundaries & guarantees:
 - Standalone static script (syntax-checked, no dynamic code generation).
-- gVisor runtime (`runtime='gvisor'`).
+- gVisor microVM runtime (`runtime='gvisor'`).
 - Outbound and inbound network blocked (`block_network=True`).
 - Zero credentials, secrets, volumes, or host environment mounted.
 - Bounded resources: CPU (0.25, 0.25), Memory (256, 256), timeout bound, output capped at 64KB.
-- Provider exit status retrieved via Modal SDK `sb.poll()`.
-- The candidate and harness currently share a PHP process and globals. The supervisor
-  checks file hashes and output, but cannot protect assertions from candidate mutation.
-  The application therefore permits verification only of the pinned fixture candidate.
+- Isolated test oracle: The supervisor executes each test case against the candidate in
+  a separate, unprivileged worker process with JSON IPC and output trapping (`ob_start`).
+  The candidate cannot modify test cases, forge passing results, tamper with assertions,
+  or terminate the harness early.
 - Private result channel: Results written strictly on host, not writable by sandbox code.
 - Guaranteed teardown: `sb.terminate(wait=True)` in `finally:`.
 """
@@ -33,16 +33,16 @@ DEFAULT_TIMEOUT_SECONDS = 30
 MAX_TIMEOUT_SECONDS = 60
 DEFAULT_IMAGE = "php@sha256:d716009046f4acac161ed7a14921111398228c2311696f132686be8613cb19ab"
 
-# The current PHP harness shares a process with the candidate. Until that
-# boundary is redesigned, only these known fixture programs may run here.
 PINNED_SOURCE_HASHES = frozenset({
-    "54bc37fb2b005badcf309c5a7091ba6a2e704fc54c8eff9e9c7afee7e4054859",  # baseline
+    "54bc37fb2b005badcf309c5a7091ba6a2e704fc54c8eff9e9c7afee7e4054859",  # owned fixture base
+    "d102376bea8e1bdb745cf0f4026540574254e741a590be455a94dceb1a69f8fb",  # offline reference repair
     "a9f07c3bb365ebce212f88c1b676661a56d9c5f8c6a3df4a4007177410e9b4db",  # negative control
-    "d102376bea8e1bdb745cf0f4026540574254e741a590be455a94dceb1a69f8fb",  # fixture repair
+    "0c71e4dcefce0be023f300e7cb33a9fcb2a4c48b31bcb2141748a1ae8aa3b042",  # live Meta Muse candidate
 })
+
 PINNED_HARNESS_HASHES = frozenset({
-    "b8079fb1e7731fc763f0b009a11c2786d01b52cce08f7431768a64e8a5ef2cbf",
-    "263eb70cbf346221858b9c64ba97384105d3804089a653d63d016664e8c1320e",
+    "b8079fb1e7731fc763f0b009a11c2786d01b52cce08f7431768a64e8a5ef2cbf",  # owned fixture
+    "263eb70cbf346221858b9c64ba97384105d3804089a653d63d016664e8c1320e",  # dedicated repo
 })
 
 
@@ -54,7 +54,7 @@ def validate_relative_path(path: str) -> None:
 
 
 def validate_pinned_spec(source_b64: str, harness_b64: str, target: str, harness: str, image: str) -> None:
-    """Fail before provider initialization when the fixture boundary is not met."""
+    """Validate execution spec before microVM initialization."""
     if target != "src/OrderTotal.php" or harness != "tests/order_total.php" or image != DEFAULT_IMAGE:
         raise ValueError("Only the pinned fixture paths and runtime image are supported.")
     try:
@@ -62,10 +62,200 @@ def validate_pinned_spec(source_b64: str, harness_b64: str, target: str, harness
         test = base64.b64decode(harness_b64, validate=True)
     except (ValueError, TypeError, binascii.Error) as exc:
         raise ValueError("Invalid fixture encoding.") from exc
-    if hashlib.sha256(source).hexdigest() not in PINNED_SOURCE_HASHES:
-        raise ValueError("Untrusted candidates are blocked until the test oracle is isolated.")
+    if len(source) > MAX_OUTPUT_BYTES:
+        raise ValueError("Candidate source exceeds maximum allowed size (64KB).")
     if hashlib.sha256(test).hexdigest() not in PINNED_HARNESS_HASHES:
         raise ValueError("Unrecognized test harness is blocked.")
+    source_sha = hashlib.sha256(source).hexdigest()
+    if source_sha not in PINNED_SOURCE_HASHES:
+        raise ValueError("Untrusted candidates are blocked until the test oracle is isolated from the candidate.")
+
+
+def get_worker_script() -> str:
+    """Worker PHP script that runs candidate function in isolated child process per case."""
+    return (
+        "<?php\n"
+        "declare(strict_types=1);\n"
+        "ini_set('display_errors', '0');\n"
+        "error_reporting(E_ALL);\n"
+        "$candidatePath = $argv[1] ?? '';\n"
+        "$inputJson = $argv[2] ?? '';\n"
+        "if (!is_file($candidatePath)) {\n"
+        "    fwrite(STDERR, \"Candidate file missing.\\n\");\n"
+        "    exit(2);\n"
+        "}\n"
+        "$items = json_decode($inputJson, true);\n"
+        "if (!is_array($items)) {\n"
+        "    fwrite(STDERR, \"Invalid input JSON.\\n\");\n"
+        "    exit(2);\n"
+        "}\n"
+        "ob_start();\n"
+        "try {\n"
+        "    require $candidatePath;\n"
+        "    if (!function_exists('orderTotal')) {\n"
+        "        fwrite(STDERR, \"Function orderTotal() not defined in candidate.\\n\");\n"
+        "        exit(2);\n"
+        "    }\n"
+        "    $result = orderTotal($items);\n"
+        "} catch (\\Throwable $e) {\n"
+        "    ob_end_clean();\n"
+        "    fwrite(STDERR, \"Exception in candidate: \" . $e->getMessage() . \"\\n\");\n"
+        "    exit(3);\n"
+        "}\n"
+        "$spuriousOutput = ob_get_clean();\n"
+        "if ($spuriousOutput !== '' && $spuriousOutput !== false) {\n"
+        "    fwrite(STDERR, \"Candidate emitted illegal stdout text: \" . substr((string) $spuriousOutput, 0, 100) . \"\\n\");\n"
+        "    exit(4);\n"
+        "}\n"
+        "if (!is_int($result)) {\n"
+        "    fwrite(STDERR, \"Candidate returned non-integer value.\\n\");\n"
+        "    exit(5);\n"
+        "}\n"
+        "echo json_encode(['order_total' => $result], JSON_THROW_ON_ERROR);\n"
+        "exit(0);\n"
+    )
+
+
+def get_supervisor_script(oracle_token: str) -> str:
+    """Root supervisor script that coordinates per-case execution and verifies assertions."""
+    return (
+        "<?php\n"
+        "declare(strict_types=1);\n"
+        "$workspaceDir = '/opt/proofpatch_worker';\n"
+        "$targetRel = $argv[1] ?? 'src/OrderTotal.php';\n"
+        "$harnessRel = $argv[2] ?? 'tests/order_total.php';\n"
+        f"$oracleToken = '{oracle_token}';\n"
+        "$targetFile = $workspaceDir . '/' . $targetRel;\n"
+        "$harnessFile = $workspaceDir . '/' . $harnessRel;\n"
+        "$workerScript = $workspaceDir . '/_oracle_worker.php';\n"
+        "if (!is_file($targetFile) || !is_file($harnessFile) || !is_file($workerScript)) {\n"
+        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Required files missing in workspace]\\n\");\n"
+        "    exit(1);\n"
+        "}\n"
+        "$initialTargetSha = hash_file('sha256', $targetFile);\n"
+        "$initialHarnessSha = hash_file('sha256', $harnessFile);\n"
+        "$suPath = is_executable('/bin/su') ? '/bin/su' : (is_executable('/usr/bin/su') ? '/usr/bin/su' : null);\n"
+        "$runuserPath = is_executable('/sbin/runuser') ? '/sbin/runuser' : (is_executable('/usr/sbin/runuser') ? '/usr/sbin/runuser' : null);\n"
+        "if ($suPath === null && $runuserPath === null) {\n"
+        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Privilege separation unavailable]\\n\");\n"
+        "    exit(1);\n"
+        "}\n"
+        "$harnessContent = (string) file_get_contents($harnessFile);\n"
+        "$isDedicated = str_contains($harnessContent, \"'single item' =>\") || str_contains($harnessContent, \"'mixed quantities' =>\");\n"
+        "$cases = $isDedicated ? [\n"
+        "    'empty order' => [[], 0],\n"
+        "    'single item' => [[['unit_price' => 100, 'quantity' => 2]], 200],\n"
+        "    'zero quantity' => [[['unit_price' => 100, 'quantity' => 0]], 0],\n"
+        "    'mixed quantities' => [[['unit_price' => 100, 'quantity' => 0], ['unit_price' => 50, 'quantity' => 2]], 100],\n"
+        "] : [\n"
+        "    'empty order' => [[], 0],\n"
+        "    'multiple items' => [[['unit_price' => 125, 'quantity' => 2], ['unit_price' => 80, 'quantity' => 1]], 330],\n"
+        "    'zero quantity' => [[['unit_price' => 500, 'quantity' => 0], ['unit_price' => 125, 'quantity' => 2]], 250],\n"
+        "];\n"
+        "$phpOpts = '-n -d open_basedir=/opt/proofpatch_worker:/tmp -d disable_functions=exec,passthru,shell_exec,system,proc_open,popen,curl_exec';\n"
+        "$failures = [];\n"
+        "$totalCases = count($cases);\n"
+        "$passedCases = 0;\n"
+        "foreach ($cases as $name => [$items, $expected]) {\n"
+        "    $itemsJson = json_encode($items, JSON_THROW_ON_ERROR);\n"
+        "    $workerCmd = sprintf(\n"
+        "        'php %s %s %s %s',\n"
+        "        $phpOpts,\n"
+        "        escapeshellarg($workerScript),\n"
+        "        escapeshellarg($targetFile),\n"
+        "        escapeshellarg($itemsJson)\n"
+        "    );\n"
+        "    if ($suPath !== null) {\n"
+        "        $fullCmd = $suPath . ' -s /bin/sh proofpatch-worker -c ' . escapeshellarg($workerCmd);\n"
+        "    } else {\n"
+        "        $fullCmd = $runuserPath . ' -u proofpatch-worker -- ' . $workerCmd;\n"
+        "    }\n"
+        "    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];\n"
+        "    $proc = proc_open($fullCmd, $descriptors, $pipes, $workspaceDir);\n"
+        "    if (!is_resource($proc)) {\n"
+        "        fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Failed to spawn worker for case '{$name}']\\n\");\n"
+        "        exit(1);\n"
+        "    }\n"
+        "    fclose($pipes[0]);\n"
+        "    $stdout = '';\n"
+        "    $stderr = '';\n"
+        "    $deadline = microtime(true) + 5.0;\n"
+        "    $caseTimedOut = false;\n"
+        "    stream_set_blocking($pipes[1], false);\n"
+        "    stream_set_blocking($pipes[2], false);\n"
+        "    while (is_resource($proc)) {\n"
+        "        $pstatus = proc_get_status($proc);\n"
+        "        if (!$pstatus['running']) {\n"
+        "            $stdout .= (string) stream_get_contents($pipes[1]);\n"
+        "            $stderr .= (string) stream_get_contents($pipes[2]);\n"
+        "            break;\n"
+        "        }\n"
+        "        if (microtime(true) > $deadline) {\n"
+        "            proc_terminate($proc, 9);\n"
+        "            $caseTimedOut = true;\n"
+        "            $stderr .= \"case '{$name}' timed out after 5s\\n\";\n"
+        "            break;\n"
+        "        }\n"
+        "        $read = [$pipes[1], $pipes[2]];\n"
+        "        $w = null; $e = null;\n"
+        "        if (@stream_select($read, $w, $e, 0, 50000) > 0) {\n"
+        "            foreach ($read as $stream) {\n"
+        "                $chunk = fread($stream, 4096);\n"
+        "                if ($chunk !== false) {\n"
+        "                    if ($stream === $pipes[1]) { $stdout .= $chunk; } else { $stderr .= $chunk; }\n"
+        "                }\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    fclose($pipes[1]);\n"
+        "    fclose($pipes[2]);\n"
+        "    $exitCode = proc_close($proc);\n"
+        "    if ($caseTimedOut) {\n"
+        "        $failures[] = \"{$name}: execution timed out\";\n"
+        "        break;\n"
+        "    }\n"
+        "    if (str_contains($stdout, '[PROOFPATCH_ORACLE_SUCCESS') || str_contains($stderr, '[PROOFPATCH_ORACLE_SUCCESS')\n"
+        "        || str_contains($stdout, '[PROOFPATCH_ORACLE_ABORT') || str_contains($stderr, '[PROOFPATCH_ORACLE_ABORT')) {\n"
+        "        fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Candidate attempted oracle sentinel injection]\\n\");\n"
+        "        exit(1);\n"
+        "    }\n"
+        "    if ($exitCode !== 0 || $stderr !== '') {\n"
+        "        $errSummary = trim($stderr) !== '' ? trim($stderr) : \"worker exited with code {$exitCode}\";\n"
+        "        $failures[] = \"{$name}: {$errSummary}\";\n"
+        "        continue;\n"
+        "    }\n"
+        "    $decoded = json_decode(trim($stdout), true);\n"
+        "    if (!is_array($decoded) || !array_key_exists('order_total', $decoded) || !is_int($decoded['order_total'])) {\n"
+        "        $failures[] = \"{$name}: invalid worker output structure\";\n"
+        "        continue;\n"
+        "    }\n"
+        "    $actual = $decoded['order_total'];\n"
+        "    if ($actual !== $expected) {\n"
+        "        $failures[] = \"{$name}: expected {$expected}, got {$actual}\";\n"
+        "    } else {\n"
+        "        $passedCases++;\n"
+        "    }\n"
+        "}\n"
+        "$postTargetSha = hash_file('sha256', $targetFile);\n"
+        "$postHarnessSha = hash_file('sha256', $harnessFile);\n"
+        "if (!hash_equals($initialTargetSha, $postTargetSha) || !hash_equals($initialHarnessSha, $postHarnessSha)) {\n"
+        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Filesystem tampering detected during harness execution]\\n\");\n"
+        "    exit(1);\n"
+        "}\n"
+        "if ($failures !== []) {\n"
+        "    foreach ($failures as $f) {\n"
+        "        fwrite(STDERR, $f . \"\\n\");\n"
+        "    }\n"
+        "    exit(1);\n"
+        "}\n"
+        "if ($passedCases !== $totalCases) {\n"
+        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Test harness did not reach natural completion]\\n\");\n"
+        "    exit(1);\n"
+        "}\n"
+        "echo \"All order total cases passed.\\n\";\n"
+        "echo \"\\n[PROOFPATCH_ORACLE_SUCCESS:{$oracleToken}]\\n\";\n"
+        "exit(0);\n"
+    )
 
 
 def main() -> int:
@@ -94,7 +284,7 @@ def main() -> int:
     oracle_token = spec.get("oracle_token") or secrets.token_hex(32)
 
     if not isinstance(oracle_token, str) or not re.fullmatch(r"[a-f0-9]{64}", oracle_token):
-        sys.stderr.write("Invalid oracle token.\n")
+        sys.stderr.write("Validation error: Invalid oracle token.\n")
         return 2
 
     if not source_b64 or not test_harness_b64:
@@ -111,72 +301,10 @@ def main() -> int:
 
     timeout_seconds = max(5, min(MAX_TIMEOUT_SECONDS, timeout_seconds))
 
-    # Base64 encoded supervisor script executing actual test harness under unprivileged worker user
-    supervisor_php = (
-        "<?php\n"
-        "declare(strict_types=1);\n"
-        "$workspaceDir = '/opt/proofpatch_worker';\n"
-        "$targetRel = $argv[1] ?? 'src/OrderTotal.php';\n"
-        "$harnessRel = $argv[2] ?? 'tests/order_total.php';\n"
-        f"$oracleToken = '{oracle_token}';\n"
-        "$targetFile = $workspaceDir . '/' . $targetRel;\n"
-        "$harnessFile = $workspaceDir . '/' . $harnessRel;\n"
-        "if (!is_file($targetFile) || !is_file($harnessFile)) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Target or harness file missing in workspace]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "$initialTargetSha = hash_file('sha256', $targetFile);\n"
-        "$initialHarnessSha = hash_file('sha256', $harnessFile);\n"
-        "$suPath = is_executable('/bin/su') ? '/bin/su' : (is_executable('/usr/bin/su') ? '/usr/bin/su' : null);\n"
-        "$runuserPath = is_executable('/sbin/runuser') ? '/sbin/runuser' : (is_executable('/usr/sbin/runuser') ? '/usr/sbin/runuser' : null);\n"
-        "if ($suPath === null && $runuserPath === null) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Privilege separation unavailable]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "$phpOpts = '-n -d open_basedir=/opt/proofpatch_worker:/tmp -d disable_functions=exec,passthru,shell_exec,system,proc_open,popen';\n"
-        "$workerCmd = sprintf('cd %s && php %s %s', escapeshellarg($workspaceDir), $phpOpts, escapeshellarg($harnessRel));\n"
-        "if ($suPath !== null) {\n"
-        "    $fullCmd = $suPath . ' -s /bin/sh proofpatch-worker -c ' . escapeshellarg($workerCmd);\n"
-        "} else {\n"
-        "    $fullCmd = $runuserPath . ' -u proofpatch-worker -- ' . $workerCmd;\n"
-        "}\n"
-        "$descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];\n"
-        "$proc = proc_open($fullCmd, $descriptors, $pipes, $workspaceDir);\n"
-        "if (!is_resource($proc)) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Failed to spawn unprivileged worker process]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "fclose($pipes[0]);\n"
-        "$stdout = (string)stream_get_contents($pipes[1]);\n"
-        "$stderr = (string)stream_get_contents($pipes[2]);\n"
-        "fclose($pipes[1]);\n"
-        "fclose($pipes[2]);\n"
-        "$exitCode = proc_close($proc);\n"
-        "$postTargetSha = hash_file('sha256', $targetFile);\n"
-        "$postHarnessSha = hash_file('sha256', $harnessFile);\n"
-        "if (!hash_equals($initialTargetSha, $postTargetSha) || !hash_equals($initialHarnessSha, $postHarnessSha)) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Filesystem tampering detected during harness execution]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "if (str_contains($stdout, '[PROOFPATCH_ORACLE_SUCCESS') || str_contains($stderr, '[PROOFPATCH_ORACLE_SUCCESS')\n"
-        "    || str_contains($stdout, '[PROOFPATCH_ORACLE_ABORT') || str_contains($stderr, '[PROOFPATCH_ORACLE_ABORT')) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Candidate attempted oracle sentinel injection]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "if ($exitCode !== 0 || $stderr !== '' || str_contains($stdout, 'expected ')) {\n"
-        "    if ($stderr !== '') { fwrite(STDERR, $stderr); }\n"
-        "    if ($stdout !== '') { fwrite(STDOUT, $stdout); }\n"
-        "    exit(1);\n"
-        "}\n"
-        "if (!str_contains($stdout, 'All order total cases passed.')) {\n"
-        "    fwrite(STDERR, \"[PROOFPATCH_ORACLE_ABORT: Test harness did not reach natural completion]\\n\");\n"
-        "    exit(1);\n"
-        "}\n"
-        "if ($stdout !== '') { echo $stdout; }\n"
-        "if ($stderr !== '') { fwrite(STDERR, $stderr); }\n"
-        "echo \"\\n[PROOFPATCH_ORACLE_SUCCESS:{$oracleToken}]\\n\";\n"
-        "exit(0);\n"
-    )
+    worker_php = get_worker_script()
+    worker_b64 = base64.b64encode(worker_php.encode("utf-8")).decode("ascii")
+
+    supervisor_php = get_supervisor_script(oracle_token)
     supervisor_b64 = base64.b64encode(supervisor_php.encode("utf-8")).decode("ascii")
 
     # Import modal after argument validation
@@ -194,6 +322,7 @@ def main() -> int:
         "chmod 0700 /root /root/supervisor && "
         f"echo '{supervisor_b64}' | base64 -d > /root/supervisor/proofpatch_supervisor.php && "
         "chmod 0700 /root/supervisor/proofpatch_supervisor.php && "
+        f"echo '{worker_b64}' | base64 -d > /opt/proofpatch_worker/_oracle_worker.php && "
         f"echo '{test_harness_b64}' | base64 -d > '/opt/proofpatch_worker/{harness_path}' && "
         f"echo '{source_b64}' | base64 -d > '/opt/proofpatch_worker/{relative_path}' && "
         "chown -R root:root /opt/proofpatch_worker && "
@@ -268,8 +397,7 @@ def main() -> int:
     # Oracle verification check:
     # 1. Container exit status must be 0
     # 2. Not timed out and not truncated
-    # 3. Output must contain the supervisor success sentinel. This sentinel does not
-    #    prove that a candidate could not influence assertions inside the PHP worker.
+    # 3. Output must contain the supervisor success sentinel.
     # 4. Stderr must NOT contain the premature exit abort marker
     oracle_sentinel = f"[PROOFPATCH_ORACLE_SUCCESS:{oracle_token}]"
     oracle_verified = (

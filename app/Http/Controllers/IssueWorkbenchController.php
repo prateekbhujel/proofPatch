@@ -529,14 +529,17 @@ final class IssueWorkbenchController
                     $suggestion['isDedicated'] = true;
                     $suggestion['provenance'] = 'Dedicated test repository';
                 } else {
-                    $candidateSource = \ProofPatch\Agent\SingleFileCandidate::create(
-                        $context['source'],
-                        $context['sourceSha256'],
-                        "max(1, \$item['quantity'])",
-                        "\$item['quantity']",
-                    );
-                    $isMuse = $request->input('candidate_origin') === 'muse' || $request->boolean('use_muse_candidate');
-                    if ($isMuse) {
+                    $proposalStore = new \ProofPatch\Agent\ServerHeldModelProposal();
+                    $requestedCandidateSha = $request->input('candidate_sha');
+                    $serverProposal = null;
+                    if (is_string($requestedCandidateSha) && preg_match('/\A[a-f0-9]{64}\z/', $requestedCandidateSha)) {
+                        $serverProposal = $proposalStore->lookup($requestedCandidateSha);
+                    }
+
+                    if ($serverProposal !== null && hash_equals($serverProposal['sourceSha256'], $context['sourceSha256'])) {
+                        // Candidate was genuinely proposed by Meta Muse Spark on public fixture with exact matching source SHA-256
+                        $candidateSource = $serverProposal['candidateSource'];
+                        $candidateSha = $serverProposal['candidateSha256'];
                         $suggestion = [
                             'status' => 'suggested',
                             'isOfflineExample' => false,
@@ -548,27 +551,35 @@ final class IssueWorkbenchController
                             'commit' => $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
                             'path' => $context['path'],
                             'sourceSha256' => $context['sourceSha256'],
-                            'find' => "        \$total += \$item['unit_price'] * max(1, \$item['quantity']);",
-                            'replace' => "        \$total += \$item['unit_price'] * \$item['quantity'];",
-                            'explanation' => "Remove max(1, quantity) so zero-quantity items contribute zero to the total instead of being charged once.",
-                            'model' => 'meta-models/muse-spark-open-1026',
-                            'requestDigest' => $digest,
-                            'usage' => ['prompt_tokens' => 503, 'completion_tokens' => 365],
+                            'find' => $serverProposal['find'],
+                            'replace' => $serverProposal['replace'],
+                            'explanation' => $serverProposal['explanation'],
+                            'model' => $serverProposal['model'],
+                            'requestDigest' => $serverProposal['requestDigest'],
+                            'usage' => $serverProposal['usage'],
                             'candidate' => [
                                 'status' => 'unverified_in_memory_preview',
                                 'source' => $candidateSource,
-                                'sha256' => hash('sha256', $candidateSource),
+                                'sha256' => $candidateSha,
                                 'applied' => false,
                                 'verified' => false,
                             ],
                         ];
                     } else {
+                        // Offline reference proposal - strictly no model, no tokens, clearly labeled as offline reference
+                        $candidateSource = \ProofPatch\Agent\SingleFileCandidate::create(
+                            $context['source'],
+                            $context['sourceSha256'],
+                            "max(1, \$item['quantity'])",
+                            "\$item['quantity']",
+                        );
+                        $candidateSha = hash('sha256', $candidateSource);
                         $suggestion = [
                             'status' => 'offline_reference_example',
                             'isOfflineExample' => true,
                             'isSynthetic' => false,
                             'isDedicated' => true,
-                            'provenance' => 'Dedicated test repository',
+                            'provenance' => 'Dedicated test repository (offline reference example)',
                             'repository' => $context['repository'],
                             'issueNumber' => $context['issueNumber'],
                             'commit' => $context['commit'] ?? \ProofPatch\GitHub\DedicatedTestRepo::requireBaseCommit(),
@@ -583,7 +594,7 @@ final class IssueWorkbenchController
                             'candidate' => [
                                 'status' => 'unverified_in_memory_preview',
                                 'source' => $candidateSource,
-                                'sha256' => hash('sha256', $candidateSource),
+                                'sha256' => $candidateSha,
                                 'applied' => false,
                                 'verified' => false,
                             ],
@@ -700,7 +711,8 @@ final class IssueWorkbenchController
         $candidateSource = (string) $suggestion['candidate']['source'];
         $candidateSha = hash('sha256', $candidateSource);
 
-        $isolatedRunner = $this->customRunner ?? new \ProofPatch\Verifier\ModalIsolatedRunner(grantVerified: getenv('MODAL_GRANT_VERIFIED') === 'true');
+        $rawGrant = getenv('MODAL_GRANT_VERIFIED') ?: ($_ENV['MODAL_GRANT_VERIFIED'] ?? $_SERVER['MODAL_GRANT_VERIFIED'] ?? 'false');
+        $isolatedRunner = $this->customRunner ?? new \ProofPatch\Verifier\ModalIsolatedRunner(grantVerified: $rawGrant === 'true');
         $isolatedAvailable = $isolatedRunner->isAvailable()['available'];
 
         // Fail closed for model-generated or untrusted candidate code if microVM runner is unavailable

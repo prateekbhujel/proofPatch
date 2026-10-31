@@ -242,6 +242,15 @@ export function VerificationPipelineCard({
               </div>
             </div>
 
+            <div className="rounded-lg bg-white/80 dark:bg-slate-900/70 border border-emerald-200/80 dark:border-emerald-800/70 px-3 py-2 text-[11px] text-slate-600 dark:text-slate-300 flex flex-wrap items-center justify-between gap-2">
+              <div className="font-mono">
+                Evidence Link: Issue #{context.issueNumber} &rarr; {suggestion?.path || context.path} · Candidate SHA-256 {(suggestion?.candidate?.sha256 || context.sourceSha256).slice(0, 12)}…
+              </div>
+              <span className="text-slate-500 dark:text-slate-400">
+                User-permitted only · No automatic merge or close
+              </span>
+            </div>
+
             {openReadyPull && (
               <div className="rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="space-y-0.5 min-w-0">

@@ -605,6 +605,17 @@ export default function Issues({
                     <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">{context.repository}</span>
                     <span className="text-slate-300 dark:text-slate-700">/</span>
                     <span className="font-mono text-slate-600 dark:text-slate-300">#{context.issueNumber}</span>
+                    <span
+                      className={`hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-medium border ${
+                        modelContextAllowed
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                          : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                      }`}
+                    >
+                      {modelContextAllowed
+                        ? 'Public · Muse + 5-Gate Co-Maintainer'
+                        : 'Private · Local Verification Only (No external model transmission)'}
+                    </span>
                   </>
                 ) : viewMode === 'local-card' && selectedLocalCard ? (
                   <>

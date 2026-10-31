@@ -321,6 +321,18 @@ export function WorkbenchSidebar({
                         </span>
                       )}
                     </div>
+                    {(issue.triage?.suggestedComment || isContradictedIssue) && (
+                      <details className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 px-2 py-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                        <summary className="cursor-pointer font-medium text-slate-700 dark:text-slate-200">
+                          {isContradictedIssue ? 'Why contradicted by code' : 'Ask for missing details'}
+                        </summary>
+                        <p className="mt-1 leading-relaxed text-[11px] text-slate-600 dark:text-slate-300">
+                          {isContradictedIssue
+                            ? 'Pinned code in src/OrderTotal.php and tests/order_total.php return 1500 for quantity 3 × priceCents 500 (not 0). Closed only with maintainer permission.'
+                            : issue.triage?.suggestedComment}
+                        </p>
+                      </details>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5">

@@ -43,7 +43,15 @@ export function AutoReviewPanel({ connected, repositories, autoReview, pendingRe
               <div key={repo.fullName} className="flex items-center justify-between gap-3 px-3 py-3 text-xs">
                 <div className="min-w-0">
                   <div className="break-all font-medium text-slate-900 dark:text-slate-100">{repo.fullName}</div>
-                  {repo.isPrivate && <div className="mt-1 text-slate-500">Private repositories are not sent to Muse.</div>}
+                  {repo.isPrivate ? (
+                    <div className="mt-1 text-slate-500">
+                      Private repositories are not sent to Muse. Local issue examination, offline verification, and user-permitted PR actions remain available.
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-slate-500">
+                      Public repository · Automatic Muse PR review {enabled ? 'enabled' : 'disabled'}.
+                    </div>
+                  )}
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-slate-700 dark:text-slate-300">
                   <span>{repo.isPrivate ? 'Off (Private)' : enabled ? 'On' : 'Off'}</span>

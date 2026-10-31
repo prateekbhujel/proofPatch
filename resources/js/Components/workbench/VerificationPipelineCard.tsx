@@ -320,7 +320,7 @@ export function VerificationPipelineCard({
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Publish a new branch (`proofpatch/{context.issueNumber}-…`) with `Co-authored-by: proofpatcher[bot]`, or use the prompt below to merge/close PRs.
+                  Create a draft PR on branch `proofpatch/{context.issueNumber}-…` using your connected GitHub account ({githubConnection?.user?.login ? `@${githubConnection.user.login}` : 'authenticated user'}), or use the prompt below to merge/close PRs.
                 </p>
                 {publisherDisconnected ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-amber-800 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800">

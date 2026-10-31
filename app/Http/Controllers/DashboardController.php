@@ -242,7 +242,7 @@ final class DashboardController
             $budget = $this->budget()->status();
         } catch (\Throwable) {}
         try {
-            $modelKeyAvailable = strlen(Credentials::baseten()) >= 16;
+            $modelKeyAvailable = strlen(Credentials::activeKey()) >= 16;
         } catch (\Throwable) {
             $modelKeyAvailable = false;
         }
@@ -1166,17 +1166,80 @@ final class DashboardController
         try {
             $workerStatusService = new \ProofPatch\Support\WorkerStatusService();
             $autoReview['worker'] = $workerStatusService->getStatus();
+            foreach (($githubConnection['repositories'] ?? []) as $r) {
+                if (is_array($r) && is_string($r['fullName'] ?? null) && ($r['isPrivate'] ?? null) === true) {
+                    \ProofPatch\Models\RepositoryAutoReviewSetting::disableForRepository($r['fullName']);
+                }
+            }
             $autoReview['settings'] = \ProofPatch\Models\RepositoryAutoReviewSetting::all(['repository', 'enabled', 'public_only'])->keyBy('repository')->all();
         } catch (\Throwable) {}
+
+        $providerConfig = \ProofPatch\Agent\ProviderConfigStore::status();
+        $statusMessage = session('status') ?? $this->getSession($request, 'status');
+        $errorMessage = session('error') ?? $this->getSession($request, 'error');
+        $this->forgetSession($request, 'status', 'error');
 
         return Inertia::render('Settings', [
             'githubConnection' => $githubConnection,
             'budget' => $budget,
             'policy' => $policy,
             'autoReview' => $autoReview,
-            'statusMessage' => session('status'),
-            'errorMessage' => session('error'),
+            'providerConfig' => $providerConfig,
+            'statusMessage' => $statusMessage,
+            'errorMessage' => $errorMessage,
         ]);
+    }
+
+    public function selectProvider(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            $provider = (string) $request->input('provider', '');
+            $model = $request->filled('model') ? (string) $request->input('model') : null;
+            \ProofPatch\Agent\ProviderConfigStore::selectActive($provider, $model);
+            $target = \ProofPatch\Agent\ProviderConfigStore::activeTarget();
+
+            $this->forgetSession($request, 'review_approval_token', 'issue_approval_token', 'card_proposal_preview');
+            $msg = "Active Muse provider set to {$target['label']} ({$target['model']}).";
+            $this->putSession($request, 'status', $msg);
+
+            return redirect('/settings')->with('status', $msg);
+        } catch (\Throwable $e) {
+            $this->putSession($request, 'error', $e->getMessage());
+            return redirect('/settings')->with('error', $e->getMessage());
+        }
+    }
+
+    public function saveProviderKey(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            $provider = (string) $request->input('provider', '');
+            $apiKey = (string) $request->input('api_key', '');
+            \ProofPatch\Agent\ProviderConfigStore::saveKey($provider, $apiKey);
+            $label = \ProofPatch\Agent\ProviderConfigStore::PROVIDERS[strtolower(trim($provider))]['label'] ?? strtoupper($provider);
+            $msg = "Encrypted API key saved locally for {$label}. No validation request was sent.";
+            $this->putSession($request, 'status', $msg);
+
+            return redirect('/settings')->with('status', $msg);
+        } catch (\Throwable $e) {
+            $this->putSession($request, 'error', $e->getMessage());
+            return redirect('/settings')->with('error', $e->getMessage());
+        }
+    }
+
+    public function removeProviderKey(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            $provider = (string) $request->input('provider', '');
+            \ProofPatch\Agent\ProviderConfigStore::removeKey($provider);
+            $label = \ProofPatch\Agent\ProviderConfigStore::PROVIDERS[strtolower(trim($provider))]['label'] ?? strtoupper($provider);
+            $msg = "Removed stored API key for {$label}.";
+            $this->putSession($request, 'status', $msg);
+
+            return redirect('/settings')->with('status', $msg);
+        } catch (\Throwable $e) {
+            $this->putSession($request, 'error', $e->getMessage());
+            return redirect('/settings')->with('error', $e->getMessage());
+        }
     }
 
     public function docs(Request $request): InertiaResponse

@@ -75,10 +75,17 @@ test('automatic reviews show the real worker state and only enable public reposi
   assert.match(html, /Automatic review for owner\/private[^>]*disabled/);
   assert.match(html, /not posted to GitHub automatically/);
   const running = render(AutoReviewPanel, { ...props, autoReview: {
-    worker: { isLive: true, status: 'running' }, settings: { 'owner/public': { repository: 'owner/public', enabled: true } }, publicOnly: true,
+    worker: { isLive: true, status: 'running' },
+    settings: {
+      'owner/public': { repository: 'owner/public', enabled: true },
+      'owner/private': { repository: 'owner/private', enabled: true },
+    },
+    publicOnly: true,
   } });
   assert.match(running, /Worker running/);
   assert.match(running, /Automatic review for owner\/public[^>]*checked/);
+  assert.match(running, /Off \(Private\)/);
+  assert.doesNotMatch(running, /Automatic review for owner\/private[^>]*checked/);
   assert.doesNotMatch(running, /Start the local worker/);
 });
 

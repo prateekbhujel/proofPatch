@@ -103,7 +103,7 @@ final class IssueWorkbenchController
         $context = $request->session()->get('issue_context');
         $modelContextAllowed = is_array($context) && $this->canSendModelContext($request, $context);
         try {
-            $modelKeyAvailable = strlen(Credentials::baseten()) >= 16;
+            $modelKeyAvailable = strlen(Credentials::activeKey()) >= 16;
         } catch (\Throwable) {
             $modelKeyAvailable = false;
         }

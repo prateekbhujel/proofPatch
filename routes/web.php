@@ -58,6 +58,9 @@ Route::post('/github/repositories/select', [DashboardController::class, 'selectI
 Route::post('/github/pulls/capture', [DashboardController::class, 'captureInstalledPullRequest']);
 Route::match(['get', 'post'], '/checks', [DashboardController::class, 'checks']);
 Route::get('/settings', [DashboardController::class, 'settings']);
+Route::post('/settings/providers/select', [DashboardController::class, 'selectProvider']);
+Route::post('/settings/providers/key', [DashboardController::class, 'saveProviderKey']);
+Route::post('/settings/providers/key/remove', [DashboardController::class, 'removeProviderKey']);
 Route::get('/docs', [DashboardController::class, 'docs']);
 Route::post('/notifications/clear', [DashboardController::class, 'clearNotifications']);
 Route::get('/checks/image', [DashboardController::class, 'image']);

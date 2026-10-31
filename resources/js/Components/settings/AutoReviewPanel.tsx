@@ -38,7 +38,7 @@ export function AutoReviewPanel({ connected, repositories, autoReview, pendingRe
         <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg">
           {repositories.map((repo) => {
             const saved = Object.values(settings).find((item) => item.repository.toLowerCase() === repo.fullName.toLowerCase());
-            const enabled = saved?.enabled === true;
+            const enabled = !repo.isPrivate && saved?.enabled === true;
             return (
               <div key={repo.fullName} className="flex items-center justify-between gap-3 px-3 py-3 text-xs">
                 <div className="min-w-0">
@@ -46,9 +46,9 @@ export function AutoReviewPanel({ connected, repositories, autoReview, pendingRe
                   {repo.isPrivate && <div className="mt-1 text-slate-500">Private repositories are not sent to Muse.</div>}
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <span>{enabled ? 'On' : 'Off'}</span>
+                  <span>{repo.isPrivate ? 'Off (Private)' : enabled ? 'On' : 'Off'}</span>
                   <input type="checkbox" aria-label={`Automatic review for ${repo.fullName}`} checked={enabled}
-                    disabled={pendingRepo !== null || (repo.isPrivate && !enabled)}
+                    disabled={pendingRepo !== null || repo.isPrivate}
                     onChange={(event) => onToggle(repo.fullName, event.currentTarget.checked)}
                     className="accent-violet-600 disabled:opacity-50" />
                 </label>

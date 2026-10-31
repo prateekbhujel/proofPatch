@@ -73,11 +73,14 @@ final readonly class ModelProposal
         }
         // Reserve uncached text input by UTF-8 bytes plus framing allowance and maximum output.
         $reserveMicros = (int) ceil((strlen($system.$prompt) + 4096 + $imageAllowance) * 1.25 + self::MAX_TOKENS * 4.25);
-        return $this->budget->run($reserveMicros, function () use ($key, $system, $userContent, $source, $sourceReceipt, $fixture): array {
-            $response = $this->http->request('POST', self::ENDPOINT, [
+        $target = Credentials::activeTarget();
+        $endpoint = $target['endpoint'];
+        $expectedModel = $target['model'];
+        return $this->budget->run($reserveMicros, function () use ($key, $system, $userContent, $source, $sourceReceipt, $fixture, $endpoint, $expectedModel): array {
+            $response = $this->http->request('POST', $endpoint, [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0, 'timeout' => 90, 'max_duration' => 120,
-                'json' => ['model' => self::MODEL, 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
+                'json' => ['model' => $expectedModel, 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
                     'temperature' => 1.0, 'top_p' => 1.0, 'stream' => false,
                     'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $userContent]]],
             ]);
@@ -90,7 +93,7 @@ final readonly class ModelProposal
             }
             $result = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
             $choice = $result['choices'][0] ?? [];
-            if (($result['model'] ?? null) !== self::MODEL || ($choice['finish_reason'] ?? null) !== 'stop'
+            if (($result['model'] ?? null) !== $expectedModel || ($choice['finish_reason'] ?? null) !== 'stop'
                 || !is_string($choice['message']['content'] ?? null) || strlen($choice['message']['content']) > 16384) {
                 throw new \RuntimeException('Model returned an incomplete or unexpected response.');
             }
@@ -106,7 +109,7 @@ final readonly class ModelProposal
                 || $usage['prompt_tokens'] < 0 || $usage['completion_tokens'] < 0 || $usage['completion_tokens'] > self::MAX_TOKENS) {
                 throw new \RuntimeException('Model response lacks bounded usage data.');
             }
-            return ['patch' => $patch->toArray(), 'model' => self::MODEL, 'sourceRunId' => $sourceReceipt['runId'],
+            return ['patch' => $patch->toArray(), 'model' => $expectedModel, 'sourceRunId' => $sourceReceipt['runId'],
                 'sourceReceiptSha256' => $sourceReceipt['sha256'],
                 'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']]];
         });

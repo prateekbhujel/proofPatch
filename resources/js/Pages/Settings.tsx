@@ -21,6 +21,7 @@ import { AutoReviewPanel } from '../Components/settings/AutoReviewPanel';
 export default function Settings({
   githubConnection,
   budget,
+  providerConfig,
   statusMessage,
   errorMessage,
   autoReview,
@@ -36,6 +37,47 @@ export default function Settings({
   const [repoSearchQuery, setRepoSearchQuery] = useState('');
   const [pendingReviewRepo, setPendingReviewRepo] = useState<string | null>(null);
   const [autoReviewError, setAutoReviewError] = useState<string | null>(null);
+
+  const [selectedProvider, setSelectedProvider] = useState<'baseten' | 'meta'>(
+    providerConfig?.activeProvider || 'baseten'
+  );
+  const [selectedModel, setSelectedModel] = useState<string>(
+    providerConfig?.activeModel || 'meta-models/muse-spark-open-1026'
+  );
+  const [basetenKeyInput, setBasetenKeyInput] = useState('');
+  const [metaKeyInput, setMetaKeyInput] = useState('');
+  const [savingProvider, setSavingProvider] = useState(false);
+
+  const handleSelectProviderSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProvider(true);
+    router.post(
+      '/settings/providers/select',
+      { provider: selectedProvider, model: selectedModel },
+      { onFinish: () => setSavingProvider(false) }
+    );
+  };
+
+  const handleSaveKey = (provider: 'baseten' | 'meta', rawKey: string, clearFn: () => void) => {
+    setSavingProvider(true);
+    router.post(
+      '/settings/providers/key',
+      { provider, api_key: rawKey },
+      {
+        onSuccess: () => clearFn(),
+        onFinish: () => setSavingProvider(false),
+      }
+    );
+  };
+
+  const handleRemoveKey = (provider: 'baseten' | 'meta') => {
+    setSavingProvider(true);
+    router.post(
+      '/settings/providers/key/remove',
+      { provider },
+      { onFinish: () => setSavingProvider(false) }
+    );
+  };
 
   const copyUserCode = () => {
     if (githubConnection.deviceFlow?.userCode) {
@@ -259,6 +301,163 @@ export default function Settings({
             <AutoReviewPanel connected={githubConnection.isConnected} repositories={repositories} autoReview={autoReview}
               pendingRepo={pendingReviewRepo} error={autoReviewError} onToggle={handleAutoReview}
               onRefresh={() => router.reload({ only: ['autoReview'] })} />
+
+            {providerConfig && (
+              <section
+                aria-labelledby="muse-provider-config-heading"
+                className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-5 shadow-xs"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div>
+                    <h2 id="muse-provider-config-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Muse Model Provider &amp; Encrypted API Keys
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Choose which provider and model handles public Muse requests. Keys are encrypted locally with AES-256-GCM (0600 owner-only) and never returned to the browser.
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                      providerConfig.activeKeyAvailable
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                        : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800'
+                    }`}
+                  >
+                    Active: {providerConfig.activeLabel} ({providerConfig.activeModel}){' '}
+                    {providerConfig.activeKeyAvailable ? '· Key ready' : '· Key missing'}
+                  </span>
+                </div>
+
+                {/* Active Provider & Model Selector */}
+                <form onSubmit={handleSelectProviderSubmit} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label htmlFor="active-provider-select" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Active Inference Provider
+                    </label>
+                    <select
+                      id="active-provider-select"
+                      value={selectedProvider}
+                      onChange={(e) => {
+                        const nextProv = e.target.value as 'baseten' | 'meta';
+                        setSelectedProvider(nextProv);
+                        setSelectedModel(providerConfig.providers[nextProv]?.defaultModel || '');
+                      }}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      <option value="baseten">Baseten Inference API</option>
+                      <option value="meta">Meta Model API (Standard Mode)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="active-model-select" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Muse Model ID
+                    </label>
+                    <select
+                      id="active-model-select"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-mono text-slate-900 dark:text-slate-100"
+                    >
+                      {(providerConfig.providers[selectedProvider]?.models || []).map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={savingProvider}
+                      className="w-full px-4 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold hover:bg-slate-800 transition disabled:opacity-50"
+                    >
+                      Apply Provider &amp; Model
+                    </button>
+                  </div>
+                </form>
+
+                <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                  Target Endpoint: {providerConfig.providers[selectedProvider]?.endpoint}
+                </div>
+
+                {/* Encrypted API Key Forms for Baseten and Meta Model API */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  {(['baseten', 'meta'] as const).map((provId) => {
+                    const info = providerConfig.providers[provId];
+                    if (!info) return null;
+                    const keyVal = provId === 'baseten' ? basetenKeyInput : metaKeyInput;
+                    const setKeyVal = provId === 'baseten' ? setBasetenKeyInput : setMetaKeyInput;
+                    const sourceBadge =
+                      info.source === 'settings_encrypted'
+                        ? 'Configured (Encrypted Local Store)'
+                        : info.source === 'env'
+                          ? 'Configured (Environment Variable)'
+                          : info.source === 'config_file'
+                            ? 'Configured (Owner-Only Key File)'
+                            : 'Not Configured';
+
+                    return (
+                      <div
+                        key={provId}
+                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 p-3.5 space-y-2.5 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">{info.label}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              info.configured
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                          >
+                            {sourceBadge}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-500 truncate">{info.endpoint}</div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="password"
+                            autoComplete="new-password"
+                            aria-label={`${info.label} API key`}
+                            value={keyVal}
+                            onChange={(e) => setKeyVal(e.target.value)}
+                            placeholder={info.configured ? '•••••••••••••••• (Enter new key to replace)' : 'Paste API key (min 16 chars)'}
+                            className="flex-1 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            disabled={savingProvider || keyVal.trim().length < 16}
+                            onClick={() => handleSaveKey(provId, keyVal, () => setKeyVal(''))}
+                            className="px-3 py-1.5 rounded-md bg-violet-700 hover:bg-violet-800 text-white font-semibold text-xs transition disabled:opacity-50 shrink-0"
+                          >
+                            {info.configured ? 'Replace Key' : 'Save Key'}
+                          </button>
+                          {info.canRemove && (
+                            <button
+                              type="button"
+                              disabled={savingProvider}
+                              onClick={() => handleRemoveKey(provId)}
+                              className="px-2.5 py-1.5 rounded-md border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 text-xs font-medium transition shrink-0"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 p-3 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+                  <p>
+                    <strong>Privacy &amp; Cost Safeguards:</strong> Saving or switching a provider never makes automatic validation requests. Meta Contributor Mode models are blocked so code is never shared for model training.
+                  </p>
+                  <p>{providerConfig.modalNote}</p>
+                </div>
+              </section>
+            )}
           </div>
         )}
 

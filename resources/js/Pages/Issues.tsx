@@ -103,22 +103,30 @@ export default function Issues({
   const [copiedBotComment, setCopiedBotComment] = useState(false);
   const [commandFeedback, setCommandFeedback] = useState<string | null>(null);
 
-  // Auto-fill known default source file paths so users can click Open in 1 click without typing manually
+  // Pre-fill file paths only when an issue's own title or body explicitly references a relative file path
   useEffect(() => {
-    const repo = githubConnection?.selectedRepo?.toLowerCase() || '';
-    const defaultPath = repo.includes('proofpatch-workflow-test')
-      ? 'src/OrderTotal.php'
-      : repo.includes('proofpatch-review-demo')
-        ? 'order_total.php'
-        : '';
-    if (!defaultPath || !githubConnection?.repoIssues) return;
+    if (!githubConnection?.repoIssues) return;
     setIssuePathMap((prev) => {
       const next = { ...prev };
       let changed = false;
       for (const iss of githubConnection.repoIssues!) {
-        if (!next[iss.number]) {
-          next[iss.number] = defaultPath;
+        if (next[iss.number] !== undefined) continue;
+        const text = `${iss.title || ''}\n${iss.body || ''}`;
+        const match = text.match(/\b([A-Za-z0-9_./-]+\.(?:php|ts|tsx|js|css|html))\b/);
+        if (match && !match[1].startsWith('tests/')) {
+          next[iss.number] = match[1];
           changed = true;
+        } else if (/OrderTotal/i.test(text)) {
+          const repo = githubConnection?.selectedRepo?.toLowerCase() || '';
+          const inferred = repo.includes('proofpatch-workflow-test')
+            ? 'src/OrderTotal.php'
+            : repo.includes('proofpatch-review-demo')
+              ? 'order_total.php'
+              : '';
+          if (inferred) {
+            next[iss.number] = inferred;
+            changed = true;
+          }
         }
       }
       return changed ? next : prev;

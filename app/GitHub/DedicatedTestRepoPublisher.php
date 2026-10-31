@@ -595,7 +595,10 @@ MARKDOWN;
             throw new \RuntimeException("Outbound {$fieldName} contains active authorization token. Refusing to publish.");
         }
 
-        $envTokens = [getenv('GITHUB_TOKEN'), getenv('BASETEN_API_KEY')];
+        $envTokens = array_merge(
+            [getenv('GITHUB_TOKEN'), getenv('BASETEN_API_KEY'), getenv('META_MODEL_API_KEY'), getenv('MODEL_API_KEY')],
+            \ProofPatch\Agent\ProviderConfigStore::allConfiguredSecrets()
+        );
         foreach ($envTokens as $envTok) {
             if (is_string($envTok) && strlen($envTok) >= 16 && str_contains($content, $envTok)) {
                 throw new \RuntimeException("Outbound {$fieldName} contains environment token. Refusing to publish.");

@@ -26,17 +26,18 @@ final readonly class IssueSuggestion
     public function preview(array $context): array
     {
         PublicIssueContext::validateContext($context);
+        $target = Credentials::activeTarget();
         $modelContext = array_filter(
             $context,
             static fn(string $k): bool => !in_array($k, ['testSource', 'testSha256'], true),
             ARRAY_FILTER_USE_KEY
         );
-        $body = ['model' => self::MODEL, 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
+        $body = ['model' => $target['model'], 'max_tokens' => self::MAX_TOKENS, 'reasoning_effort' => 'low',
             'temperature' => 1, 'top_p' => 1, 'stream' => false, 'messages' => [
                 ['role' => 'system', 'content' => self::SYSTEM],
                 ['role' => 'user', 'content' => CanonicalJson::encode($modelContext)],
             ]];
-        $payload = ['destination' => self::ENDPOINT, 'body' => $body];
+        $payload = ['destination' => $target['endpoint'], 'body' => $body];
         $inputBytes = strlen(CanonicalJson::encode($body));
         if ($inputBytes > 32000) {
             throw new \InvalidArgumentException('The request exceeds its safe bounds.');
@@ -56,8 +57,9 @@ final readonly class IssueSuggestion
             || str_contains(CanonicalJson::encode($preview['body']), $key)) {
             throw new \InvalidArgumentException('The provider key is invalid or appears in the request.');
         }
-        return $this->budget->run($preview['estimatedMicros'], function () use ($key, $preview, $context): array {
-            $response = $this->http->request('POST', self::ENDPOINT, [
+        $expectedModel = (string) ($preview['body']['model'] ?? self::MODEL);
+        return $this->budget->run($preview['estimatedMicros'], function () use ($key, $preview, $context, $expectedModel): array {
+            $response = $this->http->request('POST', (string) $preview['destination'], [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0, 'timeout' => 90, 'max_duration' => 120, 'json' => $preview['body'],
             ]);
@@ -71,7 +73,7 @@ final readonly class IssueSuggestion
             try {
                 $result = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
                 $choice = $result['choices'][0] ?? [];
-                if (($result['model'] ?? null) !== self::MODEL || ($choice['finish_reason'] ?? null) !== 'stop'
+                if (($result['model'] ?? null) !== $expectedModel || ($choice['finish_reason'] ?? null) !== 'stop'
                     || !is_string($choice['message']['content'] ?? null) || strlen($choice['message']['content']) > 16384) {
                     throw new \RuntimeException('Model returned an incomplete or unexpected response.');
                 }
@@ -110,7 +112,7 @@ final readonly class IssueSuggestion
                     'candidateSha256' => $candidateSha,
                     'candidateSource' => $candidateSource,
                     'sourceSha256' => $context['sourceSha256'],
-                    'model' => self::MODEL,
+                    'model' => $expectedModel,
                     'requestDigest' => $preview['digest'],
                     'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']],
                     'find' => $suggestion['find'],
@@ -126,7 +128,7 @@ final readonly class IssueSuggestion
             return ['status' => 'unverified_suggestion', 'repository' => $context['repository'],
                 'issueNumber' => $context['issueNumber'], 'commit' => $context['commit'], 'path' => $context['path'],
                 'sourceSha256' => $context['sourceSha256'], 'find' => $suggestion['find'], 'replace' => $suggestion['replace'],
-                'explanation' => $suggestion['explanation'], 'model' => self::MODEL, 'requestDigest' => $preview['digest'],
+                'explanation' => $suggestion['explanation'], 'model' => $expectedModel, 'requestDigest' => $preview['digest'],
                 'usage' => ['prompt_tokens' => $usage['prompt_tokens'], 'completion_tokens' => $usage['completion_tokens']],
                 'candidate' => [
                     'status' => 'unverified_in_memory_preview',

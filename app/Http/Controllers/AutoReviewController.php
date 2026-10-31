@@ -49,6 +49,18 @@ final class AutoReviewController
         }
 
         $enabled = $request->boolean('enabled');
+        if ($enabled) {
+            $auth = $request->session()->get('github_auth');
+            foreach (($auth['repositories'] ?? []) as $r) {
+                if (is_array($r) && strcasecmp((string) ($r['fullName'] ?? ''), $repository) === 0 && ($r['isPrivate'] ?? null) === true) {
+                    RepositoryAutoReviewSetting::disableForRepository($repository);
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'Automatic reviews are available for public repositories only. Private repositories are never sent to Muse.',
+                    ], 422);
+                }
+            }
+        }
         $setting = RepositoryAutoReviewSetting::setRepoEnabled($repository, $enabled);
 
         return response()->json([

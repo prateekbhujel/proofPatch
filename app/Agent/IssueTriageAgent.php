@@ -94,8 +94,9 @@ final readonly class IssueTriageAgent
             ],
         ];
 
+        $target = Credentials::activeTarget();
         $body = [
-            'model' => self::MODEL,
+            'model' => $target['model'],
             'max_tokens' => self::MAX_TOKENS,
             'reasoning_effort' => 'low',
             'temperature' => 1,
@@ -107,7 +108,7 @@ final readonly class IssueTriageAgent
             ],
         ];
 
-        $payload = ['destination' => self::ENDPOINT, 'body' => $body];
+        $payload = ['destination' => $target['endpoint'], 'body' => $body];
         $inputBytes = strlen(CanonicalJson::encode($body));
         if ($inputBytes > self::MAX_PAYLOAD_BYTES) {
             throw new \InvalidArgumentException('The issue triage request exceeds its safe bounds.');
@@ -135,8 +136,9 @@ final readonly class IssueTriageAgent
             throw new \InvalidArgumentException('The provider key is invalid or appears in the request.');
         }
 
-        return $this->budget->run($preview['estimatedMicros'], function () use ($key, $preview, $issue, $pinnedFile): array {
-            $response = $this->http->request('POST', self::ENDPOINT, [
+        $expectedModel = (string) ($preview['body']['model'] ?? self::MODEL);
+        return $this->budget->run($preview['estimatedMicros'], function () use ($key, $preview, $issue, $pinnedFile, $expectedModel): array {
+            $response = $this->http->request('POST', (string) $preview['destination'], [
                 'headers' => ['Authorization' => 'Bearer '.$key, 'Content-Type' => 'application/json'],
                 'max_redirects' => 0,
                 'timeout' => 90,
@@ -156,7 +158,7 @@ final readonly class IssueTriageAgent
             try {
                 $result = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
                 $choice = $result['choices'][0] ?? [];
-                if (($result['model'] ?? null) !== self::MODEL || ($choice['finish_reason'] ?? null) !== 'stop'
+                if (($result['model'] ?? null) !== $expectedModel || ($choice['finish_reason'] ?? null) !== 'stop'
                     || !is_string($choice['message']['content'] ?? null) || strlen($choice['message']['content']) > 16384) {
                     throw new \RuntimeException('Model returned an incomplete or unexpected response.');
                 }
@@ -180,7 +182,7 @@ final readonly class IssueTriageAgent
 
             return [
                 'unverified' => true,
-                'model' => self::MODEL,
+                'model' => $expectedModel,
                 'triagedAt' => gmdate(DATE_ATOM),
                 'inputDigest' => $preview['digest'],
                 'verdict' => $parsed['verdict'],

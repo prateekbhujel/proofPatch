@@ -47,10 +47,33 @@ export interface SettingsPolicy {
   [key: string]: any;
 }
 
+export interface ProviderStatusItem {
+  id: 'baseten' | 'meta';
+  label: string;
+  endpoint: string;
+  models: string[];
+  defaultModel: string;
+  configured: boolean;
+  source: 'settings_encrypted' | 'env' | 'config_file' | 'none';
+  canRemove: boolean;
+  updatedAt?: string | null;
+}
+
+export interface ProviderConfig {
+  activeProvider: 'baseten' | 'meta';
+  activeLabel: string;
+  activeModel: string;
+  activeEndpoint: string;
+  activeKeyAvailable: boolean;
+  providers: Record<'baseten' | 'meta', ProviderStatusItem>;
+  modalNote: string;
+}
+
 export interface SettingsProps {
   githubConnection: GitHubConnection;
   budget: BudgetStatus | null;
   policy: SettingsPolicy;
+  providerConfig?: ProviderConfig | null;
   statusMessage?: string | null;
   errorMessage?: string | null;
   autoReview?: {

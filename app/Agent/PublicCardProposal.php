@@ -34,8 +34,9 @@ final readonly class PublicCardProposal
         $context = $cardPreview['context'];
         self::assertPublicSafeContent($context['source'], $context['title'], $context['description']);
 
+        $target = Credentials::activeTarget();
         $body = [
-            'model' => self::MODEL,
+            'model' => $target['model'],
             'max_tokens' => self::MAX_TOKENS,
             'reasoning_effort' => 'low',
             'temperature' => 1,
@@ -47,7 +48,7 @@ final readonly class PublicCardProposal
             ],
         ];
         $payload = [
-            'destination' => self::ENDPOINT,
+            'destination' => $target['endpoint'],
             'body' => $body,
         ];
         $bytes = strlen(CanonicalJson::encode($body));
@@ -122,11 +123,12 @@ final readonly class PublicCardProposal
         $context = $cardPreview['context'];
         $reservationId = null;
 
+        $expectedModel = (string) ($payload['body']['model'] ?? self::MODEL);
         try {
             $answer = $this->budget->run(
                 $payload['estimatedMicros'],
-                function () use ($key, $payload, $context, $cardPreview): array {
-                    $response = $this->provider->request('POST', self::ENDPOINT, [
+                function () use ($key, $payload, $context, $cardPreview, $expectedModel): array {
+                    $response = $this->provider->request('POST', (string) $payload['destination'], [
                         'headers' => [
                             'Authorization' => 'Bearer '.$key,
                             'Content-Type' => 'application/json',
@@ -147,7 +149,7 @@ final readonly class PublicCardProposal
                         $result = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
                         $choice = $result['choices'][0] ?? [];
                         if (
-                            ($result['model'] ?? null) !== self::MODEL
+                            ($result['model'] ?? null) !== $expectedModel
                             || ($choice['finish_reason'] ?? null) !== 'stop'
                             || !is_string($choice['message']['content'] ?? null)
                             || strlen($choice['message']['content']) > 16384
@@ -202,7 +204,7 @@ final readonly class PublicCardProposal
                         'find' => $suggestion['find'],
                         'replace' => $suggestion['replace'],
                         'explanation' => $suggestion['explanation'],
-                        'model' => self::MODEL,
+                        'model' => $expectedModel,
                         'requestDigest' => $payload['digest'],
                         'usage' => [
                             'prompt_tokens' => $usage['prompt_tokens'],

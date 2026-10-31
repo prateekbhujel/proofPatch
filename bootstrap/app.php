@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Application;
+use ProofPatch\Console\Commands\AutoReviewWorkerCommand;
 use ProofPatch\Console\Commands\CheckReceiptCommand;
 use ProofPatch\Console\Commands\InspectPullRequestCommand;
 use ProofPatch\Console\Commands\RecordPullRequestSnapshotCommand;
@@ -24,6 +25,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withCommands([
+        AutoReviewWorkerCommand::class,
         RecordPullRequestSnapshotCommand::class,
         InspectPullRequestCommand::class,
         TriagePullRequestCommand::class,

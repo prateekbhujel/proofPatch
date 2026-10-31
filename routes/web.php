@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use ProofPatch\Http\Controllers\AutoReviewController;
 use ProofPatch\Http\Controllers\DashboardController;
 use ProofPatch\Http\Controllers\CardPreviewController;
 use ProofPatch\Http\Controllers\CardProposalController;
@@ -40,6 +41,11 @@ Route::post('/repositories/review/draft', [DashboardController::class, 'saveDraf
 Route::post('/repositories/review/comment', [ManualInlineCommentController::class, 'store']);
 Route::post('/repositories/review/draft/delete', [DashboardController::class, 'deleteDraftComment']);
 Route::post('/repositories/review/draft/clear', [DashboardController::class, 'clearDraftComments']);
+
+// Auto PR Review Engine (Opt-in loop, status, and persisted results under web session/CSRF boundary)
+Route::post('/repositories/auto-review/toggle', [AutoReviewController::class, 'toggle']);
+Route::get('/repositories/auto-review/status', [AutoReviewController::class, 'status']);
+Route::get('/repositories/auto-review/results', [AutoReviewController::class, 'results']);
 
 // GitHub App Device Flow (Local Desktop Connection per RFC 8628)
 Route::post('/github/device/initiate', [DashboardController::class, 'initiateDeviceFlow']);

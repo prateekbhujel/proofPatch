@@ -276,6 +276,20 @@ final class DashboardController
         $reviewError = session('review_error') ?? $this->getSession($request, 'review_error');
         $this->forgetSession($request, 'review_error');
 
+        if ($review === null && is_array($pull) && isset($pull['repository'], $pull['number'], $pull['headSha'], $pull['baseSha'])) {
+            try {
+                $savedAuto = \ProofPatch\Models\AutoReviewResult::findForRevision(
+                    (string) $pull['repository'],
+                    (int) $pull['number'],
+                    (string) $pull['headSha'],
+                    (string) $pull['baseSha']
+                );
+                if ($savedAuto !== null && $savedAuto->status === 'completed' && is_array($savedAuto->raw_review)) {
+                    $review = $savedAuto->raw_review;
+                }
+            } catch (\Throwable) {}
+        }
+
         $triage = null;
         if ($pull !== null) {
             $policyFile = $this->project.'/.proofpatchrc.json';
@@ -348,6 +362,25 @@ final class DashboardController
             }
         }
 
+        $autoReview = [
+            'worker' => [
+                'isLive' => false,
+                'status' => 'offline',
+                'workerPid' => null,
+                'lastHeartbeatAt' => null,
+                'cycleCount' => 0,
+                'publicOnly' => true,
+                'message' => 'Review worker is offline.',
+            ],
+            'settings' => [],
+            'publicOnly' => true,
+        ];
+        try {
+            $workerStatusService = new \ProofPatch\Support\WorkerStatusService();
+            $autoReview['worker'] = $workerStatusService->getStatus();
+            $autoReview['settings'] = \ProofPatch\Models\RepositoryAutoReviewSetting::all(['repository', 'enabled', 'public_only'])->keyBy('repository')->all();
+        } catch (\Throwable) {}
+
         return Inertia::render('Repositories', [
             'pull' => $pull,
             'snapshot' => $snapshot,
@@ -363,6 +396,7 @@ final class DashboardController
             'budget' => $budget,
             'modelKeyAvailable' => $modelKeyAvailable,
             'githubConnection' => $githubConnection,
+            'autoReview' => $autoReview,
             'error' => $error ?: null,
         ]);
     }
@@ -788,6 +822,7 @@ final class DashboardController
                     'connectedAt' => gmdate(DATE_ATOM),
                 ];
                 $this->putSession($request, 'github_auth', $authData);
+                \ProofPatch\GitHub\GitHubTokenStore::save($token, $user, $repos, $reposStatus);
                 $this->forgetSession($request, 'github_device_flow');
                 $this->addNotification($request, 'success', 'GitHub Connected', "Successfully connected as @{$user['login']}.");
 
@@ -858,6 +893,7 @@ final class DashboardController
             'github_repo_pulls_status'
         );
         $this->forgetSession($request, ...array_merge(IssueWorkbenchController::CASE_SESSION_KEYS, ['notifications']));
+        \ProofPatch\GitHub\GitHubTokenStore::clear();
         $this->addNotification($request, 'info', 'GitHub Disconnected', 'Disconnected from GitHub device session.');
 
         return redirect('/repositories')->with('github_status', 'Disconnected from GitHub.');
@@ -1042,10 +1078,30 @@ final class DashboardController
         $policyFile = $this->project.'/.proofpatchrc.json';
         $policy = is_file($policyFile) ? json_decode((string) file_get_contents($policyFile), true) ?? [] : [];
 
+        $autoReview = [
+            'worker' => [
+                'isLive' => false,
+                'status' => 'offline',
+                'workerPid' => null,
+                'lastHeartbeatAt' => null,
+                'cycleCount' => 0,
+                'publicOnly' => true,
+                'message' => 'Review worker is offline.',
+            ],
+            'settings' => [],
+            'publicOnly' => true,
+        ];
+        try {
+            $workerStatusService = new \ProofPatch\Support\WorkerStatusService();
+            $autoReview['worker'] = $workerStatusService->getStatus();
+            $autoReview['settings'] = \ProofPatch\Models\RepositoryAutoReviewSetting::all(['repository', 'enabled', 'public_only'])->keyBy('repository')->all();
+        } catch (\Throwable) {}
+
         return Inertia::render('Settings', [
             'githubConnection' => $githubConnection,
             'budget' => $budget,
             'policy' => $policy,
+            'autoReview' => $autoReview,
             'statusMessage' => session('status'),
             'errorMessage' => session('error'),
         ]);

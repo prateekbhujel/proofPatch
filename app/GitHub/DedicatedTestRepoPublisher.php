@@ -500,9 +500,14 @@ COMMIT;
         $testSha = (string) ($report['testSha256'] ?? self::KNOWN_TEST_SHA256);
         $baseCommit = DedicatedTestRepo::requireBaseCommit();
         $targetRepository = DedicatedTestRepo::requireName();
+        $origin = ($context['proposalOrigin'] ?? null) === 'offline_reference'
+            ? 'This is the known offline reference repair. No model was called for this proposal.'
+            : 'The candidate matches the pinned reference repair.';
 
         return <<<MARKDOWN
 This draft was prepared by ProofPatcher for review. It does not merge automatically.
+
+{$origin}
 
 The checks below cover the bounded OrderTotal fixture, not the full repository test suite.
 

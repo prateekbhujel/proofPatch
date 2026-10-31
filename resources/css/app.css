@@ -159,6 +159,44 @@ html.dark .text-slate-400 {
   color: #94a3b8 !important;
 }
 
+/* Keep code and line numbers legible in both diff layouts. */
+html.dark .diff-viewer .diff-file-header,
+html.dark .diff-viewer .diff-hunk {
+  background-color: #212938 !important;
+  color: #cbd5e1 !important;
+  border-color: #3d4960 !important;
+}
+
+html.dark .diff-viewer .diff-file-name,
+html.dark .diff-viewer .diff-code {
+  color: #e2e8f0 !important;
+}
+
+html.dark .diff-viewer .diff-number {
+  color: #aabbd2 !important;
+  border-color: #3d4960 !important;
+}
+
+html.dark .diff-viewer .diff-added,
+html.dark .diff-viewer .diff-added .diff-number {
+  background-color: #173d32 !important;
+}
+
+html.dark .diff-viewer .diff-removed,
+html.dark .diff-viewer .diff-removed .diff-number {
+  background-color: #48262c !important;
+}
+
+html.dark .diff-viewer .diff-added .diff-sign,
+html.dark .diff-viewer .diff-sign.diff-added {
+  color: #86efac !important;
+}
+
+html.dark .diff-viewer .diff-removed .diff-sign,
+html.dark .diff-viewer .diff-sign.diff-removed {
+  color: #fda4af !important;
+}
+
 /* Form controls in Dark Mode */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark textarea,

@@ -385,6 +385,60 @@ final class IssueWorkbenchConnectedWorkflowTest extends TestCase
         self::assertSame([['number' => 1, 'title' => 'Previous']], $session->get('github_repo_issues'));
     }
 
+    public function testIssueFetchFailureKeepsTheCurrentTask(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $session->put('issue_task_id', 123);
+        $session->put('issue_context', ['title' => 'Existing task']);
+        $request = Request::create('/issues/load-issue', 'POST', [
+            'repository' => 'owner/repo', 'issue_number' => 42, 'path' => 'src/example.php',
+        ]);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController($this->blockingHttp))->loadIssue($request);
+
+        self::assertStringContainsString('Failed to load issue', (string) $session->get('error'));
+        self::assertSame(123, $session->get('issue_task_id'));
+        self::assertSame(['title' => 'Existing task'], $session->get('issue_context'));
+    }
+
+    public function testSwitchingRepositoriesClearsOnlyActiveSessionContext(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $session->put('selected_github_repo', 'owner/previous');
+        $session->put('issue_context', ['repository' => 'owner/previous']);
+        $session->put('issue_suggestion', ['path' => 'old.php']);
+        $session->put('card_preview', ['context' => ['repository' => 'owner/previous']]);
+        $request = Request::create('/issues/select-repository', 'POST', ['repository' => 'owner/new']);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController(new MockHttpClient([new MockResponse('[]'), new MockResponse('[]')])))->selectRepository($request);
+
+        self::assertSame('owner/new', $session->get('selected_github_repo'));
+        self::assertNull($session->get('issue_context'));
+        self::assertNull($session->get('issue_suggestion'));
+        self::assertNull($session->get('card_preview'));
+    }
+
+    public function testRefreshingSameRepositoryKeepsActiveSessionContext(): void
+    {
+        $session = app('session')->driver('array');
+        app('redirect')->setSession($session);
+        $session->put('github_auth', ['token' => 'test-token']);
+        $session->put('selected_github_repo', 'owner/repo');
+        $session->put('issue_context', ['repository' => 'owner/repo']);
+        $request = Request::create('/issues/select-repository', 'POST', ['repository' => 'owner/repo']);
+        $request->setLaravelSession($session);
+
+        (new IssueWorkbenchController(new MockHttpClient([new MockResponse('[]'), new MockResponse('[]')])))->selectRepository($request);
+
+        self::assertSame(['repository' => 'owner/repo'], $session->get('issue_context'));
+    }
+
     public function testTruncatedRepositoryListIsMarkedAsPartial(): void
     {
         $session = app('session')->driver('array');

@@ -75,6 +75,21 @@ test('the repository sidebar shows tasks only for the selected repository', () =
   assert.match(html, /href="\/settings"/);
 });
 
+test('the dedicated test issue opens without a file path while other issues still need one', () => {
+  const sidebar = loadTsx('../../resources/js/Components/workbench/WorkbenchSidebar.tsx', (id) => id === '@inertiajs/react' ? inertia : require(id));
+  const connection = { selectedRepo: 'owner/test', dedicatedIssueNumber: 1, repositories: [{ fullName: 'owner/test' }], repoIssues: [], repoPulls: [], user: { login: 'owner' } };
+  const issues = [
+    { number: 1, title: 'Known test issue', user: 'owner', createdAt: '2026-10-30T00:00:00Z' },
+    { number: 2, title: 'Another issue', user: 'owner', createdAt: '2026-10-30T00:00:00Z' },
+  ];
+  const html = renderToStaticMarkup(React.createElement(sidebar.WorkbenchSidebar, {
+    githubConnection: connection, sidebarTab: 'issues', sidebarQuery: '', filteredIssues: issues, filteredPulls: [], issuePathMap: {}, localTasks: [],
+    handleSelectRepo() {}, setSidebarTab() {}, setSidebarQuery() {}, setIssuePathMap() {}, handleLoadIssue() {}, setViewMode() {}, onSelectTask() {},
+  }));
+  assert.equal((html.match(/placeholder="Path to file"/g) || []).length, 1);
+  assert.equal((html.match(/<button[^>]*disabled=""[^>]*>Open<\/button>/g) || []).length, 1);
+});
+
 test('a pending connection displays the actual device code and a way to finish', () => {
   const html = renderToStaticMarkup(React.createElement(onboarding.DisconnectedOnboardingView, {
     ...baseProps, githubConnection: { deviceFlow: { userCode: 'TEST-1234', verificationUri: 'https://github.com/login/device' } },

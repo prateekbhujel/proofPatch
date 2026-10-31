@@ -17,41 +17,9 @@ import {
 } from 'lucide-react';
 import { SettingsProps } from '../Components/settings/types';
 
-function SettingToggleRow({
-  title,
-  description,
-  checked,
-  onChange,
-  children,
-}: {
-  title: string;
-  description: string;
-  checked?: boolean;
-  onChange?: (val: boolean) => void;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="py-3 flex items-center justify-between gap-4">
-      <div className="space-y-0.5">
-        <div className="font-semibold text-slate-900 dark:text-slate-100">{title}</div>
-        <p className="text-slate-500 dark:text-slate-400 text-[11px]">{description}</p>
-      </div>
-      {children || (
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange?.(e.target.checked)}
-          className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-        />
-      )}
-    </div>
-  );
-}
-
 export default function Settings({
   githubConnection,
   budget,
-  policy = {},
   statusMessage,
   errorMessage,
 }: SettingsProps) {
@@ -64,47 +32,6 @@ export default function Settings({
   const [copiedCode, setCopiedCode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [repoSearchQuery, setRepoSearchQuery] = useState('');
-
-  const [automationRules, setAutomationRules] = useState(() => {
-    if (typeof window === 'undefined') {
-      return {
-        automaticReview: true,
-        reviewTrigger: 'On PR open',
-        exhaustiveCodeReview: true,
-        useCreditsForReviews: false,
-        autoTriageIssues: true,
-        autoRunVerifierOnPr: true,
-        requireApprovalBeforeModel: true,
-        antiSlopFilter: true,
-        maxDiffLines: policy.maxDiffLines ?? 300,
-      };
-    }
-    try {
-      const stored = window.localStorage.getItem('proofpatch-automation-rules');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return {
-      automaticReview: true,
-      reviewTrigger: 'On PR open',
-      exhaustiveCodeReview: true,
-      useCreditsForReviews: false,
-      autoTriageIssues: true,
-      autoRunVerifierOnPr: true,
-      requireApprovalBeforeModel: true,
-      antiSlopFilter: true,
-      maxDiffLines: policy.maxDiffLines ?? 300,
-    };
-  });
-
-  const updateRule = (key: string, val: any) => {
-    setAutomationRules((prev: any) => {
-      const next = { ...prev, [key]: val };
-      try {
-        window.localStorage.setItem('proofpatch-automation-rules', JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  };
 
   const copyUserCode = () => {
     if (githubConnection.deviceFlow?.userCode) {
@@ -156,7 +83,7 @@ export default function Settings({
         <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Settings</h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Configure code review preferences, usage allowances, GitHub connection, and sandbox parameters.
+            Manage your GitHub connection, usage and appearance.
           </p>
         </div>
 
@@ -243,7 +170,7 @@ export default function Settings({
                 <div>
                   <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Repositories</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Choose a repository to configure its automatic reviews
+                    Choose a repository to inspect.
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300">
@@ -295,98 +222,17 @@ export default function Settings({
                 </div>
               ) : (
                 <p className="text-xs text-slate-500 py-3 text-center bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
-                  Connect a GitHub account to configure repository reviews
+                  Connect GitHub to inspect repositories.
                 </p>
               )}
             </div>
 
             <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Personal preferences</h2>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Automatic reviews</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Saved in this browser. Automatic actions are not active yet.
+                  Automatic actions are not active yet. Open a pull request to review it manually.
                 </p>
-              </div>
-
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                <SettingToggleRow
-                  title="Automatic review"
-                  description="If a repository's review setting differs from your personal preference, the repository setting takes priority"
-                  checked={automationRules.automaticReview}
-                  onChange={(val) => updateRule('automaticReview', val)}
-                />
-
-                <SettingToggleRow
-                  title="Review trigger"
-                  description="Choose when ProofPatcher should review your pull requests"
-                >
-                  <select
-                    value={automationRules.reviewTrigger}
-                    onChange={(e) => updateRule('reviewTrigger', e.target.value)}
-                    className="px-2.5 py-1 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-medium"
-                  >
-                    <option value="On PR open">On PR open</option>
-                    <option value="On push">On push</option>
-                    <option value="Manual">Manual inspection</option>
-                  </select>
-                </SettingToggleRow>
-
-                <SettingToggleRow
-                  title="Exhaustive code review"
-                  description="Keep looking for findings until no new potential regressions are detected"
-                  checked={automationRules.exhaustiveCodeReview}
-                  onChange={(val) => updateRule('exhaustiveCodeReview', val)}
-                />
-
-                <SettingToggleRow
-                  title="Use credits for reviews"
-                  description="Allow credits to be consumed for reviews after rate limits"
-                  checked={automationRules.useCreditsForReviews}
-                  onChange={(val) => updateRule('useCreditsForReviews', val)}
-                />
-
-                <SettingToggleRow
-                  title="Automated Issue Triage"
-                  description="Analyze issue descriptions and candidate patches before running verification"
-                  checked={automationRules.autoTriageIssues}
-                  onChange={(val) => updateRule('autoTriageIssues', val)}
-                />
-
-                <SettingToggleRow
-                  title="Automated 5-Gate Verifier"
-                  description="Execute the 5-gate verifier automatically when a candidate patch is approved"
-                  checked={automationRules.autoRunVerifierOnPr}
-                  onChange={(val) => updateRule('autoRunVerifierOnPr', val)}
-                />
-
-                <SettingToggleRow
-                  title="Require Maintainer Approval Before Model Requests"
-                  description="Require single-use approval token before external inference calls"
-                  checked={automationRules.requireApprovalBeforeModel}
-                  onChange={(val) => updateRule('requireApprovalBeforeModel', val)}
-                />
-
-                <SettingToggleRow
-                  title="Anti-Slop Code Quality Filter"
-                  description="Reject AI slop PRs lacking test coverage or exceeding change boundaries"
-                  checked={automationRules.antiSlopFilter}
-                  onChange={(val) => updateRule('antiSlopFilter', val)}
-                />
-
-                <SettingToggleRow
-                  title="Maximum Diff Line Threshold"
-                  description="Maximum lines changed allowed in a single PR triage policy"
-                >
-                  <input
-                    type="number"
-                    min={50}
-                    max={2000}
-                    step={50}
-                    value={automationRules.maxDiffLines}
-                    onChange={(e) => updateRule('maxDiffLines', parseInt(e.target.value, 10))}
-                    className="w-24 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-right"
-                  />
-                </SettingToggleRow>
               </div>
             </div>
           </div>
@@ -587,37 +433,13 @@ export default function Settings({
             <div className="bg-white dark:bg-[#141821] rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Global Provider &amp; Sandbox Architecture
+                  Verification
                 </h2>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Multi-tier execution boundary ensuring zero private data leakage and verifiable runtime constraints.
+                  Checks are currently limited to the included test case. Private repository content stays local.
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-1">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">1. Meta Muse Spark</div>
-                  <p className="text-[11px] text-slate-500">
-                    Reasoning engine for issue triage, anti-slop PR classification, and minimal bug repair generation.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-1">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">2. Baseten Inference</div>
-                  <p className="text-[11px] text-slate-500">
-                    High-throughput dedicated model deployment with single-use maintainer approval token verification.
-                  </p>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-1">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    3. Modal gVisor Sandbox
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Ephemeral zero-network microVM execution with <code className="bg-slate-200 dark:bg-slate-800 px-1 py-0.2 rounded font-mono text-violet-700">block_network=True</code> preventing untrusted code from exfiltrating data.
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
         )}

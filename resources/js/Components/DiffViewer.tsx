@@ -98,12 +98,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
   return (
     <div
-      className={`border rounded-lg overflow-hidden bg-white shadow-2xs transition-colors ${
+      className={`diff-viewer border rounded-lg overflow-hidden bg-white shadow-2xs transition-colors ${
         isViewed ? 'border-slate-200/60 opacity-80' : 'border-slate-300'
       }`}
     >
       {/* File Header Bar — Exact GitHub PR Style */}
-      <div className="w-full p-2.5 sm:px-4 bg-[#f6f8fa] border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
+      <div className="diff-file-header w-full p-2.5 sm:px-4 bg-[#f6f8fa] border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs select-none">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
@@ -116,7 +116,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
           <FileText className="w-4 h-4 text-slate-500 shrink-0" />
 
-          <span className="font-mono font-semibold text-[#1f2328] truncate text-[13px]">{file.name}</span>
+          <span className="diff-file-name font-mono font-semibold text-[#1f2328] truncate text-[13px]">{file.name}</span>
 
           <button
             type="button"
@@ -239,10 +239,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             <SplitDiffTable
               fileName={file.name}
               splitRows={splitRows}
+              fileDrafts={fileDrafts}
               activeEditorLineKey={activeEditorLineKey}
               openEditorForLine={openEditorForLine}
               closeEditor={closeEditor}
               onSaveDraft={handleSave}
+              onDeleteDraft={onDeleteDraft}
               isSavingDraft={isSavingDraft}
             />
           ) : (

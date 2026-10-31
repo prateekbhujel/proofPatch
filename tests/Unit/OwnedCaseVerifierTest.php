@@ -207,6 +207,29 @@ PHP;
         self::assertSame(0, $calls);
     }
 
+    public function testIssueContextCannotBypassUntrustedCandidateGuard(): void
+    {
+        $calls = 0;
+        $runner = new ModalIsolatedRunner(sandboxExecutor: function () use (&$calls): array {
+            $calls++;
+            return [];
+        });
+        $verifier = new OwnedCaseVerifier(dirname(__DIR__, 2), $this->testRunsDir, null, $runner);
+        $candidate = '<?php function orderTotal(array $items): int { $GLOBALS["expected"] = 0; return 0; }';
+
+        $report = $verifier->verify($candidate, [
+            'repository' => 'owner/test-repo',
+            'issueNumber' => 1,
+        ]);
+
+        self::assertTrue($report['gates']['candidateStaticSafetyPassed']);
+        self::assertSame('FAILED', $report['decision']);
+        self::assertFalse($report['gates']['candidatePassed']);
+        self::assertSame(0, $calls);
+        self::assertArrayNotHasKey('publicationAuthorizationToken', $report);
+        self::assertStringContainsString('test oracle is not yet protected', $report['runs']['candidate']['summary']);
+    }
+
     public function testUntrustedCandidateWithoutKnownShaIsBlockedFromHostExecution(): void
     {
         $projectRoot = dirname(__DIR__, 2);

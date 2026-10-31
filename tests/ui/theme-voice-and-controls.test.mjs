@@ -122,6 +122,64 @@ test('TaskCardSection includes + Attach screenshot control with explicit local-o
   assert.match(taskCardSource, /Saved locally on this machine · not sent to or interpreted by Muse/);
 });
 
+test('a private task does not offer the public-only file preview', () => {
+  const task = { id: 1, title: 'Private task', description: 'Saved locally', repository: 'owner/private', status: 'queued', updatedAt: null, hasImage: false };
+  const html = renderToStaticMarkup(React.createElement(taskCardModule.FocusedLocalTaskView, {
+    task, preview: null, proposalPreview: null, proposalResult: null, isPrivate: true,
+  }));
+  assert.match(html, /Task-card suggestions for private repositories are not available yet/);
+  assert.doesNotMatch(html, /Pin Public File|Preview file/);
+});
+
+test('a private dedicated issue offers only the offline reference repair', () => {
+  const { exports: proposal } = loadTsxModule('../../resources/js/Components/workbench/ProposalDiffCard.tsx', (id) => {
+    if (id === '../ui/ThinkingAnimation') return thinkingModule;
+    return require(id);
+  });
+  const html = renderToStaticMarkup(React.createElement(proposal.ProposalDiffCard, {
+    context: { path: 'src/OrderTotal.php' }, preview: { digest: 'a'.repeat(64), body: {}, estimatedMicros: 1000 },
+    suggestion: null, sending: false, modelContextAllowed: false, modelKeyAvailable: true,
+    isDedicatedTestRepo: true, isOwnedFixture: true, budget: { canRequest: true },
+    verificationReport: null, passedGateCount: 0, copiedCandidateSha: false, copyCandidateHash() {}, onRequestSuggestion() {},
+  }));
+  assert.match(html, /<button[^>]*>.*Use reference repair<\/span><\/button>/);
+  assert.doesNotMatch(html, /Ask Muse|Review Muse request/);
+  assert.match(html, /Private repository content stays local/);
+});
+
+test('public Muse review is enabled only when approved, funded and configured', () => {
+  const { exports: review } = loadTsxModule('../../resources/js/Components/repositories/PrReviewTab.tsx');
+  const props = {
+    review: null, reviewPreview: { filesCount: 1, estimatedMicros: 1000, digest: 'a'.repeat(64), body: {} },
+    isPrivate: false, reviewApproved: true, reviewProcessing: false, budget: { canRequest: true, attempts: 0, maxAttempts: 10 },
+    modelKeyAvailable: true, copiedReviewDigest: false, setReviewApproved() {}, copyText() {}, handleReviewSubmit() {}, setReviewFormData() {},
+  };
+  const enabled = renderToStaticMarkup(React.createElement(review.PrReviewTab, props));
+  assert.match(enabled, /<button type="submit" class=/);
+  const noKey = renderToStaticMarkup(React.createElement(review.PrReviewTab, { ...props, modelKeyAvailable: false }));
+  assert.match(noKey, /<button type="submit" disabled=""/);
+  const privatePull = renderToStaticMarkup(React.createElement(review.PrReviewTab, { ...props, isPrivate: true }));
+  assert.match(privatePull, /<button type="submit" disabled=""/);
+});
+
+test('split diffs keep saved drafts visible and allow comments on both sides', () => {
+  const { exports: inlineDraft } = loadTsxModule('../../resources/js/Components/diff/InlineDraft.tsx');
+  const { exports: split } = loadTsxModule('../../resources/js/Components/diff/SplitDiffTable.tsx', (id) => {
+    if (id === './InlineDraft') return inlineDraft;
+    if (id === './InlineCommentEditor') return { InlineCommentEditor: () => null };
+    return require(id);
+  });
+  const html = renderToStaticMarkup(React.createElement(split.SplitDiffTable, {
+    fileName: 'src/Example.php', splitRows: [{ type: 'row', left: { lineNum: 4, type: 'deletion', content: 'old' }, right: { lineNum: 5, type: 'addition', content: 'new' } }],
+    fileDrafts: [{ id: 'draft-1', line: 5, side: 'RIGHT', comment: 'Check this case' }],
+    activeEditorLineKey: null, openEditorForLine() {}, closeEditor() {}, onSaveDraft() {}, onDeleteDraft() {},
+  }));
+  assert.match(html, /Add comment on line 4 \(base\)/);
+  assert.match(html, /Add comment on line 5/);
+  assert.match(html, /Saved Local Draft/);
+  assert.match(html, /Check this case/);
+});
+
 test('FocusedLocalTaskView renders actual task preview, single-use approval step, and unverified mocked proposal diff', () => {
   const task = {
     id: 7,

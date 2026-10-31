@@ -213,6 +213,10 @@ final class IssueWorkbenchController
             'user' => is_array($githubAuth) ? ($githubAuth['user'] ?? null) : null,
             'repositories' => is_array($githubAuth) ? ($githubAuth['repositories'] ?? []) : [],
             'selectedRepo' => $selectedRepo,
+            'dedicatedIssueNumber' => is_string($selectedRepo)
+                && \ProofPatch\GitHub\DedicatedTestRepo::name() !== null
+                && strcasecmp($selectedRepo, \ProofPatch\GitHub\DedicatedTestRepo::name()) === 0
+                    ? \ProofPatch\GitHub\DedicatedTestRepoFetcher::ISSUE_NUMBER : null,
             'repoIssues' => $triagedIssues,
             'repoPulls' => $repoPulls,
             'repoListIncomplete' => $repoListIncomplete,
@@ -345,6 +349,12 @@ final class IssueWorkbenchController
                 throw new \RuntimeException('GitHub did not return a complete issue and pull request list. Try again.');
             }
 
+            $previousRepo = $request->session()->get('selected_github_repo');
+            if (is_string($previousRepo) && strcasecmp($previousRepo, $repoName) !== 0) {
+                $request->session()->forget(array_merge(self::CASE_SESSION_KEYS, [
+                    'card_preview', 'card_proposal_preview', 'card_proposal_result',
+                ]));
+            }
             $request->session()->put('selected_github_repo', $repoName);
             $request->session()->put('github_repo_issues', $issues);
             $request->session()->put('github_repo_pulls', $pulls);
@@ -373,13 +383,12 @@ final class IssueWorkbenchController
             return redirect('/issues')->with('error', 'Select a valid issue to load.');
         }
 
-        $isDedicated = $repoName === \ProofPatch\GitHub\DedicatedTestRepo::name()
+        $dedicatedName = \ProofPatch\GitHub\DedicatedTestRepo::name();
+        $isDedicated = $dedicatedName !== null && strcasecmp($repoName, $dedicatedName) === 0
             && $issueNumber === \ProofPatch\GitHub\DedicatedTestRepoFetcher::ISSUE_NUMBER;
         if (!$isDedicated && $path === '') {
             return redirect('/issues')->with('error', 'Choose the source file to review.');
         }
-
-        $request->session()->forget(self::CASE_SESSION_KEYS);
 
         try {
             if ($isDedicated) {
@@ -387,6 +396,7 @@ final class IssueWorkbenchController
                 $context = $fetcher->fetchAndVerify($token);
                 $access = $request->attributes->get('proofpatch_github_access');
                 $task = WorkbenchTask::recordIntake($context, true, githubUserId: $access['userId'] ?? null);
+                $request->session()->forget(self::CASE_SESSION_KEYS);
                 $this->hydrateTaskSession($request, $task);
                 $this->addNotification($request, 'success', 'Dedicated Issue Loaded', "Loaded {$repoName}#{$issueNumber} into the workbench.");
                 return redirect('/issues');
@@ -396,6 +406,7 @@ final class IssueWorkbenchController
             $context = $client->fetchIssueContext($token, $repoName, $issueNumber, $path);
             $access = $request->attributes->get('proofpatch_github_access');
             $task = WorkbenchTask::recordIntake($context, false, githubUserId: $access['userId'] ?? null);
+            $request->session()->forget(self::CASE_SESSION_KEYS);
             $this->hydrateTaskSession($request, $task);
 
             $this->addNotification($request, 'success', 'Issue Loaded', "Loaded {$repoName}#{$issueNumber} ({$path}) into the workbench.");
@@ -807,8 +818,11 @@ final class IssueWorkbenchController
                 disconnected: false
             );
 
+            $publicationContext = $context;
+            $publicationContext['proposalOrigin'] = ($suggestion['isOfflineExample'] ?? false) === true
+                ? 'offline_reference' : 'unspecified';
             $result = $publisher->publishDraftPr(
-                $context,
+                $publicationContext,
                 $evidenceDir,
                 (string) $suggestion['candidate']['source'],
                 (string) $authToken,

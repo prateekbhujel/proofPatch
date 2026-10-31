@@ -49,6 +49,8 @@ export function ProposalDiffCard({
   copyCandidateHash,
   onRequestSuggestion,
 }: ProposalDiffCardProps) {
+  const canUseReference = isOwnedFixture || isDedicatedTestRepo;
+  const canAskMuse = modelContextAllowed && modelKeyAvailable && Boolean(budget?.canRequest);
   const museThinkingSteps = [
     { label: 'Waiting for the proposal', status: sending ? ('active' as const) : ('waiting' as const) },
   ];
@@ -71,85 +73,55 @@ export function ProposalDiffCard({
             <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                {budget?.canRequest && modelKeyAvailable
-                  ? 'Muse Spark Open wants to propose a change to ' + context.path
-                  : 'Offline reference repair available for ' + context.path}
+                {canUseReference ? 'Try the reference repair' : 'Ask Muse for a suggestion'}
               </h2>
               <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                Nothing runs until you decide. Review the target file and request digest below.
+                {canUseReference
+                  ? 'This known repair runs without sending your repository to a model.'
+                  : 'Review the request before sending the selected file to Muse.'}
               </p>
             </div>
           </div>
 
-          <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 font-mono text-xs text-slate-800 dark:text-slate-200 flex flex-wrap items-center justify-between gap-2">
-            <span>
-              $ {budget?.canRequest && modelKeyAvailable ? `propose --model muse-spark-open-1026 ${context.path}` : `load-reference-repair ${context.path}`}
-            </span>
-            <span className="text-[11px] text-slate-500">
-              {budget?.canRequest && modelKeyAvailable
-                ? `Est. $${(preview.estimatedMicros / 1_000_000).toFixed(4)}`
-                : '$0.00 (offline)'}
-            </span>
-          </div>
-
+          {canAskMuse && (
           <details className="text-[11px] text-slate-600 dark:text-slate-400">
             <summary className="cursor-pointer font-medium text-slate-700 dark:text-slate-300">
-              Inspect request payload &amp; SHA-256 digest ({preview.digest.slice(0, 12)}…)
+              Review Muse request · estimated ${(preview.estimatedMicros / 1_000_000).toFixed(4)}
             </summary>
             <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white dark:bg-slate-900 p-2.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800">
               {JSON.stringify(preview.body, null, 2)}
             </pre>
           </details>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2">
-              {isOwnedFixture && !isDedicatedTestRepo ? (
+              {canUseReference && (
                 <>
                   <button
                     type="button"
                     onClick={(e) => onRequestSuggestion(e, true)}
-                    disabled={!modelContextAllowed || sending}
+                    disabled={sending}
                     className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 disabled:opacity-40 transition"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Allow once (Offline reference repair)</span>
+                    <span>Use reference repair</span>
                   </button>
-                  {budget?.canRequest && modelKeyAvailable && (
-                    <button
-                      type="submit"
-                      disabled={!modelContextAllowed || sending}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
-                      <span>Ask Muse (In-memory preview)</span>
-                    </button>
-                  )}
                 </>
-              ) : (
+              )}
+              {canAskMuse && (
                 <button
                   type="submit"
-                  disabled={
-                    !modelContextAllowed ||
-                    sending ||
-                    (!(budget?.canRequest && modelKeyAvailable) &&
-                      !isDedicatedTestRepo &&
-                      !isOwnedFixture)
-                  }
+                  disabled={sending}
                   className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 disabled:opacity-40 transition"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>
-                    {budget?.canRequest && modelKeyAvailable
-                      ? 'Allow once'
-                      : 'Allow offline reference repair'}
-                  </span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Ask Muse</span>
                 </button>
               )}
             </div>
             <span className="text-[11px] text-slate-500 font-mono">
-              {!modelContextAllowed
-                ? 'Private repository content stays local'
-                : 'Single-use approval'}
+              {!modelContextAllowed ? 'Private repository content stays local' : canAskMuse ? 'Approval applies once' : 'Muse is not configured or the local limit is reached'}
             </span>
           </div>
         </form>
@@ -164,8 +136,6 @@ export function ProposalDiffCard({
               <span>{suggestion.path}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-semibold text-emerald-700 dark:text-emerald-400">+1</span>
-              <span className="text-xs font-mono font-semibold text-rose-700 dark:text-rose-400">-1</span>
               <span
                 className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                   suggestion.candidate?.verified
@@ -174,28 +144,20 @@ export function ProposalDiffCard({
                 }`}
               >
                 {suggestion.candidate?.verified
-                  ? verificationReport?.isSimulated !== false
-                    ? 'Fixture Passed'
-                    : 'Verified'
+                  ? 'Fixture checks passed'
                   : 'Proposed Diff'}
               </span>
             </div>
           </div>
 
-          <div className="px-4 py-1.5 bg-slate-100/80 dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 font-mono text-[11px] text-slate-500">
-            @@ -14,3 +14,3 @@ OrderTotal::calculate(array $items)
-          </div>
-
           <div className="font-mono text-xs divide-y divide-slate-100 dark:divide-slate-800">
             <div className="bg-rose-50/75 dark:bg-rose-950/30 text-rose-950 dark:text-rose-200 px-4 py-2.5 flex items-start gap-3 overflow-x-auto">
-              <span className="text-rose-400 select-none w-5 text-right shrink-0">15</span>
               <span className="text-rose-600 select-none shrink-0">-</span>
               <pre className="whitespace-pre-wrap break-words line-through decoration-rose-400">
                 {suggestion.find}
               </pre>
             </div>
             <div className="bg-emerald-50/75 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 px-4 py-2.5 flex items-start gap-3 overflow-x-auto">
-              <span className="text-emerald-600/70 select-none w-5 text-right shrink-0">15</span>
               <span className="text-emerald-700 select-none shrink-0">+</span>
               <pre className="whitespace-pre-wrap break-words">
                 {suggestion.replace}

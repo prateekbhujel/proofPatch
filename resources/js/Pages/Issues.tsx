@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../Components/AppLayout';
 import {
@@ -134,6 +134,15 @@ export default function Issues({
   });
 
   const isConnected = Boolean(githubConnection?.isConnected && githubConnection.user);
+  const previousRepo = useRef(githubConnection?.selectedRepo);
+
+  useEffect(() => {
+    if (previousRepo.current && previousRepo.current !== githubConnection?.selectedRepo) {
+      setSelectedLocalCardId(null);
+      setViewMode('new');
+    }
+    previousRepo.current = githubConnection?.selectedRepo;
+  }, [githubConnection?.selectedRepo]);
 
   useEffect(() => {
     if (cardPreview?.context?.cardId) {
@@ -173,7 +182,7 @@ export default function Issues({
   function handleLoadIssue(issue: GitHubIssueItem) {
     if (!githubConnection?.selectedRepo) return;
     const path = issuePathMap[issue.number]?.trim() || '';
-    if (!path) return;
+    if (!path && issue.number !== githubConnection.dedicatedIssueNumber) return;
     setLoadingIssueNum(issue.number);
     router.post(
       '/issues/load-issue',
@@ -257,11 +266,11 @@ export default function Issues({
 
   function requestSuggestion(event: React.FormEvent, useOfflineReference = false) {
     event.preventDefault();
-    const canSubmit =
-      !sending &&
-      modelContextAllowed &&
-      Boolean(preview) &&
-      (Boolean(budget?.canRequest && modelKeyAvailable) || isDedicatedTestRepo || isOwnedFixture);
+    const canSubmit = !sending && Boolean(preview) && (
+      useOfflineReference
+        ? isDedicatedTestRepo || isOwnedFixture
+        : modelContextAllowed && Boolean(budget?.canRequest && modelKeyAvailable)
+    );
     if (!canSubmit) return;
     router.post(
       '/issues/propose',
@@ -311,10 +320,17 @@ export default function Issues({
     setTimeout(() => setCopiedCandidateSha(false), 2000);
   }
 
-  const selectedLocalCard = useMemo(
-    () => localTasks.find((c) => Number(c.id) === selectedLocalCardId) || localTasks[0] || null,
-    [localTasks, selectedLocalCardId]
-  );
+  const selectedLocalCard = useMemo(() => {
+    const selectedRepo = githubConnection?.selectedRepo?.toLowerCase();
+    const cards = localTasks.filter((card) => card.repository.toLowerCase() === selectedRepo);
+    return cards.find((card) => Number(card.id) === selectedLocalCardId) || cards[0] || null;
+  }, [localTasks, selectedLocalCardId, githubConnection?.selectedRepo]);
+
+  useEffect(() => {
+    if (viewMode === 'local-card' && !selectedLocalCard && githubConnection?.selectedRepo) {
+      setViewMode('new');
+    }
+  }, [viewMode, selectedLocalCard, githubConnection?.selectedRepo]);
 
   const filteredIssues = useMemo(() => {
     if (!githubConnection?.repoIssues) return [];
@@ -507,6 +523,7 @@ export default function Issues({
                   preview={cardPreview}
                   proposalPreview={cardProposalPreview}
                   proposalResult={cardProposalResult}
+                  isPrivate={githubConnection?.repositories?.find((repo) => repo.fullName.toLowerCase() === selectedLocalCard.repository.toLowerCase())?.isPrivate !== false}
                   modelKeyAvailable={modelKeyAvailable}
                   budgetCanRequest={Boolean(budget?.canRequest)}
                 />

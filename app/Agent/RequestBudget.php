@@ -22,15 +22,24 @@ final readonly class RequestBudget
 
     public static function forRuntime(?string $customDir = null): self
     {
+        $configuredAttempts = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        if ($configuredAttempts === false || $configuredAttempts === '') {
+            $maxAttempts = self::DEFAULT_MAX_ATTEMPTS;
+        } elseif (preg_match('/\A[1-9][0-9]{0,2}\z/D', $configuredAttempts) && (int) $configuredAttempts <= 100) {
+            $maxAttempts = (int) $configuredAttempts;
+        } else {
+            throw new \RuntimeException('Model attempt limit must be between 1 and 100.');
+        }
+
         if ($customDir !== null) {
-            return new self($customDir, self::DEFAULT_LIMIT_MICROS, self::DEFAULT_MAX_ATTEMPTS);
+            return new self($customDir, self::DEFAULT_LIMIT_MICROS, $maxAttempts);
         }
         $home = getenv('HOME');
         if (!$home) {
             throw new \RuntimeException('The local request budget is unavailable.');
         }
 
-        return new self($home.'/.local/share/proofpatch/runtime', self::DEFAULT_LIMIT_MICROS, self::DEFAULT_MAX_ATTEMPTS);
+        return new self($home.'/.local/share/proofpatch/runtime', self::DEFAULT_LIMIT_MICROS, $maxAttempts);
     }
 
     public function status(): array

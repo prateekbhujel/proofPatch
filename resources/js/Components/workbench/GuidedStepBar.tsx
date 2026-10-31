@@ -37,7 +37,7 @@ export function GuidedStepBar({
           }`}
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>1. Context Loaded</span>
+          <span>1. Issue</span>
         </span>
 
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -52,7 +52,7 @@ export function GuidedStepBar({
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>2. Single-Use Approval</span>
+          <span>2. Proposal</span>
         </span>
 
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -67,7 +67,7 @@ export function GuidedStepBar({
           }`}
         >
           <Shield className="w-3.5 h-3.5" />
-          <span>3. 5-Gate Verifier</span>
+          <span>3. Checks</span>
         </span>
 
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -80,15 +80,17 @@ export function GuidedStepBar({
           }`}
         >
           <GitPullRequest className="w-3.5 h-3.5" />
-          <span>4. Receipt &amp; PR Response</span>
+          <span>4. Draft PR</span>
         </span>
       </div>
 
       <div className="text-[11px] font-mono text-violet-700 dark:text-violet-300">
-        {!isStep2Done && 'Next: Click "Allow once" below ↓'}
-        {isStep2Done && !isStep3Done && 'Next: Click "Run verifier" below ↓'}
-        {isStep3Done && !isStep4Done && 'Next: Copy bot receipt or publish draft PR ↓'}
-        {isStep4Done && '✓ Workflow Complete! Draft PR Published'}
+        {!isStep2Done && 'Next: choose a proposal below'}
+        {isStep2Done && !verificationReport && 'Next: run the checks below'}
+        {verificationReport && !isStep3Done && 'Review the check results below'}
+        {isStep3Done && !isStep4Done && verificationReport?.isSimulated !== false && 'Local fixture checks passed'}
+        {isStep3Done && !isStep4Done && verificationReport?.isSimulated === false && 'Review the results before publishing'}
+        {isStep4Done && 'Draft PR created'}
       </div>
     </div>
   );

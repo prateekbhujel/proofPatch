@@ -320,7 +320,7 @@ final readonly class OwnedCaseVerifier
         $isGenuineProvider = false;
 
         // 3. Phase 1: Baseline reproduction
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && ($isTrustedFixtureCandidate || $context !== null)) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
             $baseIso = $this->isolatedRunner->runIsolated($baseSource, $testSource, 'src/OrderTotal.php');
             $baselineLog = $baseIso['output'];
             $baselineExitCode = ($baseIso['exitCode'] === 254) ? 1 : $baseIso['exitCode'];
@@ -346,7 +346,7 @@ final readonly class OwnedCaseVerifier
         );
 
         // 4. Phase 2: Negative control guard
-        if ($isolatedAvailable && $candidateStaticSafetyPassed && ($isTrustedFixtureCandidate || $context !== null)) {
+        if ($isolatedAvailable && $candidateStaticSafetyPassed && $isTrustedFixtureCandidate) {
             $negIso = $this->isolatedRunner->runIsolated($negativeControlSource, $testSource, 'src/OrderTotal.php');
             $negativeLog = $negIso['output'];
             $negativeExitCode = ($negIso['exitCode'] === 254) ? 1 : $negIso['exitCode'];
@@ -381,7 +381,7 @@ final readonly class OwnedCaseVerifier
             $candidateLogSha = hash('sha256', $log . "\n");
             $candidateRun = ['exitCode' => 255, 'log' => $log, 'durationMs' => 0];
             $candidatePassed = false;
-        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable && $context === null) {
+        } elseif (!$isTrustedFixtureCandidate && $isolatedAvailable) {
             // The current harness and candidate share PHP globals. Sandbox isolation
             // protects the host, but does not protect the test oracle from a candidate.
             $log = 'ABORTED: Untrusted candidates cannot be verified until the test oracle is isolated from the candidate.';

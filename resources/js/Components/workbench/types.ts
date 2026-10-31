@@ -60,6 +60,7 @@ export interface GitHubConnectionData {
   } | null;
   repositories: GitHubRepo[];
   selectedRepo: string | null;
+  dedicatedIssueNumber?: number | null;
   repoIssues: GitHubIssueItem[];
   repoPulls: GitHubPullItem[];
   repoListIncomplete: boolean;

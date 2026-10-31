@@ -177,6 +177,7 @@ export function WorkbenchSidebar({
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {issue.number !== githubConnection?.dedicatedIssueNumber && (
                     <input
                       type="text"
                       autoComplete="off"
@@ -188,10 +189,11 @@ export function WorkbenchSidebar({
                       }
                       className="flex-1 px-2 py-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
                     />
+                    )}
                     <button
                       type="button"
                       onClick={() => handleLoadIssue(issue)}
-                      disabled={loadingIssueNum === issue.number || !issuePathMap[issue.number]?.trim()}
+                      disabled={loadingIssueNum === issue.number || (issue.number !== githubConnection?.dedicatedIssueNumber && !issuePathMap[issue.number]?.trim())}
                       className="px-2.5 py-1 rounded bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-semibold text-[11px] hover:bg-slate-800 transition shrink-0 disabled:opacity-50"
                     >
                       {loadingIssueNum === issue.number ? '…' : 'Open'}

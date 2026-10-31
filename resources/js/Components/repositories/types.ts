@@ -221,6 +221,7 @@ export interface RepositoriesProps {
   commentApprovals?: Record<string, string>;
   commentPosted?: boolean;
   budget?: BudgetData | null;
+  modelKeyAvailable?: boolean;
   githubConnection?: GitHubConnectionData | null;
   csrf?: string;
 }

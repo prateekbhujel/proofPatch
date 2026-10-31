@@ -82,8 +82,7 @@ final class ThreeOutcomesSameCaseIntegrationTest extends TestCase
     }
 
     /**
-     * Outcome 2: Harmful cheat/shortcut candidate is caught and rejected by negative control.
-     * Proves both host execution boundary (blocks untrusted candidates) and sandbox rejection.
+     * Outcome 2: A harmful shortcut is blocked before execution on the host or runner.
      */
     public function testOutcome2RejectedHarmfulShortcut(): void
     {
@@ -109,26 +108,11 @@ final class ThreeOutcomesSameCaseIntegrationTest extends TestCase
         self::assertSame(255, $hostReport['runs']['candidate']['exitCode']);
         self::assertArrayNotHasKey('publicationAuthorizationToken', $hostReport);
 
-        // 2. In isolated runner: executes safely in sandbox and is caught by test suite (exit code 1)
-        $simulatedExecutor = function (string $source, string $test, string $path, int $timeout): array {
-            // Run shortcut against test harness in isolated subprocess
-            $tmp = sys_get_temp_dir() . '/iso_test_' . bin2hex(random_bytes(6));
-            mkdir($tmp . '/src', 0700, true);
-            mkdir($tmp . '/tests', 0700, true);
-            file_put_contents($tmp . '/' . $path, $source);
-            file_put_contents($tmp . '/tests/test_harness.php', $test);
-            exec('php ' . escapeshellarg($tmp . '/tests/test_harness.php') . ' 2>&1', $out, $code);
-            @unlink($tmp . '/' . $path);
-            @unlink($tmp . '/tests/test_harness.php');
-            @rmdir($tmp . '/src');
-            @rmdir($tmp . '/tests');
-            @rmdir($tmp);
-            return [
-                'exitCode' => $code,
-                'output' => implode("\n", $out),
-                'sandboxId' => 'sb-test-01',
-                'networkBlocked' => true,
-            ];
+        // 2. A runner cannot establish an isolated oracle, so it is never called.
+        $runnerCalls = 0;
+        $simulatedExecutor = function () use (&$runnerCalls): array {
+            $runnerCalls++;
+            return [];
         };
 
         $isolatedRunner = new \ProofPatch\Verifier\ModalIsolatedRunner(sandboxExecutor: $simulatedExecutor);
@@ -142,7 +126,10 @@ final class ThreeOutcomesSameCaseIntegrationTest extends TestCase
         $isolatedReport = $isolatedVerifier->verify($harmfulShortcut, $context);
         self::assertSame('FAILED', $isolatedReport['decision']);
         self::assertFalse($isolatedReport['gates']['candidatePassed']);
-        self::assertSame(1, $isolatedReport['runs']['candidate']['exitCode']);
+        self::assertSame(255, $isolatedReport['runs']['candidate']['exitCode']);
+        self::assertSame(0, $runnerCalls);
+        self::assertStringContainsString('test oracle is not yet protected', $isolatedReport['runs']['candidate']['summary']);
+        self::assertArrayNotHasKey('publicationAuthorizationToken', $isolatedReport);
     }
 
     /**

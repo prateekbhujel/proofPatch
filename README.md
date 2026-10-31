@@ -46,6 +46,8 @@ The Issues page also lets a connected user save task cards and one PNG or JPEG s
 
 The Issues page can load issues from repositories granted to the connected GitHub account. A public issue and selected text file can also be previewed when that repository is granted. Muse suggestions are unverified until checked. The dedicated test workflow requires a local repository and revision allowlist; it is disabled when those settings are absent. A maintainer may manually post an anchored comment to the configured test repository after reviewing it. Private PRs are limited to that configured test repository, kept in the server session, and never sent to a model. A PR can change between the final check and GitHub accepting a comment. General automatic reviews, GitHub comment triggers, and verification of arbitrary model-generated patches are not yet supported.
 
+Model requests use a local ledger with a default limit of 10 attempts and $0.50 in estimated reservations. The operator may set `PROOFPATCH_MODEL_MAX_ATTEMPTS` between 1 and 100; this does not change the $0.50 limit or set a provider billing cap.
+
 To enable the dedicated test workflow, set `PROOFPATCH_TEST_REPO` to the exact `owner/repository` and `PROOFPATCH_TEST_BASE_COMMIT` to the intended 40-character commit SHA in your private environment. The workflow is limited to the bundled test case and pinned file hashes. Do not commit private settings.
 
 ---

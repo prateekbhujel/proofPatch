@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\GitHub\DedicatedTestRepo;
+use ProofPatch\GitHub\DedicatedTestRepoFetcher;
 use ProofPatch\GitHub\DedicatedTestRepoPublisher;
 use ProofPatch\GitHub\GitHubAppClient;
 use ProofPatch\GitHub\ManualInlineCommentPublisher;
@@ -24,12 +25,12 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
- * End-to-end integration test verifying the complete ProofPatcher workflow:
+ * Integration test for the reference-case flow using mocked external services:
  * 1. Create task card with repository, description, and attached screenshot.
- * 2. Assign task to Muse; verify private text/screenshots stay local.
- * 3. Generate proposal preview with budget controls and request proposal.
- * 4. Run 5-gate verifier, producing cryptographic receipt and publication authorization.
- * 5. Publish draft PR to dedicated test repo (no auto-merge) and verify UI status binding.
+ * 2. Stage the pinned case; verify private text/screenshots stay local.
+ * 3. Generate an offline reference proposal.
+ * 4. Run fixture checks with host and simulated provider results.
+ * 5. Exercise draft PR publication against mocked GitHub responses.
  * 6. Capture private test PR, draft line-anchored review comment, and approve posting.
  */
 final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
@@ -117,7 +118,7 @@ final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
         return new AuthorizeGithubTasks(new GitHubAppClient($mockClient));
     }
 
-    public function testCompleteTicketToMuseToVerifierToDraftPrPath(): void
+    public function testReferenceTaskToMockVerifierAndDraftPrPath(): void
     {
         $session = $this->createSession();
         $middleware = $this->createMiddleware(1);
@@ -163,11 +164,28 @@ final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
         self::assertStringContainsString('no-store', (string) $imgResponse->headers->get('Cache-Control'));
 
         // =========================================================================
-        // STEP 2: Assign task card to Muse; verify private text/screenshots stay local
+        // STEP 2: Stage the known test case; private text/screenshots stay local
         // =========================================================================
         $assignRequest = Request::create("/issues/tasks/{$card->id}/assign", 'POST');
         $assignRequest->setLaravelSession($session);
-        $middleware->handle($assignRequest, fn (Request $req) => (new LocalTaskCardController())->assign($req, (int) $card->id));
+        $fetchClient = new MockHttpClient(static function (string $method, string $url): MockResponse {
+            if (str_ends_with($url, '/issues/1')) {
+                return new MockResponse(json_encode([
+                    'number' => 1, 'state' => 'open', 'title' => 'Zero-quantity items inflate the order total',
+                    'body' => 'Zero-quantity items should not be charged.',
+                ], JSON_THROW_ON_ERROR));
+            }
+            $fixture = dirname(__DIR__) . '/Fixtures/owned-review-case/';
+            if (str_contains($url, '/contents/src/OrderTotal.php')) {
+                return new MockResponse(json_encode(['content' => base64_encode((string) file_get_contents($fixture . 'src/OrderTotal.php'))], JSON_THROW_ON_ERROR));
+            }
+            if (str_contains($url, '/contents/tests/order_total.php')) {
+                return new MockResponse(json_encode(['content' => base64_encode((string) file_get_contents($fixture . 'tests/order_total.php'))], JSON_THROW_ON_ERROR));
+            }
+            throw new \RuntimeException('Unexpected test request.');
+        });
+        $controller = new LocalTaskCardController(new DedicatedTestRepoFetcher($fetchClient));
+        $middleware->handle($assignRequest, fn (Request $req) => $controller->assign($req, (int) $card->id));
 
         $card->refresh();
         self::assertSame('in_progress', $card->status);
@@ -241,9 +259,10 @@ final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
         self::assertStringContainsString('mock/simulated runner', (string) $session->get('error'));
 
         // =========================================================================
-        // STEP 4B: Verifier with Genuine MicroVM Runner produces publishable token
+        // STEP 4B: A test double supplies provider-shaped results to exercise publication.
+        // This does not establish that a real sandbox was run.
         // =========================================================================
-        $genuineRunner = new class implements \ProofPatch\Verifier\IsolatedRunnerInterface {
+        $pretendGenuineRunner = new class implements \ProofPatch\Verifier\IsolatedRunnerInterface {
             public function isAvailable(): array {
                 return ['available' => true, 'runner' => 'modal', 'isGenuineProvider' => true];
             }
@@ -271,7 +290,7 @@ final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
             }
         };
 
-        $isolatedWorkbenchController = new IssueWorkbenchController(customRunner: $genuineRunner);
+        $isolatedWorkbenchController = new IssueWorkbenchController(customRunner: $pretendGenuineRunner);
         $verifyIsoRequest = Request::create('/issues/verify', 'POST');
         $verifyIsoRequest->setLaravelSession($session);
         $middleware->handle($verifyIsoRequest, fn (Request $req) => $isolatedWorkbenchController->verifyCandidate($req));
@@ -279,7 +298,7 @@ final class EndToEndTaskToDraftPrIntegrationTest extends TestCase
         $report = $session->get('issue_verification_report');
         self::assertIsArray($report);
         self::assertSame('VERIFIED', $report['decision']);
-        self::assertFalse($report['isSimulated']); // Genuine microVM run
+        self::assertFalse($report['isSimulated']); // The test double deliberately supplies provider-shaped metadata.
         self::assertTrue($report['gates']['baselineReproduced']);
         self::assertTrue($report['gates']['negativeControlCaught']);
         self::assertTrue($report['gates']['candidatePassed']);

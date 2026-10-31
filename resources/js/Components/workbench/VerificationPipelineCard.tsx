@@ -70,6 +70,9 @@ export function VerificationPipelineCard({
   const verifierThinkingSteps = [
     { label: 'Running checks', status: verifying ? ('active' as const) : ('waiting' as const) },
   ];
+  const checkSummary = verificationReport
+    ? `### ProofPatcher check summary\n- **Scope**: ${verificationReport.isSimulated !== false ? 'Local fixture run; isolated sandbox not verified' : 'Pinned fixture run; isolation not independently probed'}\n- **Target**: \`${context.path}\` (${context.repository}#${context.issueNumber})\n- **Result**: ${verificationReport.decision}\n- **Receipt SHA-256**: \`${verificationReport.receipt?.sha256 ?? 'unavailable'}\`\n- **Candidate SHA-256**: \`${verificationReport.candidateSha256}\``
+    : '';
 
   return (
     <>
@@ -82,7 +85,7 @@ export function VerificationPipelineCard({
                 <span>5-Gate Falsifiable Verifier</span>
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Reproduces baseline bug (exit 1), checks negative control (exit 1), runs candidate (exit 0), AST checks, and signs receipt.
+                Runs the test case against the original, a negative control and the proposed repair.
               </p>
             </div>
             <button
@@ -132,9 +135,7 @@ export function VerificationPipelineCard({
                     </span>
                   </span>
                   <span className="text-[11px] font-mono text-slate-500">
-                    {verificationReport.isSimulated !== false
-                      ? 'Local fixture run'
-                      : 'Externally anchored'}
+                    {verificationReport.receipt?.externallyAnchored ? 'Externally anchored' : 'Local receipt'}
                   </span>
                 </div>
 
@@ -166,37 +167,26 @@ export function VerificationPipelineCard({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
                       <Bot className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" />
-                      <span>GitHub Co-Maintainer Response Attribution</span>
+                      <span>Check summary</span>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300">
-                      {githubConnection?.user?.login
-                        ? `Posts via @${githubConnection.user.login} (Co-Maintainer Header)`
-                        : 'proofpatcher[bot] / Maintainer Signed Receipt'}
-                    </span>
+                    <span className="text-[10px] text-slate-500">Not posted to GitHub</span>
                   </div>
-                  <pre className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-{`### ProofPatcher Co-Maintainer Verification Receipt
-- **Target**: \`${context.path}\` (${context.repository}#${context.issueNumber})
-- **5-Gate Decision**: \`${verificationReport.decision}\` (Baseline exit 1 → Negative Control exit 1 → Candidate exit 0 → AST Safe → Allowlist Verified)
-- **Receipt SHA-256**: \`${verificationReport.receipt?.sha256 ?? 'unavailable'}\`
-- **Candidate SHA-256**: \`${verificationReport.candidateSha256}\``}
-                  </pre>
+                  <pre className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{checkSummary}</pre>
                   <div className="flex items-center justify-between pt-0.5">
                     <span className="text-[10px] text-slate-500">
-                      Single-use digest-bound comment ready for GitHub PR/Issue thread
+                      Copy this summary to share it yourself.
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        const text = `### ProofPatcher Co-Maintainer Verification Receipt\n- **Target**: \`${context.path}\` (${context.repository}#${context.issueNumber})\n- **5-Gate Decision**: \`${verificationReport.decision}\` (Baseline exit 1 -> Negative Control exit 1 -> Candidate exit 0 -> AST Safe -> Allowlist Verified)\n- **Receipt SHA-256**: \`${verificationReport.receipt?.sha256 ?? 'unavailable'}\`\n- **Candidate SHA-256**: \`${verificationReport.candidateSha256}\``;
-                        navigator.clipboard?.writeText(text);
+                        navigator.clipboard?.writeText(checkSummary);
                         setCopiedBotComment(true);
                         setTimeout(() => setCopiedBotComment(false), 2000);
                       }}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-700 hover:bg-violet-800 text-white font-semibold text-[11px] transition"
                     >
                       {copiedBotComment ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedBotComment ? 'Copied Response!' : 'Copy Verified Response'}</span>
+                      <span>{copiedBotComment ? 'Copied' : 'Copy summary'}</span>
                     </button>
                   </div>
                 </div>

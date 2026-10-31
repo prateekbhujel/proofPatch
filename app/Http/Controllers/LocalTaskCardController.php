@@ -6,10 +6,13 @@ namespace ProofPatch\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use ProofPatch\GitHub\DedicatedTestRepoFetcher;
 use ProofPatch\Models\LocalTaskCard;
 
 final class LocalTaskCardController
 {
+    public function __construct(private ?DedicatedTestRepoFetcher $dedicatedFetcher = null) {}
+
     public function store(Request $request): RedirectResponse
     {
         $access = $request->attributes->get('proofpatch_github_access');
@@ -97,40 +100,13 @@ final class LocalTaskCardController
         }
 
         try {
-            $context = null;
             $token = \ProofPatch\Support\TaskWorkflowHelper::resolveGitHubToken($request);
-
-            if ($token !== null && trim($token) !== '') {
-                try {
-                    $fetcher = new \ProofPatch\GitHub\DedicatedTestRepoFetcher();
-                    $context = $fetcher->fetchAndVerify($token);
-                } catch (\Throwable) {
-                    $context = null;
-                }
+            if ($token === null || trim($token) === '') {
+                return redirect('/issues')->with('error', 'Connect GitHub to load the test issue.');
             }
-
-            if ($context === null) {
-                $fixturePath = base_path('tests/Fixtures/owned-review-case/src/OrderTotal.php');
-                if (file_exists($fixturePath)) {
-                    $source = (string) file_get_contents($fixturePath);
-                    $baseCommit = \ProofPatch\GitHub\DedicatedTestRepo::baseCommit();
-                    $context = [
-                        'repository' => \ProofPatch\GitHub\DedicatedTestRepo::requireName(),
-                        'issueNumber' => 1,
-                        'issueUrl' => 'https://github.com/' . \ProofPatch\GitHub\DedicatedTestRepo::requireName() . '/issues/1',
-                        'commit' => $baseCommit,
-                        'title' => '[Dedicated Test] Zero-quantity order items incorrectly charged once',
-                        'body' => "Authentic case from " . \ProofPatch\GitHub\DedicatedTestRepo::requireName() . " issue #1.\nTarget: repair calculation in OrderTotal::calculate so zero quantity items contribute zero.",
-                        'path' => 'src/OrderTotal.php',
-                        'source' => $source,
-                        'sourceSha256' => hash('sha256', $source),
-                    ];
-                }
-            }
-
-            if (!is_array($context)) {
-                return redirect('/issues')->with('error', 'Could not initialize suitable context for this task.');
-            }
+            // A failed GitHub fetch must never be replaced with local fixture bytes
+            // while claiming that those bytes came from the repository.
+            $context = ($this->dedicatedFetcher ?? new DedicatedTestRepoFetcher())->fetchAndVerify($token);
 
             \ProofPatch\GitHub\PublicIssueContext::validateContext($context);
 

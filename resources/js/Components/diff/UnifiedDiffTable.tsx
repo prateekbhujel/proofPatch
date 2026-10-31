@@ -1,7 +1,8 @@
 import React from 'react';
-import { Plus, MessageSquare, Sparkles, Edit3, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Sparkles, Edit3 } from 'lucide-react';
 import { DiffLine, ReviewFinding, CommentDraft } from './types';
 import { InlineCommentEditor } from './InlineCommentEditor';
+import { InlineDraft } from './InlineDraft';
 
 interface UnifiedDiffTableProps {
   fileName: string;
@@ -68,7 +69,7 @@ export function UnifiedDiffTable({
 
             if (isHunk) {
               return (
-                <tr key={lIdx} className="bg-[#f0f4f8] text-[#57606a] border-y border-[#d0d7de] font-bold">
+                <tr key={lIdx} className="diff-hunk bg-[#f0f4f8] text-[#57606a] border-y border-[#d0d7de] font-bold">
                   <td colSpan={5} className="px-4 py-1 text-xs select-none">
                     {line.content}
                   </td>
@@ -81,12 +82,12 @@ export function UnifiedDiffTable({
                 {/* Diff Row */}
                 <tr
                   className={`group border-b border-slate-100 ${
-                    isAdd ? 'bg-[#e6ffec]' : isDel ? 'bg-[#ffebe9]' : 'bg-white'
+                    isAdd ? 'diff-added bg-[#e6ffec]' : isDel ? 'diff-removed bg-[#ffebe9]' : 'diff-context bg-white'
                   }`}
                 >
                   {/* Old Line Number */}
                   <td
-                    className={`px-2 py-0.5 text-right select-none text-[11px] border-r border-[#d0d7de]/60 font-mono ${
+                    className={`diff-number px-2 py-0.5 text-right select-none text-[11px] border-r border-[#d0d7de]/60 font-mono ${
                       isDel ? 'bg-[#ffdce0] text-[#cf222e]' : 'text-[#656d76]'
                     }`}
                   >
@@ -95,7 +96,7 @@ export function UnifiedDiffTable({
 
                   {/* New Line Number */}
                   <td
-                    className={`px-2 py-0.5 text-right select-none text-[11px] border-r border-[#d0d7de]/60 font-mono ${
+                    className={`diff-number px-2 py-0.5 text-right select-none text-[11px] border-r border-[#d0d7de]/60 font-mono ${
                       isAdd ? 'bg-[#dafbe1] text-[#1a7f37]' : 'text-[#656d76]'
                     }`}
                   >
@@ -122,7 +123,7 @@ export function UnifiedDiffTable({
                             ? 'bg-violet-600 text-white shadow-2xs'
                             : matchingFinding
                             ? 'bg-[#0969da] text-white shadow-2xs'
-                            : 'text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-[#0969da] hover:text-white focus:opacity-100 focus:bg-[#0969da] focus:text-white'
+                            : 'text-slate-400 opacity-50 group-hover:opacity-100 hover:bg-[#0969da] hover:text-white focus:opacity-100 focus:bg-[#0969da] focus:text-white'
                         }`}
                       >
                         {matchingDraft ? (
@@ -136,7 +137,7 @@ export function UnifiedDiffTable({
 
                   {/* Sign Marker (+ or -) */}
                   <td
-                    className={`text-center select-none font-bold font-mono text-[13px] ${
+                    className={`diff-sign text-center select-none font-bold font-mono text-[13px] ${
                       isAdd ? 'text-[#1a7f37]' : isDel ? 'text-[#cf222e]' : 'text-transparent'
                     }`}
                   >
@@ -144,7 +145,7 @@ export function UnifiedDiffTable({
                   </td>
 
                   {/* Code Content */}
-                  <td className="px-2 py-0.5 whitespace-pre font-mono text-xs overflow-x-auto text-[#1f2328]">
+                  <td className="diff-code px-2 py-0.5 whitespace-pre font-mono text-xs overflow-x-auto text-[#1f2328]">
                     {line.content}
                   </td>
                 </tr>
@@ -248,45 +249,7 @@ export function UnifiedDiffTable({
                 {matchingDraft && (
                   <tr>
                     <td colSpan={5} className="p-3 bg-violet-50/70 border-y border-violet-200">
-                      <div className="p-3 rounded-lg bg-white border border-violet-200 shadow-2xs space-y-2 font-sans">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xs font-bold font-mono px-2 py-0.5 rounded bg-violet-100 text-violet-900 border border-violet-300">
-                              Saved Local Draft · Line {matchingDraft.line} ({matchingDraft.side})
-                            </span>
-                            <span className="text-2xs text-slate-500 font-mono">
-                              {matchingDraft.updatedAt
-                                ? new Date(matchingDraft.updatedAt).toLocaleTimeString()
-                                : ''}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => openEditorForLine(lineKey, matchingDraft.comment)}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 underline"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                              <span>Edit</span>
-                            </button>
-                            {onDeleteDraft && (
-                              <button
-                                type="button"
-                                onClick={() => onDeleteDraft(matchingDraft.id)}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:text-rose-800 underline"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Delete</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-slate-800 leading-relaxed font-normal whitespace-pre-wrap">
-                          {matchingDraft.comment}
-                        </p>
-                      </div>
+                      <InlineDraft draft={matchingDraft} onEdit={() => openEditorForLine(lineKey, matchingDraft.comment)} onDelete={onDeleteDraft} />
                     </td>
                   </tr>
                 )}

@@ -50,19 +50,25 @@ final class RequestBudgetTest extends TestCase
 
     public function testDefaultLimitsAndFactoryMethod(): void
     {
-        self::assertSame(500000, RequestBudget::DEFAULT_LIMIT_MICROS);
-        self::assertSame(10, RequestBudget::DEFAULT_MAX_ATTEMPTS);
+        $previous = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        try {
+            self::assertSame(500000, RequestBudget::DEFAULT_LIMIT_MICROS);
+            self::assertSame(10, RequestBudget::DEFAULT_MAX_ATTEMPTS);
 
-        $budget = new RequestBudget($this->directory);
-        $status = $budget->status();
-        self::assertSame(500000, $status['limitMicros']);
-        self::assertSame(10, $status['maxAttempts']);
-        self::assertSame(0, $status['attempts']);
-        self::assertSame(500000, $status['remainingMicros']);
-        self::assertTrue($status['canRequest']);
+            $budget = new RequestBudget($this->directory);
+            $status = $budget->status();
+            self::assertSame(500000, $status['limitMicros']);
+            self::assertSame(10, $status['maxAttempts']);
+            self::assertSame(0, $status['attempts']);
+            self::assertSame(500000, $status['remainingMicros']);
+            self::assertTrue($status['canRequest']);
 
-        $factoryBudget = RequestBudget::forRuntime($this->directory);
-        self::assertSame($status, $factoryBudget->status());
+            $factoryBudget = RequestBudget::forRuntime($this->directory);
+            self::assertSame($status, $factoryBudget->status());
+        } finally {
+            $previous === false ? putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS') : putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS='.$previous);
+        }
     }
 
     public function testInvalidLedgerFailsClosed(): void
@@ -71,5 +77,26 @@ final class RequestBudgetTest extends TestCase
         file_put_contents($this->directory.'/runtime-ledger.json', '{"version":1,"attempts":[{"reservedMicros":-1,"status":"received"}]}');
         $this->expectException(\RuntimeException::class);
         (new RequestBudget($this->directory))->status();
+    }
+
+    public function testAttemptLimitCanBeSetWithoutChangingTheReservationLimit(): void
+    {
+        $previous = getenv('PROOFPATCH_MODEL_MAX_ATTEMPTS');
+        try {
+            putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS=12');
+            $status = RequestBudget::forRuntime($this->directory)->status();
+            self::assertSame(12, $status['maxAttempts']);
+            self::assertSame(500000, $status['limitMicros']);
+
+            putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS=101');
+            try {
+                RequestBudget::forRuntime($this->directory);
+                self::fail('An excessive attempt limit must be rejected.');
+            } catch (\RuntimeException $error) {
+                self::assertStringContainsString('between 1 and 100', $error->getMessage());
+            }
+        } finally {
+            $previous === false ? putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS') : putenv('PROOFPATCH_MODEL_MAX_ATTEMPTS='.$previous);
+        }
     }
 }

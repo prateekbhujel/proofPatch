@@ -55,6 +55,7 @@ export default function Repositories({
   commentApprovals = {},
   commentPosted = false,
   budget = null,
+  modelKeyAvailable = false,
   githubConnection = null,
 }: RepositoriesProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'triage' | 'files' | 'review' | 'checks' | 'receipt' | 'new'>(
@@ -73,7 +74,7 @@ export default function Repositories({
   const [privateConsentApproved, setPrivateConsentApproved] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<'comment' | 'approve' | 'request_changes'>('comment');
   const [gitHubSectionOpen, setGitHubSectionOpen] = useState(
-    Boolean(githubConnection?.isConnected || githubConnection?.deviceFlow || !pull)
+    Boolean(githubConnection?.deviceFlow || !pull)
   );
 
   const isPrivate = Boolean(pull?.isPrivate || patchPreview?.isPrivate || reviewPreview?.isPrivate);
@@ -388,6 +389,7 @@ export default function Repositories({
                   setReviewApproved={setReviewApproved}
                   reviewProcessing={reviewProcessing}
                   budget={budget}
+                  modelKeyAvailable={modelKeyAvailable}
                   copiedReviewDigest={copiedReviewDigest}
                   copyText={copyText}
                   handleReviewSubmit={handleReviewSubmit}

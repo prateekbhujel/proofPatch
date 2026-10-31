@@ -153,6 +153,7 @@ export function FocusedLocalTaskView({
   preview,
   proposalPreview,
   proposalResult,
+  isPrivate = false,
   modelKeyAvailable = false,
   budgetCanRequest = false,
 }: {
@@ -160,6 +161,7 @@ export function FocusedLocalTaskView({
   preview: CardPreview | null;
   proposalPreview: CardProposalPreview | null;
   proposalResult: CardProposalResult | null;
+  isPrivate?: boolean;
   modelKeyAvailable?: boolean;
   budgetCanRequest?: boolean;
 }) {
@@ -216,6 +218,12 @@ export function FocusedLocalTaskView({
         <TaskImage task={task} />
       </div>
 
+      {isPrivate ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
+          This task is saved locally. Task-card suggestions for private repositories are not available yet.
+        </div>
+      ) : (
+      <>
       {/* Step 1: Local Public-File Preview */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3.5">
         <div className="flex items-center justify-between">
@@ -465,6 +473,8 @@ export function FocusedLocalTaskView({
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -133,6 +133,24 @@ final class PrivateTestPullSessionTest extends TestCase
         self::assertSame([], glob($this->directory.'/*'));
     }
 
+    public function testReviewPageReportsKeyAvailabilityWithoutExposingTheKey(): void
+    {
+        $previous = getenv('BASETEN_API_KEY');
+        try {
+            foreach (['short-key-123' => false, 'unit-test-key-123456789' => true] as $key => $expected) {
+                putenv('BASETEN_API_KEY='.$key);
+                $session = app('session')->driver('array');
+                $request = $this->request('GET', '/repositories', [], $session);
+                $response = (new DashboardController($this->client()))->repositories($request);
+                $props = $response->toResponse($request)->getOriginalContent()->getData()['page']['props'];
+                self::assertSame($expected, $props['modelKeyAvailable']);
+                self::assertStringNotContainsString($key, json_encode($props, JSON_THROW_ON_ERROR));
+            }
+        } finally {
+            $previous === false ? putenv('BASETEN_API_KEY') : putenv('BASETEN_API_KEY='.$previous);
+        }
+    }
+
     public function testRevocationAndAccountChangeErasePrivateSessionOnNextRequest(): void
     {
         foreach (['revoke', 'switch'] as $mode) {

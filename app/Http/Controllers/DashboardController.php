@@ -241,6 +241,11 @@ final class DashboardController
         try {
             $budget = $this->budget()->status();
         } catch (\Throwable) {}
+        try {
+            $modelKeyAvailable = strlen(Credentials::baseten()) >= 16;
+        } catch (\Throwable) {
+            $modelKeyAvailable = false;
+        }
 
         $reviewPreview = null;
         if ($patchPreview !== null && ($patchPreview['isPrivate'] ?? true) === false
@@ -356,6 +361,7 @@ final class DashboardController
             'commentApprovals' => $commentApprovals,
             'commentPosted' => $this->getSession($request, 'comment_posted') === true,
             'budget' => $budget,
+            'modelKeyAvailable' => $modelKeyAvailable,
             'githubConnection' => $githubConnection,
             'error' => $error ?: null,
         ]);

@@ -43,9 +43,9 @@ export function PrReviewTab({
   return (
     <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-6 space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">Automated Review &amp; Security Findings</h2>
+        <h2 className="text-base font-semibold text-slate-900">Muse review</h2>
         <p className="text-xs text-slate-500">
-          Muse Spark Open review engine analyzes changed diffs for correctness, anti-slop quality, and logic bugs.
+          {review ? 'Review suggestions are advisory.' : isPrivate ? 'Private pull requests stay local and are not sent to Muse.' : 'Ask Muse to review the selected public diff.'}
         </p>
       </div>
 

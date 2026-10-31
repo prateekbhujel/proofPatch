@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use PHPUnit\Framework\TestCase;
 use ProofPatch\GitHub\GitHubAppClient;
+use ProofPatch\GitHub\DedicatedTestRepoFetcher;
 use ProofPatch\Http\Controllers\IssueWorkbenchController;
 use ProofPatch\Http\Controllers\LocalTaskCardController;
 use ProofPatch\Http\Middleware\AuthorizeGithubTasks;
@@ -396,6 +397,41 @@ final class LocalTaskCardTest extends TestCase
         self::assertSame('queued', $card->status);
         self::assertNull($card->workbench_task_id);
         self::assertSame('Use the attached screenshot to fix the colors.', $card->description);
+    }
+
+    public function testFailedDedicatedFetchDoesNotSubstituteLocalFixture(): void
+    {
+        $previousRepo = getenv('PROOFPATCH_TEST_REPO');
+        $previousBase = getenv('PROOFPATCH_TEST_BASE_COMMIT');
+        putenv('PROOFPATCH_TEST_REPO=owner/dedicated-test');
+        putenv('PROOFPATCH_TEST_BASE_COMMIT=' . str_repeat('c', 40));
+        try {
+            $card = new LocalTaskCard();
+            $card->github_user_id = 1;
+            $card->repository = 'owner/dedicated-test';
+            $card->title = 'Fix order total for zero quantity';
+            $card->description = 'Zero quantity should not be charged.';
+            $card->status = 'queued';
+            $card->save();
+            $request = $this->request('POST', "/issues/tasks/{$card->id}/assign");
+            $request->attributes->set('proofpatch_github_access', [
+                'userId' => 1, 'repositories' => ['owner/dedicated-test' => true],
+            ]);
+            $request->session()->put('issue_context', ['sentinel' => 'previous context']);
+            $fetcher = new DedicatedTestRepoFetcher(new MockHttpClient(new MockResponse('', ['http_code' => 404])));
+
+            (new LocalTaskCardController($fetcher))->assign($request, (int) $card->id);
+
+            self::assertStringContainsString('Failed to assign task', (string) $request->session()->get('error'));
+            self::assertSame(['sentinel' => 'previous context'], $request->session()->get('issue_context'));
+            self::assertSame(0, \ProofPatch\Models\WorkbenchTask::count());
+            $card->refresh();
+            self::assertSame('queued', $card->status);
+            self::assertNull($card->workbench_task_id);
+        } finally {
+            $previousRepo === false ? putenv('PROOFPATCH_TEST_REPO') : putenv('PROOFPATCH_TEST_REPO=' . $previousRepo);
+            $previousBase === false ? putenv('PROOFPATCH_TEST_BASE_COMMIT') : putenv('PROOFPATCH_TEST_BASE_COMMIT=' . $previousBase);
+        }
     }
 
     public function testMigrationRollbackOnlyRemovesLocalCardsInIsolatedDatabase(): void

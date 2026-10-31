@@ -72,7 +72,7 @@ export function PrDashboardView({
               <h1 className="text-lg font-bold text-slate-900 tracking-tight">Pull Request Reviews</h1>
             </div>
             <p className="text-xs text-slate-500">
-              Select an incoming pull request from your connected GitHub repository to begin autonomous review and 5-gate verification.
+              Select a pull request to inspect its changes and checks.
             </p>
           </div>
 
